@@ -8,6 +8,7 @@
         backgroundColor?: string;
         mode?: 'bird' | 'fish';
         fps?: number;
+        zoom?: number;
     }
 
     let { 
@@ -15,7 +16,8 @@
         color = '#00ffff',
         backgroundColor = '#0f172a', // slate-900 matches app theme
         mode = 'bird',
-        fps = $bindable(0)
+        fps = $bindable(0),
+        zoom = 120
     }: Props = $props();
 
     let container: HTMLDivElement;
@@ -74,7 +76,7 @@
 
         // Camera
         camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
-        camera.position.z = 120;
+        camera.position.z = zoom;
 
         // Renderer
         renderer = new THREE.WebGLRenderer({ 
@@ -152,6 +154,13 @@
     $effect(() => {
         if (mesh && birdGeo && fishGeo) {
             mesh.geometry = mode === 'fish' ? fishGeo : birdGeo;
+        }
+    });
+
+    // Reactive Zoom
+    $effect(() => {
+        if (camera) {
+            camera.position.z = zoom;
         }
     });
 

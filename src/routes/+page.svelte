@@ -3,6 +3,7 @@
     
     let mode = $state<'bird' | 'fish'>('bird');
     let fps = $state(0);
+    let zoom = $state(120);
 
     // Theme Configuration
     let backgroundColor = $derived(mode === 'bird' ? '#0f172a' : '#06202a'); // Slate-900 (Night Sky) vs ~Cyan-950 (Deep Sea)
@@ -11,7 +12,7 @@
 
 <div class="relative min-h-screen w-full text-white overflow-hidden font-sans transition-colors duration-1000" style="background-color: {backgroundColor}">
     <!-- WebGL Background Layer -->
-    <BoidBackground boidCount={600} color={boidColor} {backgroundColor} {mode} bind:fps />
+    <BoidBackground boidCount={600} color={boidColor} {backgroundColor} {mode} bind:fps bind:zoom />
 
     <!-- UI Overlay -->
     <div class="relative z-10 flex flex-col items-center justify-center min-h-screen p-8 pointer-events-none">
@@ -49,25 +50,41 @@
     </div>
 
     <!-- Controls Overlay -->
-    <div class="fixed bottom-6 right-6 z-50 pointer-events-auto flex items-center gap-4 p-3 rounded-2xl bg-slate-900/50 backdrop-blur-lg border border-white/10 shadow-lg">
-        <div class="flex bg-slate-800/80 rounded-lg p-1">
-            <button
-                class="px-3 py-1.5 rounded-md text-xs font-bold transition-all {mode === 'bird' ? 'bg-sky-500 text-white shadow-md' : 'text-slate-400 hover:text-white'}"
-                onclick={() => mode = 'bird'}
-            >
-                Birds
-            </button>
-            <button
-                class="px-3 py-1.5 rounded-md text-xs font-bold transition-all {mode === 'fish' ? 'bg-sky-500 text-white shadow-md' : 'text-slate-400 hover:text-white'}"
-                onclick={() => mode = 'fish'}
-            >
-                Fish
-            </button>
+    <div class="fixed bottom-6 right-6 z-50 pointer-events-auto flex flex-col gap-3 p-3 rounded-2xl bg-slate-900/50 backdrop-blur-lg border border-white/10 shadow-lg min-w-[200px]">
+        <div class="flex items-center justify-between gap-2">
+            <span class="text-[10px] font-mono font-bold text-slate-400 uppercase tracking-widest">Zoom</span>
+            <span class="text-[10px] font-mono font-bold text-sky-400">{zoom}</span>
         </div>
-        <div class="px-2 border-l border-white/10">
-            <p class="text-[10px] font-mono font-bold text-slate-400">
-                <span class="text-sky-400 text-sm">{fps}</span> FPS
-            </p>
+        <input 
+            type="range" 
+            min="60" 
+            max="200" 
+            bind:value={zoom} 
+            class="w-full h-1 bg-slate-700 rounded-lg appearance-none cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-3 [&::-webkit-slider-thumb]:h-3 [&::-webkit-slider-thumb]:bg-sky-400 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:hover:bg-white"
+        />
+        
+        <div class="h-px bg-white/10 my-1"></div>
+
+        <div class="flex items-center justify-between gap-4">
+            <div class="flex bg-slate-800/80 rounded-lg p-1">
+                <button
+                    class="px-3 py-1.5 rounded-md text-xs font-bold transition-all {mode === 'bird' ? 'bg-sky-500 text-white shadow-md' : 'text-slate-400 hover:text-white'}"
+                    onclick={() => mode = 'bird'}
+                >
+                    Birds
+                </button>
+                <button
+                    class="px-3 py-1.5 rounded-md text-xs font-bold transition-all {mode === 'fish' ? 'bg-sky-500 text-white shadow-md' : 'text-slate-400 hover:text-white'}"
+                    onclick={() => mode = 'fish'}
+                >
+                    Fish
+                </button>
+            </div>
+            <div class="px-2 border-l border-white/10">
+                <p class="text-[10px] font-mono font-bold text-slate-400">
+                    <span class="text-sky-400 text-sm">{fps}</span> FPS
+                </p>
+            </div>
         </div>
     </div>
 </div>
