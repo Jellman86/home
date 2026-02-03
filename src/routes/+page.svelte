@@ -6,7 +6,7 @@
 
     // Theme Configuration - Deeper, more professional colors
     let backgroundColor = $derived(mode === 'bird' ? '#0f172a' : '#01161e'); // Dark Twilight vs Deepest Teal
-    let boidColor = $derived(mode === 'bird' ? '#cbd5e1' : '#4fd1c5'); // Muted Silver Birds vs Glowing Fish
+    let boidColor = $derived(mode === 'bird' ? '#000000' : '#a8dadc'); // Black Birds vs Silvery Fish
 </script>
 
 <div class="relative min-h-screen w-full text-white overflow-hidden font-sans transition-colors duration-1000">
@@ -25,7 +25,7 @@
             </div>
 
             <p class="text-xl text-slate-300 font-light leading-relaxed">
-                Work in Progress (Build v1.2.4)
+                Work in Progress (Build v1.2.5)
             </p>
             
             <div class="flex flex-wrap gap-4 justify-center pt-8">
