@@ -3,11 +3,11 @@
     
     let mode = $state<'bird' | 'fish'>('bird');
     let fps = $state(0);
-    let zoom = $state(200);
+    let zoom = $state(400);
 
-    // Theme Configuration - More evocative of Sea and Sky
-    let backgroundColor = $derived(mode === 'bird' ? '#87ceeb' : '#03242c'); // Sky Blue vs Deep Teal
-    let boidColor = $derived(mode === 'bird' ? '#ffffff' : '#a8dadc'); // White Birds vs Silvery Fish
+    // Theme Configuration - Deeper, more professional colors
+    let backgroundColor = $derived(mode === 'bird' ? '#0f172a' : '#01161e'); // Dark Twilight vs Deepest Teal
+    let boidColor = $derived(mode === 'bird' ? '#cbd5e1' : '#4fd1c5'); // Muted Silver Birds vs Glowing Fish
 </script>
 
 <div class="relative min-h-screen w-full text-white overflow-hidden font-sans transition-colors duration-1000" style="background-color: {backgroundColor}">
@@ -26,7 +26,7 @@
             </div>
 
             <p class="text-xl text-slate-300 font-light leading-relaxed">
-                Work in Progress (Build v1.0.6)
+                Work in Progress (Build v1.0.7)
             </p>
             
             <div class="flex flex-wrap gap-4 justify-center pt-8">
@@ -57,8 +57,8 @@
         </div>
         <input 
             type="range" 
-            min="100" 
-            max="400" 
+            min="50" 
+            max="1000" 
             bind:value={zoom} 
             class="w-full h-1 bg-slate-700 rounded-lg appearance-none cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-3 [&::-webkit-slider-thumb]:h-3 [&::-webkit-slider-thumb]:bg-sky-400 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:hover:bg-white"
         />
