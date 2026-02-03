@@ -27,8 +27,11 @@
     let mesh: THREE.InstancedMesh;
     let frameId: number;
 
+    // Component-level references for reactivity
     let skyShaderMaterial: THREE.ShaderMaterial;
     let bubbleParticles: THREE.Points;
+    let birdGeo: THREE.BufferGeometry;
+    let fishGeo: THREE.BufferGeometry;
 
     let lastTime = performance.now();
     let frameCount = 0;
@@ -103,27 +106,27 @@
             vec3 finalColor;
             
             if (isFish > 0.5) {
-                // SEA SLICE VIEW: Bright top, dark deep bottom
-                float gradient = smoothstep(-0.8, 0.8, vUv.y * 2.0 - 1.0);
+                // SEA SLICE VIEW: Bright surface at top, deep pressure dark at bottom
+                float gradient = smoothstep(-1.0, 1.0, vUv.y * 2.0 - 1.0);
                 vec3 topColor = bgColor + vec3(0.1, 0.3, 0.4);
-                vec3 bottomColor = bgColor * 0.2;
+                vec3 bottomColor = bgColor * 0.1;
                 finalColor = mix(bottomColor, topColor, gradient);
                 
-                // Sunlight shafts from the surface
-                float rays = pow(sin(vUv.x * 10.0 + time * 0.3) * 0.5 + 0.5, 12.0) * 0.3 * gradient;
-                finalColor += rays * vec3(0.5, 0.9, 1.0);
+                // Light rays from top
+                float rays = pow(sin(vUv.x * 12.0 + time * 0.4) * 0.5 + 0.5, 15.0) * 0.4 * gradient;
+                finalColor += rays * vec3(0.6, 0.9, 1.0);
             } else {
-                // PERSPECTIVE SKY: Look up from ground
+                // PERSPECTIVE SKY: Darker top (zenith), lighter horizon
                 vec3 skyTop = bgColor;
-                vec3 skyHorizon = bgColor + vec3(0.1, 0.1, 0.2);
-                finalColor = mix(skyHorizon, skyTop, vUv.y);
+                vec3 skyHorizon = bgColor + vec3(0.1, 0.15, 0.25);
+                finalColor = mix(skyHorizon, skyTop, pow(vUv.y, 0.7));
                 
-                // High-altitude clouds
-                vec2 p = vUv * vec2(2.0, 1.0); // Stretch for horizon feel
-                p.x += time * 0.02;
-                float d = fbm(p * 2.5);
-                float f = smoothstep(0.5, 0.9, d);
-                finalColor = mix(finalColor, vec3(1.0), f * 0.3);
+                // Distant, high-altitude clouds
+                vec2 cloudP = vUv * vec2(2.5, 1.5);
+                cloudP.x += time * 0.03;
+                float d = fbm(cloudP * 2.0);
+                float cloudMask = smoothstep(0.45, 0.85, d);
+                finalColor = mix(finalColor, vec3(1.0), cloudMask * 0.35);
             }
             
             gl_FragColor = vec4(finalColor, 1.0);
@@ -141,6 +144,7 @@
         renderer.setSize(window.innerWidth, window.innerHeight);
         renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 
+        // Background Plane
         const skyGeo = new THREE.PlaneGeometry(3000, 2000);
         skyShaderMaterial = new THREE.ShaderMaterial({
             uniforms: {
@@ -156,9 +160,10 @@
         sky.position.z = -500;
         scene.add(sky);
 
-        const birdGeo = new THREE.ConeGeometry(0.6, 2.5, 4);
+        // Define Geometries
+        birdGeo = new THREE.ConeGeometry(0.6, 2.5, 4);
         birdGeo.rotateX(Math.PI / 2);
-        const fishGeo = new THREE.ConeGeometry(0.7, 2.0, 8);
+        fishGeo = new THREE.ConeGeometry(0.7, 2.0, 8);
         fishGeo.rotateX(Math.PI / 2);
         fishGeo.scale(0.4, 1, 1);
         
@@ -167,6 +172,7 @@
         mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
         scene.add(mesh);
 
+        // Bubbles
         const bubbleGeo = new THREE.BufferGeometry();
         const bubbleCount = 400;
         const bubblePos = new Float32Array(bubbleCount * 3);
@@ -195,10 +201,17 @@
         }
     }
 
+    // REACTIVE UPDATES
     $effect(() => {
-        if (mesh && skyShaderMaterial) {
+        if (mesh && skyShaderMaterial && birdGeo && fishGeo) {
+            // Update Uniforms
             skyShaderMaterial.uniforms.isFish.value = mode === 'fish' ? 1.0 : 0.0;
+            
+            // Update Visibility
             if (bubbleParticles) bubbleParticles.visible = mode === 'fish';
+            
+            // Update Geometry
+            mesh.geometry = mode === 'fish' ? fishGeo : birdGeo;
         }
     });
 
@@ -224,17 +237,12 @@
                 let y = attr.getY(i) + 0.5;
                 if (y > 400) y = -400;
                 attr.setY(i, y);
-                let x = attr.getX(i);
-                x += Math.sin(now * 0.001 + i) * 0.15;
-                attr.setX(i, x);
+                attr.setX(i, attr.getX(i) + Math.sin(now * 0.001 + i) * 0.15);
             }
             attr.needsUpdate = true;
         }
 
-        const vFOV = THREE.MathUtils.degToRad(camera.fov);
-        const hAtDepth = 2 * Math.tan(vFOV / 2) * camera.position.z;
-        const wAtDepth = hAtDepth * camera.aspect;
-        target.set((mouse.x * wAtDepth) / 2, (mouse.y * hAtDepth) / 2, 0);
+        target.set((mouse.x * window.innerWidth) / 20, -(mouse.y * window.innerHeight) / 20, 0);
 
         for (let i = 0; i < boidCount; i++) {
             const idx = i * 3;
