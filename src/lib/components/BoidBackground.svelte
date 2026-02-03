@@ -56,9 +56,9 @@
     const BOUNDARY_SIZE = 120; // World size
     
     // Rule weights - Reactive based on mode
-    let SEPARATION_WEIGHT = $derived(mode === 'fish' ? 1.0 : 1.5);
-    let ALIGNMENT_WEIGHT = $derived(mode === 'fish' ? 4.0 : 1.0);
-    let COHESION_WEIGHT = $derived(mode === 'fish' ? 4.0 : 1.0);
+    let SEPARATION_WEIGHT = $derived(mode === 'fish' ? 1.5 : 1.5);
+    let ALIGNMENT_WEIGHT = $derived(mode === 'fish' ? 3.0 : 1.0);
+    let COHESION_WEIGHT = $derived(mode === 'fish' ? 2.0 : 1.0);
     const MOUSE_REPULSION_WEIGHT = 5.0;
 
     // Geometries
