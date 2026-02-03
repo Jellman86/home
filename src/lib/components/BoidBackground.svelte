@@ -17,7 +17,7 @@
         backgroundColor = '#0f172a',
         mode = 'bird',
         fps = $bindable(0),
-        zoom = 120
+        zoom = 400
     }: Props = $props();
 
     let container: HTMLDivElement;
@@ -46,15 +46,15 @@
     let target = new THREE.Vector3();
     
     // REFINED BOID PARAMETERS
-    let SPEED_LIMIT = $derived(mode === 'fish' ? 0.4 : 1.5); 
-    let VISUAL_RANGE = $derived(mode === 'fish' ? 30 : 60); 
+    let SPEED_LIMIT = $derived(mode === 'fish' ? 0.5 : 1.8); 
+    let VISUAL_RANGE = $derived(mode === 'fish' ? 40 : 80); 
     let VISUAL_RANGE_SQ = $derived(VISUAL_RANGE * VISUAL_RANGE);
-    const BOUNDARY_SIZE = 400; 
+    const BOUNDARY_SIZE = 300; 
     
-    let SEPARATION_WEIGHT = $derived(mode === 'fish' ? 3.0 : 1.5); 
-    let ALIGNMENT_WEIGHT = $derived(mode === 'fish' ? 2.0 : 1.5); 
-    let COHESION_WEIGHT = $derived(mode === 'fish' ? 0.1 : 1.0); 
-    const MOUSE_REPULSION_WEIGHT = 15.0;
+    let SEPARATION_WEIGHT = $derived(mode === 'fish' ? 2.5 : 1.2); 
+    let ALIGNMENT_WEIGHT = $derived(mode === 'fish' ? 2.0 : 2.5); 
+    let COHESION_WEIGHT = $derived(mode === 'fish' ? 0.2 : 2.0); // Stronger cohesion for tighter birds
+    const MOUSE_REPULSION_WEIGHT = 20.0;
 
     let birdGeo: THREE.BufferGeometry;
     let fishGeo: THREE.BufferGeometry;
@@ -64,7 +64,7 @@
         
         // Mode-specific Fog initialization
         const fogNear = mode === 'fish' ? 10 : 200;
-        const fogFar = mode === 'fish' ? 300 : 2000;
+        const fogFar = mode === 'fish' ? 400 : 3000;
         scene.fog = new THREE.Fog(backgroundColor, fogNear, fogFar);
         scene.background = new THREE.Color(backgroundColor);
 
@@ -135,14 +135,13 @@
     $effect(() => {
         if (camera) {
             camera.position.z = zoom;
-            // No updateProjectionMatrix needed for position, only for fov/aspect/planes
         }
     });
 
     $effect(() => {
         if (scene && mesh) {
             const fogNear = mode === 'fish' ? 10 : 200;
-            const fogFar = mode === 'fish' ? 300 : 2500;
+            const fogFar = mode === 'fish' ? 400 : 3000;
             scene.fog = new THREE.Fog(backgroundColor, fogNear, fogFar);
 
             const material = mesh.material as THREE.MeshBasicMaterial;
@@ -161,9 +160,15 @@
             lastTime = now;
         }
 
+        // ACCURATE MOUSE PROJECTION
+        // Calculate field of view size at target depth (z=0)
+        const vFOV = THREE.MathUtils.degToRad(camera.fov);
+        const height = 2 * Math.tan(vFOV / 2) * camera.position.z;
+        const width = height * camera.aspect;
+        
         target.set(
-            (mouse.x * window.innerWidth) / 20,
-            -(mouse.y * window.innerHeight) / 20,
+            (mouse.x * width) / 2,
+            (mouse.y * height) / 2,
             0
         );
 
@@ -202,30 +207,31 @@
             }
 
             if (count > 0) {
-                alignment.divideScalar(count).normalize().multiplyScalar(SPEED_LIMIT).sub(_velocity).multiplyScalar(0.1);
-                cohesion.divideScalar(count).sub(_position).normalize().multiplyScalar(SPEED_LIMIT).sub(_velocity).multiplyScalar(0.05);
-                separation.divideScalar(count).normalize().multiplyScalar(SPEED_LIMIT).sub(_velocity).multiplyScalar(0.2);
+                alignment.divideScalar(count).normalize().multiplyScalar(SPEED_LIMIT).sub(_velocity).multiplyScalar(0.12);
+                cohesion.divideScalar(count).sub(_position).normalize().multiplyScalar(SPEED_LIMIT).sub(_velocity).multiplyScalar(0.08);
+                separation.divideScalar(count).normalize().multiplyScalar(SPEED_LIMIT).sub(_velocity).multiplyScalar(0.25);
 
                 _acceleration.add(alignment.multiplyScalar(ALIGNMENT_WEIGHT));
                 _acceleration.add(cohesion.multiplyScalar(COHESION_WEIGHT));
                 _acceleration.add(separation.multiplyScalar(SEPARATION_WEIGHT));
             }
 
+            // MOUSE REACTION (FOLLOWS CURSOR ACCURATELY NOW)
             const distToMouse = _position.distanceToSquared(target);
-            if (distToMouse < 4000) { 
+            if (distToMouse < 5000) { 
                 _diff.copy(_position).sub(target).normalize().multiplyScalar(MOUSE_REPULSION_WEIGHT * 0.1);
                 _acceleration.add(_diff);
             }
 
             if (mode === 'bird') {
-                _acceleration.y += 0.002; // Subtle lift
+                _acceleration.y += 0.004; // Lift
             } else {
-                _acceleration.y += Math.sin(now * 0.001 + i) * 0.001; // Buoyancy wobble
+                _acceleration.y += Math.sin(now * 0.001 + i) * 0.0015; // Sea oscillation
             }
 
             const distSqCent = _position.lengthSq();
             if (distSqCent > (BOUNDARY_SIZE * BOUNDARY_SIZE)) {
-                _diff.copy(_position).negate().normalize().multiplyScalar(0.01);
+                _diff.copy(_position).negate().normalize().multiplyScalar(0.015);
                 _acceleration.add(_diff);
             }
 
