@@ -1,10 +1,13 @@
 <script lang="ts">
     import BoidBackground from '$lib/components/BoidBackground.svelte';
+    
+    let mode = $state<'bird' | 'fish'>('bird');
+    let fps = $state(0);
 </script>
 
 <div class="relative min-h-screen w-full text-white overflow-hidden font-sans">
     <!-- WebGL Background Layer -->
-    <BoidBackground boidCount={600} color="#38bdf8" />
+    <BoidBackground boidCount={600} color="#38bdf8" {mode} bind:fps />
 
     <!-- UI Overlay -->
     <div class="relative z-10 flex flex-col items-center justify-center min-h-screen p-8 pointer-events-none">
@@ -39,6 +42,29 @@
                 </a>
             </div>
         </main>
+    </div>
+
+    <!-- Controls Overlay -->
+    <div class="fixed bottom-6 right-6 z-50 pointer-events-auto flex items-center gap-4 p-3 rounded-2xl bg-slate-900/50 backdrop-blur-lg border border-white/10 shadow-lg">
+        <div class="flex bg-slate-800/80 rounded-lg p-1">
+            <button
+                class="px-3 py-1.5 rounded-md text-xs font-bold transition-all {mode === 'bird' ? 'bg-sky-500 text-white shadow-md' : 'text-slate-400 hover:text-white'}"
+                onclick={() => mode = 'bird'}
+            >
+                Birds
+            </button>
+            <button
+                class="px-3 py-1.5 rounded-md text-xs font-bold transition-all {mode === 'fish' ? 'bg-sky-500 text-white shadow-md' : 'text-slate-400 hover:text-white'}"
+                onclick={() => mode = 'fish'}
+            >
+                Fish
+            </button>
+        </div>
+        <div class="px-2 border-l border-white/10">
+            <p class="text-[10px] font-mono font-bold text-slate-400">
+                <span class="text-sky-400 text-sm">{fps}</span> FPS
+            </p>
+        </div>
     </div>
 </div>
 

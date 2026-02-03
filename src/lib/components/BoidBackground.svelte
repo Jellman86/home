@@ -6,12 +6,16 @@
         boidCount?: number;
         color?: string;
         backgroundColor?: string;
+        mode?: 'bird' | 'fish';
+        fps?: number;
     }
 
     let { 
         boidCount = 800, 
         color = '#00ffff',
-        backgroundColor = '#0f172a' // slate-900 matches app theme
+        backgroundColor = '#0f172a', // slate-900 matches app theme
+        mode = 'bird',
+        fps = $bindable(0)
     }: Props = $props();
 
     let container: HTMLDivElement;
@@ -23,6 +27,10 @@
     let renderer: THREE.WebGLRenderer;
     let mesh: THREE.InstancedMesh;
     let frameId: number;
+
+    // FPS calculation
+    let lastTime = performance.now();
+    let frameCount = 0;
 
     // Simulation State
     // Using Float32Arrays for performance (Struct of Arrays layout)
@@ -41,16 +49,16 @@
     let mouse = new THREE.Vector2(-9999, -9999);
     let target = new THREE.Vector3();
     
-    // Boid Parameters
-    const SPEED_LIMIT = 0.6; // Reduced speed for smoother background
-    const VISUAL_RANGE = 25; // How far they can see
-    const VISUAL_RANGE_SQ = VISUAL_RANGE * VISUAL_RANGE;
+    // Boid Parameters - Reactive based on mode
+    let SPEED_LIMIT = $derived(mode === 'fish' ? 0.5 : 0.6);
+    let VISUAL_RANGE = $derived(mode === 'fish' ? 40 : 25);
+    let VISUAL_RANGE_SQ = $derived(VISUAL_RANGE * VISUAL_RANGE);
     const BOUNDARY_SIZE = 120; // World size
     
-    // Rule weights
-    const SEPARATION_WEIGHT = 1.5;
-    const ALIGNMENT_WEIGHT = 1.0;
-    const COHESION_WEIGHT = 1.0;
+    // Rule weights - Reactive based on mode
+    let SEPARATION_WEIGHT = $derived(mode === 'fish' ? 3.0 : 1.5);
+    let ALIGNMENT_WEIGHT = $derived(mode === 'fish' ? 3.0 : 1.0);
+    let COHESION_WEIGHT = $derived(mode === 'fish' ? 4.0 : 1.0);
     const MOUSE_REPULSION_WEIGHT = 5.0;
 
     function init() {
@@ -131,6 +139,15 @@
 
     function animate() {
         frameId = requestAnimationFrame(animate);
+
+        // FPS Calculation
+        const now = performance.now();
+        frameCount++;
+        if (now - lastTime >= 1000) {
+            fps = Math.round((frameCount * 1000) / (now - lastTime));
+            frameCount = 0;
+            lastTime = now;
+        }
 
         // Map mouse 2D to 3D plane at z=0 approx
         // Simple projection for repulsion effect
