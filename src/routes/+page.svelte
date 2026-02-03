@@ -3,7 +3,7 @@
     
     let mode = $state<'bird' | 'fish'>('bird');
     let fps = $state(0);
-    let zoom = $state(120);
+    let zoom = $state(80);
 
     // Theme Configuration
     let backgroundColor = $derived(mode === 'bird' ? '#0f172a' : '#06202a'); // Slate-900 (Night Sky) vs ~Cyan-950 (Deep Sea)
@@ -57,7 +57,7 @@
         </div>
         <input 
             type="range" 
-            min="60" 
+            min="40" 
             max="200" 
             bind:value={zoom} 
             class="w-full h-1 bg-slate-700 rounded-lg appearance-none cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-3 [&::-webkit-slider-thumb]:h-3 [&::-webkit-slider-thumb]:bg-sky-400 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:hover:bg-white"
