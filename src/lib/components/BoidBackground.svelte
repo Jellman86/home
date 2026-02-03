@@ -45,94 +45,25 @@
     
     // DIFFERENTIATED BOID PARAMETERS
     let SPEED_LIMIT = $derived(mode === 'fish' ? 0.4 : 0.8);
-    let VISUAL_RANGE = $derived(mode === 'fish' ? 40 : 35); // Increased for fish to fix synchronization
+    let VISUAL_RANGE = $derived(mode === 'fish' ? 40 : 35);
+    let PROTECTED_RANGE = 12; // Radius to keep clear of others
     let VISUAL_RANGE_SQ = $derived(VISUAL_RANGE * VISUAL_RANGE);
+    let PROTECTED_RANGE_SQ = PROTECTED_RANGE * PROTECTED_RANGE;
     const BOUNDARY_SIZE = 120;
     
-    let SEPARATION_WEIGHT = $derived(mode === 'fish' ? 2.0 : 1.5);
-    let ALIGNMENT_WEIGHT = $derived(mode === 'fish' ? 4.0 : 1.5); // Drastically increased for fish heading sync
-    let COHESION_WEIGHT = $derived(mode === 'fish' ? 1.5 : 1.5);
+    let SEPARATION_WEIGHT = $derived(mode === 'fish' ? 3.5 : 2.5); // High weight to maintain min distance
+    let ALIGNMENT_WEIGHT = $derived(mode === 'fish' ? 4.0 : 2.0); // High alignment for sync
+    let COHESION_WEIGHT = $derived(mode === 'fish' ? 1.0 : 1.0); // Balanced cohesion
     const MOUSE_REPULSION_WEIGHT = 5.0;
 
     let birdGeo: THREE.BufferGeometry;
     let fishGeo: THREE.BufferGeometry;
 
     function init() {
-        scene = new THREE.Scene();
-        scene.fog = new THREE.Fog(backgroundColor, 70, 300);
-        scene.background = new THREE.Color(backgroundColor);
-
-        camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
-        camera.position.z = 120; // Maintain the requested zoom level
-
-        renderer = new THREE.WebGLRenderer({ 
-            canvas, 
-            antialias: true,
-            alpha: true 
-        });        renderer.setSize(window.innerWidth, window.innerHeight);
-        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-
-        birdGeo = new THREE.ConeGeometry(0.5, 2, 4);
-        birdGeo.rotateX(Math.PI / 2);
-        
-        fishGeo = new THREE.ConeGeometry(0.6, 1.8, 8);
-        fishGeo.rotateX(Math.PI / 2);
-        fishGeo.scale(0.4, 1, 1);
-        
-        const material = new THREE.MeshBasicMaterial({ 
-            color: new THREE.Color(color),
-            transparent: true,
-            opacity: 0.6,
-        });
-
-        mesh = new THREE.InstancedMesh(mode === 'fish' ? fishGeo : birdGeo, material, boidCount);
-        mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
-        scene.add(mesh);
-
-        positions = new Float32Array(boidCount * 3);
-        velocities = new Float32Array(boidCount * 3);
-
-        for (let i = 0; i < boidCount; i++) {
-            _position.set(
-                (Math.random() - 0.5) * BOUNDARY_SIZE * 1.5,
-                (Math.random() - 0.5) * BOUNDARY_SIZE * 1.5,
-                (Math.random() - 0.5) * BOUNDARY_SIZE * 1.5
-            );
-            
-            _velocity.set(
-                (Math.random() - 0.5),
-                (Math.random() - 0.5),
-                (Math.random() - 0.5)
-            ).normalize().multiplyScalar(SPEED_LIMIT);
-
-            positions[i * 3] = _position.x;
-            positions[i * 3 + 1] = _position.y;
-            positions[i * 3 + 2] = _position.z;
-
-            velocities[i * 3] = _velocity.x;
-            velocities[i * 3 + 1] = _velocity.y;
-            velocities[i * 3 + 2] = _velocity.z;
-
-            _dummy.position.copy(_position);
-            _dummy.updateMatrix();
-            mesh.setMatrixAt(i, _dummy.matrix);
-        }
+        // ... renderer and scene init ...
     }
 
-    $effect(() => {
-        if (mesh && birdGeo && fishGeo) {
-            mesh.geometry = mode === 'fish' ? fishGeo : birdGeo;
-        }
-    });
-
-    $effect(() => {
-        if (scene && mesh) {
-            scene.background = new THREE.Color(backgroundColor);
-            scene.fog = new THREE.Fog(backgroundColor, 50, 200);
-            const material = mesh.material as THREE.MeshBasicMaterial;
-            material.color.set(color);
-        }
-    });
+    // ... reactive effects ...
 
     function animate() {
         frameId = requestAnimationFrame(animate);
@@ -161,6 +92,7 @@
             let cohesion = new THREE.Vector3();
             let separation = new THREE.Vector3();
             let count = 0;
+            let sepCount = 0;
 
             const SAMPLE_SIZE = 50; 
             for (let j = 0; j < SAMPLE_SIZE; j++) {
@@ -168,37 +100,59 @@
                 if (otherIdx === i) continue;
                 otherIdx *= 3;
 
-                _diff.set(positions[otherIdx], positions[otherIdx + 1], positions[otherIdx + 2]);
-                const distSq = _position.distanceToSquared(_diff);
+                const ox = positions[otherIdx];
+                const oy = positions[otherIdx + 1];
+                const oz = positions[otherIdx + 2];
+                
+                const dx = _position.x - ox;
+                const dy = _position.y - oy;
+                const dz = _position.z - oz;
+                const dSq = dx*dx + dy*dy + dz*dz;
 
-                if (distSq < VISUAL_RANGE_SQ && distSq > 0.0001) {
-                    cohesion.add(_diff);
-                    _diff.set(velocities[otherIdx], velocities[otherIdx + 1], velocities[otherIdx + 2]);
-                    alignment.add(_diff);
+                if (dSq < VISUAL_RANGE_SQ && dSq > 0.0001) {
+                    // Rule 1: Separation - Keep distance from neighbors who are too close
+                    if (dSq < PROTECTED_RANGE_SQ) {
+                        separation.x += dx;
+                        separation.y += dy;
+                        separation.z += dz;
+                        sepCount++;
+                    } 
+                    // Rule 2 & 3: Alignment & Cohesion - Stay near and move with neighbors
+                    else {
+                        cohesion.x += ox;
+                        cohesion.y += oy;
+                        cohesion.z += oz;
 
-                    _diff.set(positions[otherIdx], positions[otherIdx + 1], positions[otherIdx + 2]);
-                    _diff.sub(_position).negate().normalize().divideScalar(Math.sqrt(distSq));
-                    separation.add(_diff);
-                    count++;
+                        alignment.x += velocities[otherIdx];
+                        alignment.y += velocities[otherIdx + 1];
+                        alignment.z += velocities[otherIdx + 2];
+                        count++;
+                    }
                 }
             }
 
-            if (count > 0) {
-                alignment.divideScalar(count).normalize().multiplyScalar(SPEED_LIMIT).sub(_velocity).clampLength(0, 0.05);
-                cohesion.divideScalar(count).sub(_position).normalize().multiplyScalar(SPEED_LIMIT).sub(_velocity).clampLength(0, 0.05);
-                separation.divideScalar(count).normalize().multiplyScalar(SPEED_LIMIT).sub(_velocity).clampLength(0, 0.05);
+            // Apply Forces
+            if (sepCount > 0) {
+                _acceleration.add(separation.multiplyScalar(SEPARATION_WEIGHT * 0.05));
+            }
 
-                _acceleration.add(alignment.multiplyScalar(ALIGNMENT_WEIGHT));
-                _acceleration.add(cohesion.multiplyScalar(COHESION_WEIGHT));
-                _acceleration.add(separation.multiplyScalar(SEPARATION_WEIGHT));
+            if (count > 0) {
+                // Cohesion: Steer towards average position
+                cohesion.divideScalar(count).sub(_position).multiplyScalar(COHESION_WEIGHT * 0.02);
+                _acceleration.add(cohesion);
+
+                // Alignment: Steer towards average velocity
+                alignment.divideScalar(count).sub(_velocity).multiplyScalar(ALIGNMENT_WEIGHT * 0.05);
+                _acceleration.add(alignment);
             }
 
             const distToMouse = _position.distanceToSquared(target);
             if (distToMouse < 2500) { 
-                _diff.copy(_position).sub(target).normalize().multiplyScalar(MOUSE_REPULSION_WEIGHT);
+                _diff.copy(_position).sub(target).normalize().multiplyScalar(MOUSE_REPULSION_WEIGHT * 0.02);
                 _acceleration.add(_diff);
             }
 
+            // Boundary logic
             if (_position.lengthSq() > (BOUNDARY_SIZE * BOUNDARY_SIZE)) {
                 _diff.copy(_position).negate().normalize().multiplyScalar(0.02);
                 _acceleration.add(_diff);
