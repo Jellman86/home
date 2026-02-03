@@ -8,7 +8,6 @@
         backgroundColor?: string;
         mode?: 'bird' | 'fish';
         fps?: number;
-        zoom?: number;
     }
 
     let { 
@@ -16,8 +15,7 @@
         color = '#00ffff',
         backgroundColor = '#0f172a',
         mode = 'bird',
-        fps = $bindable(0),
-        zoom = 400
+        fps = $bindable(0)
     }: Props = $props();
 
     let container: HTMLDivElement;
@@ -46,15 +44,21 @@
     let target = new THREE.Vector3();
     
     // REFINED BOID PARAMETERS
-    let SPEED_LIMIT = $derived(mode === 'fish' ? 0.5 : 1.8); 
-    let VISUAL_RANGE = $derived(mode === 'fish' ? 40 : 80); 
-    let VISUAL_RANGE_SQ = $derived(VISUAL_RANGE * VISUAL_RANGE);
-    const BOUNDARY_SIZE = 300; 
+    let SPEED_LIMIT = $derived(mode === 'fish' ? 0.6 : 1.2);
+    let MIN_SPEED = $derived(mode === 'fish' ? 0.2 : 0.5);
+    let VISUAL_RANGE = $derived(mode === 'fish' ? 40 : 80);
+    let PROTECTED_RANGE = $derived(mode === 'fish' ? 15 : 20); // Separation distance
     
-    let SEPARATION_WEIGHT = $derived(mode === 'fish' ? 2.5 : 1.2); 
-    let ALIGNMENT_WEIGHT = $derived(mode === 'fish' ? 2.0 : 2.5); 
-    let COHESION_WEIGHT = $derived(mode === 'fish' ? 0.2 : 2.0); // Stronger cohesion for tighter birds
-    const MOUSE_REPULSION_WEIGHT = 20.0;
+    // Smoothing factor - THE CURE FOR JIGGLING
+    // Limits how much a boid can change its velocity per frame
+    const MAX_STEER_FORCE = 0.05; 
+    
+    // Weights
+    let SEPARATION_WEIGHT = $derived(mode === 'fish' ? 2.5 : 1.5); 
+    let ALIGNMENT_WEIGHT = $derived(mode === 'fish' ? 1.5 : 1.5); 
+    let COHESION_WEIGHT = $derived(mode === 'fish' ? 0.1 : 1.0); 
+    const MOUSE_REPULSION_WEIGHT = 10.0;
+    const BOUNDARY_SIZE = 250; 
 
     let birdGeo: THREE.BufferGeometry;
     let fishGeo: THREE.BufferGeometry;
@@ -62,14 +66,14 @@
     function init() {
         scene = new THREE.Scene();
         
-        // Mode-specific Fog initialization
-        const fogNear = mode === 'fish' ? 10 : 200;
-        const fogFar = mode === 'fish' ? 400 : 3000;
+        // Mode-specific Fog
+        const fogNear = mode === 'fish' ? 50 : 200;
+        const fogFar = mode === 'fish' ? 500 : 1500;
         scene.fog = new THREE.Fog(backgroundColor, fogNear, fogFar);
         scene.background = new THREE.Color(backgroundColor);
 
         camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 5000);
-        camera.position.z = zoom;
+        camera.position.z = 400; // Fixed distance
 
         renderer = new THREE.WebGLRenderer({ 
             canvas, 
@@ -133,15 +137,9 @@
     });
 
     $effect(() => {
-        if (camera) {
-            camera.position.z = zoom;
-        }
-    });
-
-    $effect(() => {
         if (scene && mesh) {
-            const fogNear = mode === 'fish' ? 10 : 200;
-            const fogFar = mode === 'fish' ? 400 : 3000;
+            const fogNear = mode === 'fish' ? 50 : 200;
+            const fogFar = mode === 'fish' ? 500 : 1500;
             scene.fog = new THREE.Fog(backgroundColor, fogNear, fogFar);
 
             const material = mesh.material as THREE.MeshBasicMaterial;
@@ -160,15 +158,14 @@
             lastTime = now;
         }
 
-        // ACCURATE MOUSE PROJECTION
-        // Calculate field of view size at target depth (z=0)
+        // Project mouse at fixed depth
         const vFOV = THREE.MathUtils.degToRad(camera.fov);
-        const height = 2 * Math.tan(vFOV / 2) * camera.position.z;
-        const width = height * camera.aspect;
+        const hAtDepth = 2 * Math.tan(vFOV / 2) * camera.position.z;
+        const wAtDepth = hAtDepth * camera.aspect;
         
         target.set(
-            (mouse.x * width) / 2,
-            (mouse.y * height) / 2,
+            (mouse.x * wAtDepth) / 2,
+            (mouse.y * hAtDepth) / 2,
             0
         );
 
@@ -182,6 +179,7 @@
             let cohesion = new THREE.Vector3();
             let separation = new THREE.Vector3();
             let count = 0;
+            let sepCount = 0;
 
             const SAMPLE_SIZE = 40; 
             for (let j = 0; j < SAMPLE_SIZE; j++) {
@@ -190,52 +188,53 @@
                 otherIdx *= 3;
 
                 _diff.set(positions[otherIdx], positions[otherIdx + 1], positions[otherIdx + 2]);
-                const distSq = _position.distanceToSquared(_diff);
+                const dist = _position.distanceTo(_diff);
 
-                if (distSq < VISUAL_RANGE_SQ && distSq > 0.001) {
+                // Separation (Avoidance) - Priority
+                if (dist < PROTECTED_RANGE && dist > 0.001) {
+                    _diff.copy(_position).sub(_diff).normalize().divideScalar(dist);
+                    separation.add(_diff);
+                    sepCount++;
+                } 
+                // Alignment & Cohesion - Secondary
+                else if (dist < VISUAL_RANGE) {
                     cohesion.add(_diff);
-                    
                     _diff.set(velocities[otherIdx], velocities[otherIdx + 1], velocities[otherIdx + 2]);
                     alignment.add(_diff);
-
-                    _diff.set(positions[otherIdx], positions[otherIdx + 1], positions[otherIdx + 2]);
-                    _diff.sub(_position).negate().normalize().divideScalar(Math.sqrt(distSq));
-                    separation.add(_diff);
-
                     count++;
                 }
             }
 
+            if (sepCount > 0) {
+                separation.normalize().multiplyScalar(SPEED_LIMIT).sub(_velocity).multiplyScalar(SEPARATION_WEIGHT);
+                _acceleration.add(separation);
+            }
+
             if (count > 0) {
-                alignment.divideScalar(count).normalize().multiplyScalar(SPEED_LIMIT).sub(_velocity).multiplyScalar(0.12);
-                cohesion.divideScalar(count).sub(_position).normalize().multiplyScalar(SPEED_LIMIT).sub(_velocity).multiplyScalar(0.08);
-                separation.divideScalar(count).normalize().multiplyScalar(SPEED_LIMIT).sub(_velocity).multiplyScalar(0.25);
+                alignment.divideScalar(count).normalize().multiplyScalar(SPEED_LIMIT).sub(_velocity).multiplyScalar(ALIGNMENT_WEIGHT);
+                cohesion.divideScalar(count).sub(_position).normalize().multiplyScalar(SPEED_LIMIT).sub(_velocity).multiplyScalar(COHESION_WEIGHT);
 
-                _acceleration.add(alignment.multiplyScalar(ALIGNMENT_WEIGHT));
-                _acceleration.add(cohesion.multiplyScalar(COHESION_WEIGHT));
-                _acceleration.add(separation.multiplyScalar(SEPARATION_WEIGHT));
+                _acceleration.add(alignment);
+                _acceleration.add(cohesion);
             }
 
-            // MOUSE REACTION (FOLLOWS CURSOR ACCURATELY NOW)
-            const distToMouse = _position.distanceToSquared(target);
-            if (distToMouse < 5000) { 
-                _diff.copy(_position).sub(target).normalize().multiplyScalar(MOUSE_REPULSION_WEIGHT * 0.1);
+            // Mouse Repulsion
+            const distToMouse = _position.distanceTo(target);
+            if (distToMouse < 100) { 
+                _diff.copy(_position).sub(target).normalize().multiplyScalar(MOUSE_REPULSION_WEIGHT);
                 _acceleration.add(_diff);
             }
 
-            if (mode === 'bird') {
-                _acceleration.y += 0.004; // Lift
-            } else {
-                _acceleration.y += Math.sin(now * 0.001 + i) * 0.0015; // Sea oscillation
-            }
-
-            const distSqCent = _position.lengthSq();
-            if (distSqCent > (BOUNDARY_SIZE * BOUNDARY_SIZE)) {
-                _diff.copy(_position).negate().normalize().multiplyScalar(0.015);
+            // Boundary
+            const d = _position.length();
+            if (d > BOUNDARY_SIZE) {
+                _diff.copy(_position).negate().normalize().multiplyScalar((d - BOUNDARY_SIZE) * 0.02);
                 _acceleration.add(_diff);
             }
 
-            _velocity.add(_acceleration).clampLength(0, SPEED_LIMIT);
+            // Apply steering force smoothly
+            _acceleration.clampLength(0, MAX_STEER_FORCE);
+            _velocity.add(_acceleration).clampLength(MIN_SPEED, SPEED_LIMIT);
             _position.add(_velocity);
 
             positions[idx] = _position.x;

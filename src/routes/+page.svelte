@@ -3,7 +3,6 @@
     
     let mode = $state<'bird' | 'fish'>('bird');
     let fps = $state(0);
-    let zoom = $state(400);
 
     // Theme Configuration - Deeper, more professional colors
     let backgroundColor = $derived(mode === 'bird' ? '#0f172a' : '#01161e'); // Dark Twilight vs Deepest Teal
@@ -12,7 +11,7 @@
 
 <div class="relative min-h-screen w-full text-white overflow-hidden font-sans transition-colors duration-1000" style="background-color: {backgroundColor}">
     <!-- WebGL Background Layer -->
-    <BoidBackground boidCount={600} color={boidColor} {backgroundColor} {mode} bind:fps bind:zoom />
+    <BoidBackground boidCount={600} color={boidColor} {backgroundColor} {mode} bind:fps />
 
     <!-- UI Overlay -->
     <div class="relative z-10 flex flex-col items-center justify-center min-h-screen p-8 pointer-events-none">
@@ -26,7 +25,7 @@
             </div>
 
             <p class="text-xl text-slate-300 font-light leading-relaxed">
-                Work in Progress (Build v1.0.7)
+                Work in Progress (Build v1.0.9)
             </p>
             
             <div class="flex flex-wrap gap-4 justify-center pt-8">
@@ -50,21 +49,7 @@
     </div>
 
     <!-- Controls Overlay -->
-    <div class="fixed bottom-6 right-6 z-50 pointer-events-auto flex flex-col gap-3 p-3 rounded-2xl bg-slate-900/50 backdrop-blur-lg border border-white/10 shadow-lg min-w-[200px]">
-        <div class="flex items-center justify-between gap-2">
-            <span class="text-[10px] font-mono font-bold text-slate-400 uppercase tracking-widest">Zoom</span>
-            <span class="text-[10px] font-mono font-bold text-sky-400">{zoom}</span>
-        </div>
-        <input 
-            type="range" 
-            min="50" 
-            max="1000" 
-            bind:value={zoom} 
-            class="w-full h-1 bg-slate-700 rounded-lg appearance-none cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-3 [&::-webkit-slider-thumb]:h-3 [&::-webkit-slider-thumb]:bg-sky-400 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:hover:bg-white"
-        />
-        
-        <div class="h-px bg-white/10 my-1"></div>
-
+    <div class="fixed bottom-6 right-6 z-50 pointer-events-auto flex flex-col gap-3 p-3 rounded-2xl bg-slate-900/50 backdrop-blur-lg border border-white/10 shadow-lg min-w-[150px]">
         <div class="flex items-center justify-between gap-4">
             <div class="flex bg-slate-800/80 rounded-lg p-1">
                 <button
