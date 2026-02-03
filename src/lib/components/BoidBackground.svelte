@@ -58,7 +58,7 @@
     let ALIGNMENT_WEIGHT = $derived(mode === 'fish' ? 1.5 : 1.5); 
     let COHESION_WEIGHT = $derived(mode === 'fish' ? 0.1 : 1.0); 
     const MOUSE_REPULSION_WEIGHT = 10.0;
-    const BOUNDARY_SIZE = 250; 
+    const BOUNDARY_SIZE = 200; 
 
     let birdGeo: THREE.BufferGeometry;
     let fishGeo: THREE.BufferGeometry;
@@ -66,14 +66,14 @@
     function init() {
         scene = new THREE.Scene();
         
-        // Mode-specific Fog
-        const fogNear = mode === 'fish' ? 50 : 200;
-        const fogFar = mode === 'fish' ? 500 : 1500;
+        // Mode-specific Fog - Pulled closer for zoomed view
+        const fogNear = mode === 'fish' ? 20 : 50;
+        const fogFar = mode === 'fish' ? 300 : 600;
         scene.fog = new THREE.Fog(backgroundColor, fogNear, fogFar);
         scene.background = new THREE.Color(backgroundColor);
 
         camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 5000);
-        camera.position.z = 400; // Fixed distance
+        camera.position.z = 180; // Zoomed in
 
         renderer = new THREE.WebGLRenderer({ 
             canvas, 
@@ -83,10 +83,11 @@
         renderer.setSize(window.innerWidth, window.innerHeight);
         renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 
-        birdGeo = new THREE.ConeGeometry(0.5, 2, 4);
+        // Slightly larger for better visibility when zoomed
+        birdGeo = new THREE.ConeGeometry(0.7, 2.5, 4);
         birdGeo.rotateX(Math.PI / 2);
         
-        fishGeo = new THREE.ConeGeometry(0.6, 1.8, 8);
+        fishGeo = new THREE.ConeGeometry(0.8, 2.2, 8);
         fishGeo.rotateX(Math.PI / 2);
         fishGeo.scale(0.4, 1, 1);
         
@@ -137,9 +138,15 @@
     });
 
     $effect(() => {
+        if (camera) {
+            camera.position.z = 180;
+        }
+    });
+
+    $effect(() => {
         if (scene && mesh) {
-            const fogNear = mode === 'fish' ? 50 : 200;
-            const fogFar = mode === 'fish' ? 500 : 1500;
+            const fogNear = mode === 'fish' ? 20 : 50;
+            const fogFar = mode === 'fish' ? 300 : 600;
             scene.fog = new THREE.Fog(backgroundColor, fogNear, fogFar);
 
             const material = mesh.material as THREE.MeshBasicMaterial;
