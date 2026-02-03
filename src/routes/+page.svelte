@@ -5,9 +5,9 @@
     let fps = $state(0);
     let zoom = $state(200);
 
-    // Theme Configuration
-    let backgroundColor = $derived(mode === 'bird' ? '#0f172a' : '#06202a'); // Slate-900 (Night Sky) vs ~Cyan-950 (Deep Sea)
-    let boidColor = $derived(mode === 'bird' ? '#e2e8f0' : '#fbbf24'); // Slate-200 (White Birds) vs Amber-400 (Gold Fish)
+    // Theme Configuration - More evocative of Sea and Sky
+    let backgroundColor = $derived(mode === 'bird' ? '#87ceeb' : '#03242c'); // Sky Blue vs Deep Teal
+    let boidColor = $derived(mode === 'bird' ? '#ffffff' : '#a8dadc'); // White Birds vs Silvery Fish
 </script>
 
 <div class="relative min-h-screen w-full text-white overflow-hidden font-sans transition-colors duration-1000" style="background-color: {backgroundColor}">
@@ -26,7 +26,7 @@
             </div>
 
             <p class="text-xl text-slate-300 font-light leading-relaxed">
-                Work in Progress (Build v1.0.5)
+                Work in Progress (Build v1.0.6)
             </p>
             
             <div class="flex flex-wrap gap-4 justify-center pt-8">
