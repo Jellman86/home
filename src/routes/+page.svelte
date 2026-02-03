@@ -9,7 +9,7 @@
     let boidColor = $derived(mode === 'bird' ? '#cbd5e1' : '#4fd1c5'); // Muted Silver Birds vs Glowing Fish
 </script>
 
-<div class="relative min-h-screen w-full text-white overflow-hidden font-sans transition-colors duration-1000" style="background-color: {backgroundColor}">
+<div class="relative min-h-screen w-full text-white overflow-hidden font-sans transition-colors duration-1000">
     <!-- WebGL Background Layer -->
     <BoidBackground boidCount={600} color={boidColor} {backgroundColor} {mode} bind:fps />
 
@@ -25,7 +25,7 @@
             </div>
 
             <p class="text-xl text-slate-300 font-light leading-relaxed">
-                Work in Progress (Build v1.1.5)
+                Work in Progress (Build v1.1.6)
             </p>
             
             <div class="flex flex-wrap gap-4 justify-center pt-8">
@@ -78,7 +78,6 @@
     :global(body) {
         margin: 0;
         overflow: hidden;
-        background-color: #0f172a;
     }
     
     .animate-gradient {
