@@ -10,66 +10,66 @@
         fps?: number;
     }
 
-        let {
-            boidCount = 1200,
-            color = '#00ffff',
-            backgroundColor = '#0f172a',
-            mode = 'bird',
-            fps = $bindable(0)
-        }: Props = $props();
+    let { 
+        boidCount = 1200, 
+        color = '#00ffff',
+        backgroundColor = '#0f172a',
+        mode = 'bird',
+        fps = $bindable(0)
+    }: Props = $props();
+
+    let container: HTMLDivElement;
+    let canvas: HTMLCanvasElement;
     
-        let container: HTMLDivElement;
-        let canvas: HTMLCanvasElement;
-        
-        let scene: THREE.Scene;
-        let camera: THREE.PerspectiveCamera;
-        let renderer: THREE.WebGLRenderer;
-        let mesh: THREE.InstancedMesh;
-        let frameId: number;
+    let scene: THREE.Scene;
+    let camera: THREE.PerspectiveCamera;
+    let renderer: THREE.WebGLRenderer;
+    let mesh: THREE.InstancedMesh;
+    let frameId: number;
+
+    let lastTime = performance.now();
+    let frameCount = 0;
+
+    let positions: Float32Array;
+    let velocities: Float32Array;
     
-        let lastTime = performance.now();
-        let frameCount = 0;
+    const _position = new THREE.Vector3();
+    const _velocity = new THREE.Vector3();
+    const _acceleration = new THREE.Vector3();
+    const _dummy = new THREE.Object3D();
+    const _diff = new THREE.Vector3();
+    const _lookAt = new THREE.Vector3();
+
+    let mouse = new THREE.Vector2(-9999, -9999);
+    let target = new THREE.Vector3();
     
-        let positions: Float32Array;
-        let velocities: Float32Array;
-        
-        const _position = new THREE.Vector3();
-        const _velocity = new THREE.Vector3();
-        const _acceleration = new THREE.Vector3();
-        const _dummy = new THREE.Object3D();
-        const _diff = new THREE.Vector3();
-        const _lookAt = new THREE.Vector3();
+    // DIFFERENTIATED BOID PARAMETERS
+    let SPEED_LIMIT = $derived(mode === 'fish' ? 0.4 : 0.8);
+    let VISUAL_RANGE = $derived(mode === 'fish' ? 40 : 35); // Increased for fish to fix synchronization
+    let VISUAL_RANGE_SQ = $derived(VISUAL_RANGE * VISUAL_RANGE);
+    const BOUNDARY_SIZE = 120;
     
-        let mouse = new THREE.Vector2(-9999, -9999);
-        let target = new THREE.Vector3();
-        
-        // DIFFERENTIATED BOID PARAMETERS
-        let SPEED_LIMIT = $derived(mode === 'fish' ? 0.5 : 0.8);
-        let VISUAL_RANGE = $derived(mode === 'fish' ? 20 : 35);
-        let VISUAL_RANGE_SQ = $derived(VISUAL_RANGE * VISUAL_RANGE);
-        const BOUNDARY_SIZE = 120;
-        
-        let SEPARATION_WEIGHT = $derived(mode === 'fish' ? 3.0 : 1.5);
-        let ALIGNMENT_WEIGHT = $derived(mode === 'fish' ? 1.0 : 1.5);
-        let COHESION_WEIGHT = $derived(mode === 'fish' ? 0.5 : 1.5);
-        const MOUSE_REPULSION_WEIGHT = 5.0;
-    
-        let birdGeo: THREE.BufferGeometry;
-        let fishGeo: THREE.BufferGeometry;
-    
-        function init() {
-            scene = new THREE.Scene();
-            scene.fog = new THREE.Fog(backgroundColor, 70, 300);
-            scene.background = new THREE.Color(backgroundColor);
-    
-            camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
-            camera.position.z = 120; // Slightly zoomed out
-    
-            renderer = new THREE.WebGLRenderer({
-                canvas,
-                antialias: true,
-                alpha: true
-            });        renderer.setSize(window.innerWidth, window.innerHeight);
+    let SEPARATION_WEIGHT = $derived(mode === 'fish' ? 2.0 : 1.5);
+    let ALIGNMENT_WEIGHT = $derived(mode === 'fish' ? 4.0 : 1.5); // Drastically increased for fish heading sync
+    let COHESION_WEIGHT = $derived(mode === 'fish' ? 1.5 : 1.5);
+    const MOUSE_REPULSION_WEIGHT = 5.0;
+
+    let birdGeo: THREE.BufferGeometry;
+    let fishGeo: THREE.BufferGeometry;
+
+    function init() {
+        scene = new THREE.Scene();
+        scene.fog = new THREE.Fog(backgroundColor, 70, 300);
+        scene.background = new THREE.Color(backgroundColor);
+
+        camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+        camera.position.z = 120; // Maintain the requested zoom level
+
+        renderer = new THREE.WebGLRenderer({ 
+            canvas, 
+            antialias: true,
+            alpha: true 
+        });        renderer.setSize(window.innerWidth, window.innerHeight);
         renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 
         birdGeo = new THREE.ConeGeometry(0.5, 2, 4);
