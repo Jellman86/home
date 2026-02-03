@@ -82,7 +82,7 @@
         renderer = new THREE.WebGLRenderer({ 
             canvas, 
             antialias: true,
-            alpha: true // Allow CSS background to show through
+            alpha: false 
         });
         renderer.setSize(window.innerWidth, window.innerHeight);
         renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
@@ -101,8 +101,8 @@
         // Material
         const material = new THREE.MeshBasicMaterial({ 
             color: new THREE.Color(color),
-            transparent: true,
-            opacity: 0.8,
+            transparent: false,
+            opacity: 1.0,
         });
 
         // Instanced Mesh
@@ -164,9 +164,15 @@
         }
     });
 
-    // Reactive Color Update
+    // Reactive Color/Theme Update
     $effect(() => {
-        if (mesh) {
+        if (scene && mesh) {
+            // Update Background & Fog
+            const bg = new THREE.Color(backgroundColor);
+            scene.background = bg;
+            scene.fog = new THREE.Fog(backgroundColor, 70, 250);
+
+            // Update Material Color
             const material = mesh.material as THREE.MeshBasicMaterial;
             material.color.set(color);
         }
@@ -327,6 +333,6 @@
     });
 </script>
 
-<div bind:this={container} class="fixed inset-0 w-full h-full z-0 pointer-events-none">
+<div bind:this={container} class="fixed inset-0 w-full h-full -z-10">
     <canvas bind:this={canvas} class="w-full h-full block"></canvas>
 </div>
