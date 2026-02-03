@@ -57,7 +57,7 @@
     let COHESION_WEIGHT = $derived(mode === 'fish' ? 0.8 : 0.4); 
     const MOUSE_REPULSION_WEIGHT = 8.0;
 
-    // Advanced Volumetric Raymarching Shader
+    // Advanced FBM Cloud Shader
     const skyVertexShader = `
         varying vec2 vUv;
         varying vec3 vWorldPosition;
@@ -76,27 +76,43 @@
         varying vec2 vUv;
         varying vec3 vWorldPosition;
 
-        float noise(vec3 p) {
-            vec3 i = floor(p);
-            vec3 f = fract(p);
-            f = f*f*(3.0-2.0*f);
-            float n = i.x + i.y*57.0 + 113.0*i.z;
-            return mix(mix(mix( fract(sin(n)*43758.5453), fract(sin(n+1.0)*43758.5453),f.x),
-                           mix( fract(sin(n+57.0)*43758.5453), fract(sin(n+58.0)*43758.5453),f.x),f.y),
-                       mix(mix( fract(sin(n+113.0)*43758.5453), fract(sin(n+114.0)*43758.5453),f.x),
-                           mix( fract(sin(n+170.0)*43758.5453), fract(sin(n+171.0)*43758.5453),f.x),f.y),f.z);
+        float hash(vec2 p) {
+            return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453123);
+        }
+
+        float noise(vec2 p) {
+            vec2 i = floor(p);
+            vec2 f = fract(p);
+            f = f * f * (3.0 - 2.0 * f);
+            return mix(mix(hash(i + vec2(0,0)), hash(i + vec2(1,0)), f.x),
+                       mix(hash(i + vec2(0,1)), hash(i + vec2(1,1)), f.x), f.y);
+        }
+
+        float fbm(vec2 p) {
+            float v = 0.0;
+            float a = 0.5;
+            for (int i = 0; i < 5; i++) {
+                v += a * noise(p);
+                p *= 2.0;
+                a *= 0.5;
+            }
+            return v;
         }
 
         void main() {
             vec3 finalColor = bgColor;
             if (isFish > 0.5) {
-                float rays = pow(sin(vUv.x * 15.0 + time) * 0.5 + 0.5, 8.0) * 0.15;
+                // Underwater shafts
+                float rays = pow(sin(vUv.x * 15.0 + time * 0.5) * 0.5 + 0.5, 10.0) * 0.2;
                 finalColor += rays * vec3(0.4, 0.8, 1.0);
+                finalColor = mix(finalColor * 0.8, finalColor, vUv.y);
             } else {
-                float d = noise(vWorldPosition * 0.01 + time * 0.05);
-                d += 0.5 * noise(vWorldPosition * 0.02);
-                float f = smoothstep(0.5, 0.8, d);
-                finalColor = mix(finalColor, vec3(1.0), f * 0.2);
+                // FBM Clouds
+                vec2 p = vUv * 3.0;
+                p.x += time * 0.05;
+                float d = fbm(p);
+                float f = smoothstep(0.4, 0.9, d);
+                finalColor = mix(finalColor, vec3(1.0), f * 0.25);
             }
             gl_FragColor = vec4(finalColor, 1.0);
         }
@@ -107,7 +123,7 @@
         scene.background = new THREE.Color(backgroundColor);
 
         camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 2000);
-        camera.position.z = 180; // Perfect balanced distance
+        camera.position.z = 180;
 
         renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
         renderer.setSize(window.innerWidth, window.innerHeight);
@@ -140,17 +156,18 @@
         scene.add(mesh);
 
         const bubbleGeo = new THREE.BufferGeometry();
-        const bubbleCount = 300;
+        const bubbleCount = 400;
         const bubblePos = new Float32Array(bubbleCount * 3);
         for(let i=0; i<bubbleCount; i++) {
-            bubblePos[i*3] = (Math.random()-0.5) * 600;
-            bubblePos[i*3+1] = (Math.random()-0.5) * 600;
-            bubblePos[i*3+2] = (Math.random()-0.5) * 600;
+            bubblePos[i*3] = (Math.random()-0.5) * 800;
+            bubblePos[i*3+1] = (Math.random()-0.5) * 800;
+            bubblePos[i*3+2] = (Math.random()-0.5) * 400 - 200;
         }
         bubbleGeo.setAttribute('position', new THREE.BufferAttribute(bubblePos, 3));
         bubbleParticles = new THREE.Points(bubbleGeo, new THREE.PointsMaterial({ 
-            color: 0xffffff, size: 1.5, transparent: true, opacity: 0.3, sizeAttenuation: true
+            color: 0xffffff, size: 3.0, transparent: true, opacity: 0.4, sizeAttenuation: true
         }));
+        bubbleParticles.visible = mode === 'fish';
         scene.add(bubbleParticles);
 
         positions = new Float32Array(boidCount * 3);
@@ -169,8 +186,7 @@
     $effect(() => {
         if (mesh && skyShaderMaterial) {
             skyShaderMaterial.uniforms.isFish.value = mode === 'fish' ? 1.0 : 0.0;
-            bubbleParticles.visible = mode === 'fish';
-            mesh.geometry = mode === 'fish' ? mesh.geometry : mesh.geometry; // Trigger swap if needed
+            if (bubbleParticles) bubbleParticles.visible = mode === 'fish';
         }
     });
 
@@ -193,9 +209,13 @@
         if (mode === 'fish' && bubbleParticles) {
             const attr = bubbleParticles.geometry.attributes.position as THREE.BufferAttribute;
             for(let i=0; i<attr.count; i++) {
-                let y = attr.getY(i) + 0.2;
-                if (y > 300) y = -300;
+                let y = attr.getY(i) + 0.4;
+                if (y > 400) y = -400;
                 attr.setY(i, y);
+                // Drift
+                let x = attr.getX(i);
+                x += Math.sin(now * 0.001 + i) * 0.1;
+                attr.setX(i, x);
             }
             attr.needsUpdate = true;
         }
@@ -247,7 +267,7 @@
             if (Math.abs(_position.y) > lim) _acceleration.y -= Math.sign(_position.y) * 0.04;
             if (Math.abs(_position.z) > lim) _acceleration.z -= Math.sign(_position.z) * 0.04;
 
-            _acceleration.clampLength(0, 0.04);
+            _acceleration.clampLength(0, 0.03);
             _velocity.add(_acceleration).clampLength(0.2, SPEED_LIMIT);
             _position.add(_velocity);
 
