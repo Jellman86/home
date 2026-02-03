@@ -11,7 +11,7 @@
     }
 
     let { 
-        boidCount = 800, 
+        boidCount = 1000, 
         color = '#00ffff',
         backgroundColor = '#0f172a',
         mode = 'bird',
@@ -43,15 +43,15 @@
     let mouse = new THREE.Vector2(-9999, -9999);
     let target = new THREE.Vector3();
     
-    // RESTORED INITIAL PARAMETERS
-    let SPEED_LIMIT = $derived(mode === 'fish' ? 0.4 : 0.8);
-    let VISUAL_RANGE = $derived(mode === 'fish' ? 50 : 25);
-    let VISUAL_RANGE_SQ = $derived(VISUAL_RANGE * VISUAL_RANGE);
+    // TRUE INITIAL PARAMETERS
+    const SPEED_LIMIT = 0.8;
+    const VISUAL_RANGE = 25;
+    const VISUAL_RANGE_SQ = VISUAL_RANGE * VISUAL_RANGE;
     const BOUNDARY_SIZE = 120;
     
-    let SEPARATION_WEIGHT = $derived(mode === 'fish' ? 1.5 : 1.5);
-    let ALIGNMENT_WEIGHT = $derived(mode === 'fish' ? 3.0 : 1.0);
-    let COHESION_WEIGHT = $derived(mode === 'fish' ? 2.0 : 1.0);
+    const SEPARATION_WEIGHT = 2.0;
+    const ALIGNMENT_WEIGHT = 1.0;
+    const COHESION_WEIGHT = 1.0;
     const MOUSE_REPULSION_WEIGHT = 5.0;
 
     let birdGeo: THREE.BufferGeometry;
@@ -59,11 +59,11 @@
 
     function init() {
         scene = new THREE.Scene();
-        scene.fog = new THREE.Fog(backgroundColor, 70, 250);
+        scene.fog = new THREE.Fog(backgroundColor, 50, 200);
         scene.background = new THREE.Color(backgroundColor);
 
         camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
-        camera.position.z = 120; // Original "zoomed out" but visible distance
+        camera.position.z = 80;
 
         renderer = new THREE.WebGLRenderer({ 
             canvas, 
@@ -129,7 +129,7 @@
     $effect(() => {
         if (scene && mesh) {
             scene.background = new THREE.Color(backgroundColor);
-            scene.fog = new THREE.Fog(backgroundColor, 70, 250);
+            scene.fog = new THREE.Fog(backgroundColor, 50, 200);
             const material = mesh.material as THREE.MeshBasicMaterial;
             material.color.set(color);
         }
@@ -176,6 +176,7 @@
                     cohesion.add(_diff);
                     _diff.set(velocities[otherIdx], velocities[otherIdx + 1], velocities[otherIdx + 2]);
                     alignment.add(_diff);
+
                     _diff.set(positions[otherIdx], positions[otherIdx + 1], positions[otherIdx + 2]);
                     _diff.sub(_position).negate().normalize().divideScalar(Math.sqrt(distSq));
                     separation.add(_diff);
