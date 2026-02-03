@@ -43,9 +43,8 @@ jobs:
       - name: Build
         run: npm run build
         env:
-            # Important for GitHub Pages if not at root domain, but usually '' is fine for custom domains or username.github.io
-            # If using username.github.io/repo-name, set BASE_PATH to /repo-name
-            BASE_PATH: ''
+            # Set this to your repository name with a leading slash
+            BASE_PATH: '/home'
 
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
