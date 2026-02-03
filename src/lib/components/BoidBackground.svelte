@@ -43,14 +43,14 @@
     
     // Boid Parameters
     const SPEED_LIMIT = 0.6; // Reduced speed for smoother background
-    const VISUAL_RANGE = 40; // How far they can see
+    const VISUAL_RANGE = 25; // How far they can see
     const VISUAL_RANGE_SQ = VISUAL_RANGE * VISUAL_RANGE;
     const BOUNDARY_SIZE = 120; // World size
     
     // Rule weights
-    const SEPARATION_WEIGHT = 3.0;
-    const ALIGNMENT_WEIGHT = 3.0;
-    const COHESION_WEIGHT = 4.0;
+    const SEPARATION_WEIGHT = 1.5;
+    const ALIGNMENT_WEIGHT = 1.0;
+    const COHESION_WEIGHT = 1.0;
     const MOUSE_REPULSION_WEIGHT = 5.0;
 
     function init() {
