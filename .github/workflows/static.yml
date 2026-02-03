@@ -43,8 +43,8 @@ jobs:
       - name: Build
         run: npm run build
         env:
-            # Set this to your repository name with a leading slash
-            BASE_PATH: '/home'
+            # Set to empty string for custom domain root deployment
+            BASE_PATH: ''
 
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
