@@ -71,7 +71,7 @@
         // Scene setup
         scene = new THREE.Scene();
         // Fog for depth and to hide boundaries
-        scene.fog = new THREE.Fog(backgroundColor, 70, 250);
+        scene.fog = new THREE.Fog(backgroundColor, 100, 500);
         scene.background = new THREE.Color(backgroundColor);
 
         // Camera
@@ -115,11 +115,11 @@
         velocities = new Float32Array(boidCount * 3);
 
         for (let i = 0; i < boidCount; i++) {
-            // Random positions within cube
+            // Random positions within a smaller area to start
             _position.set(
-                (Math.random() - 0.5) * BOUNDARY_SIZE * 1.5,
-                (Math.random() - 0.5) * BOUNDARY_SIZE * 1.5,
-                (Math.random() - 0.5) * BOUNDARY_SIZE * 1.5
+                (Math.random() - 0.5) * BOUNDARY_SIZE,
+                (Math.random() - 0.5) * BOUNDARY_SIZE,
+                (Math.random() - 0.5) * BOUNDARY_SIZE
             );
             
             // Random velocities
@@ -170,7 +170,7 @@
             // Update Background & Fog
             const bg = new THREE.Color(backgroundColor);
             scene.background = bg;
-            scene.fog = new THREE.Fog(backgroundColor, 70, 250);
+            scene.fog = new THREE.Fog(backgroundColor, 100, 500);
 
             // Update Material Color
             const material = mesh.material as THREE.MeshBasicMaterial;
