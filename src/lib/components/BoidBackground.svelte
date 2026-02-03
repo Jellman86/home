@@ -69,12 +69,12 @@
         // Scene setup
         scene = new THREE.Scene();
         // Fog for depth and to hide boundaries
-        scene.fog = new THREE.Fog(backgroundColor, 50, 200);
+        scene.fog = new THREE.Fog(backgroundColor, 70, 250);
         scene.background = new THREE.Color(backgroundColor);
 
         // Camera
         camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
-        camera.position.z = 80;
+        camera.position.z = 120;
 
         // Renderer
         renderer = new THREE.WebGLRenderer({ 
@@ -161,7 +161,7 @@
             // Update Background & Fog
             const bg = new THREE.Color(backgroundColor);
             scene.background = bg;
-            scene.fog = new THREE.Fog(backgroundColor, 50, 200);
+            scene.fog = new THREE.Fog(backgroundColor, 70, 250);
 
             // Update Material Color
             const material = mesh.material as THREE.MeshBasicMaterial;
