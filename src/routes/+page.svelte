@@ -2,7 +2,7 @@
     import BoidBackground from '$lib/components/BoidBackground.svelte';
 </script>
 
-<div class="relative min-h-screen w-full bg-slate-900 text-white overflow-hidden font-sans">
+<div class="relative min-h-screen w-full text-white overflow-hidden font-sans">
     <!-- WebGL Background Layer -->
     <BoidBackground boidCount={1200} color="#38bdf8" />
 
@@ -14,12 +14,11 @@
                 <h1 class="text-7xl font-black tracking-tighter bg-clip-text text-transparent bg-gradient-to-r from-sky-400 to-indigo-500 animate-gradient">
                     Jellman86
                 </h1>
-                <p class="text-xs font-mono uppercase tracking-[0.3em] text-sky-300/80">Software Engineer • Creator</p>
+                <p class="text-xs font-mono uppercase tracking-[0.3em] text-sky-300/80">Infrastructure Engineer</p>
             </div>
 
             <p class="text-xl text-slate-300 font-light leading-relaxed">
-                Building modern, high-performance web applications and tools. 
-                Passionate about <span class="text-white font-medium">AI</span>, <span class="text-white font-medium">IoT</span>, and <span class="text-white font-medium">Visual Design</span>.
+                Work in Progress
             </p>
             
             <div class="flex flex-wrap gap-4 justify-center pt-8">
