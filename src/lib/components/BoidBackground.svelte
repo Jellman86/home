@@ -61,6 +61,10 @@
     let COHESION_WEIGHT = $derived(mode === 'fish' ? 4.0 : 1.0);
     const MOUSE_REPULSION_WEIGHT = 5.0;
 
+    // Geometries
+    let birdGeo: THREE.BufferGeometry;
+    let fishGeo: THREE.BufferGeometry;
+
     function init() {
         // Scene setup
         scene = new THREE.Scene();
@@ -81,9 +85,16 @@
         renderer.setSize(window.innerWidth, window.innerHeight);
         renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 
-        // Geometry (Paper Airplane / Cone shape)
-        const geometry = new THREE.ConeGeometry(0.5, 2, 4);
-        geometry.rotateX(Math.PI / 2); // Point forward
+        // Define Geometries
+        
+        // 1. Bird: Paper Airplane / Arrow (Low Poly)
+        birdGeo = new THREE.ConeGeometry(0.5, 2, 4);
+        birdGeo.rotateX(Math.PI / 2); // Point forward
+        
+        // 2. Fish: Thinner, rounder (Higher Poly)
+        fishGeo = new THREE.ConeGeometry(0.6, 1.8, 8);
+        fishGeo.rotateX(Math.PI / 2);
+        fishGeo.scale(0.4, 1, 1); // Flatten width (streamlined)
         
         // Material
         const material = new THREE.MeshBasicMaterial({ 
@@ -93,7 +104,7 @@
         });
 
         // Instanced Mesh
-        mesh = new THREE.InstancedMesh(geometry, material, boidCount);
+        mesh = new THREE.InstancedMesh(mode === 'fish' ? fishGeo : birdGeo, material, boidCount);
         mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage); // Optimizing for frequent updates
         scene.add(mesh);
 
@@ -136,6 +147,13 @@
         light.position.set(10, 10, 10);
         scene.add(light);
     }
+
+    // Reactive Geometry Swap
+    $effect(() => {
+        if (mesh && birdGeo && fishGeo) {
+            mesh.geometry = mode === 'fish' ? fishGeo : birdGeo;
+        }
+    });
 
     function animate() {
         frameId = requestAnimationFrame(animate);
