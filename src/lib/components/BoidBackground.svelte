@@ -27,7 +27,6 @@
     let mesh: THREE.InstancedMesh;
     let frameId: number;
 
-    // Component-level references for reactivity
     let skyShaderMaterial: THREE.ShaderMaterial;
     let bubbleParticles: THREE.Points;
     let birdGeo: THREE.BufferGeometry;
@@ -60,7 +59,6 @@
     let COHESION_WEIGHT = $derived(mode === 'fish' ? 0.8 : 0.4); 
     const MOUSE_REPULSION_WEIGHT = 8.0;
 
-    // Perspectival Environment Shader
     const skyVertexShader = `
         varying vec2 vUv;
         varying vec3 vWorldPosition;
@@ -106,27 +104,32 @@
             vec3 finalColor;
             
             if (isFish > 0.5) {
-                // SEA SLICE VIEW: Bright surface at top, deep pressure dark at bottom
+                // SEA SLICE VIEW
                 float gradient = smoothstep(-1.0, 1.0, vUv.y * 2.0 - 1.0);
-                vec3 topColor = bgColor + vec3(0.1, 0.3, 0.4);
-                vec3 bottomColor = bgColor * 0.1;
+                vec3 topColor = vec3(0.02, 0.25, 0.35);
+                vec3 bottomColor = vec3(0.0, 0.05, 0.1);
                 finalColor = mix(bottomColor, topColor, gradient);
                 
-                // Light rays from top
                 float rays = pow(sin(vUv.x * 12.0 + time * 0.4) * 0.5 + 0.5, 15.0) * 0.4 * gradient;
                 finalColor += rays * vec3(0.6, 0.9, 1.0);
             } else {
-                // PERSPECTIVE SKY: Darker top (zenith), lighter horizon
-                vec3 skyTop = bgColor;
-                vec3 skyHorizon = bgColor + vec3(0.1, 0.15, 0.25);
-                finalColor = mix(skyHorizon, skyTop, pow(vUv.y, 0.7));
+                // REALISTIC SKY: Deep Blue Zenith -> Cerulean Horizon
+                vec3 zenithColor = vec3(0.05, 0.15, 0.4); // Deep night/sky blue
+                vec3 horizonColor = vec3(0.3, 0.6, 0.9); // Bright cerulean
                 
-                // Distant, high-altitude clouds
-                vec2 cloudP = vUv * vec2(2.5, 1.5);
-                cloudP.x += time * 0.03;
-                float d = fbm(cloudP * 2.0);
-                float cloudMask = smoothstep(0.45, 0.85, d);
-                finalColor = mix(finalColor, vec3(1.0), cloudMask * 0.35);
+                // Taper towards "sun" (top right)
+                float distToSun = distance(vUv, vec2(0.8, 0.8));
+                float sunGlow = exp(-distToSun * 2.0);
+                
+                finalColor = mix(horizonColor, zenithColor, pow(vUv.y, 0.8));
+                finalColor = mix(finalColor, vec3(1.0, 0.9, 0.8), sunGlow * 0.3);
+                
+                // Crisp High-Altitude Clouds
+                vec2 cloudP = vUv * vec2(2.0, 1.2);
+                cloudP.x += time * 0.025;
+                float d = fbm(cloudP * 3.0);
+                float cloudMask = smoothstep(0.5, 0.7, d); // Sharper edges
+                finalColor = mix(finalColor, vec3(1.0), cloudMask * 0.4);
             }
             
             gl_FragColor = vec4(finalColor, 1.0);
@@ -144,8 +147,7 @@
         renderer.setSize(window.innerWidth, window.innerHeight);
         renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 
-        // Background Plane
-        const skyGeo = new THREE.PlaneGeometry(3000, 2000);
+        const skyGeo = new THREE.PlaneGeometry(3500, 2500);
         skyShaderMaterial = new THREE.ShaderMaterial({
             uniforms: {
                 time: { value: 0 },
@@ -157,10 +159,9 @@
             depthWrite: false
         });
         const sky = new THREE.Mesh(skyGeo, skyShaderMaterial);
-        sky.position.z = -500;
+        sky.position.z = -600;
         scene.add(sky);
 
-        // Define Geometries
         birdGeo = new THREE.ConeGeometry(0.6, 2.5, 4);
         birdGeo.rotateX(Math.PI / 2);
         fishGeo = new THREE.ConeGeometry(0.7, 2.0, 8);
@@ -172,7 +173,6 @@
         mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
         scene.add(mesh);
 
-        // Bubbles
         const bubbleGeo = new THREE.BufferGeometry();
         const bubbleCount = 400;
         const bubblePos = new Float32Array(bubbleCount * 3);
@@ -201,16 +201,10 @@
         }
     }
 
-    // REACTIVE UPDATES
     $effect(() => {
         if (mesh && skyShaderMaterial && birdGeo && fishGeo) {
-            // Update Uniforms
             skyShaderMaterial.uniforms.isFish.value = mode === 'fish' ? 1.0 : 0.0;
-            
-            // Update Visibility
             if (bubbleParticles) bubbleParticles.visible = mode === 'fish';
-            
-            // Update Geometry
             mesh.geometry = mode === 'fish' ? fishGeo : birdGeo;
         }
     });
