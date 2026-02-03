@@ -4,7 +4,7 @@
 
 <div class="relative min-h-screen w-full text-white overflow-hidden font-sans">
     <!-- WebGL Background Layer -->
-    <BoidBackground boidCount={1200} color="#38bdf8" />
+    <BoidBackground boidCount={600} color="#38bdf8" />
 
     <!-- UI Overlay -->
     <div class="relative z-10 flex flex-col items-center justify-center min-h-screen p-8 pointer-events-none">
