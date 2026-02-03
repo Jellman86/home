@@ -82,7 +82,7 @@
         renderer = new THREE.WebGLRenderer({ 
             canvas, 
             antialias: true,
-            alpha: false 
+            alpha: true 
         });
         renderer.setSize(window.innerWidth, window.innerHeight);
         renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
@@ -101,8 +101,8 @@
         // Material
         const material = new THREE.MeshBasicMaterial({ 
             color: new THREE.Color(color),
-            transparent: false,
-            opacity: 1.0,
+            transparent: true,
+            opacity: 0.8,
         });
 
         // Instanced Mesh
@@ -167,9 +167,7 @@
     // Reactive Color/Theme Update
     $effect(() => {
         if (scene && mesh) {
-            // Update Background & Fog
-            const bg = new THREE.Color(backgroundColor);
-            scene.background = bg;
+            // Update Fog to match background for depth feel
             scene.fog = new THREE.Fog(backgroundColor, 100, 500);
 
             // Update Material Color
@@ -333,6 +331,6 @@
     });
 </script>
 
-<div bind:this={container} class="fixed inset-0 w-full h-full -z-10">
+<div bind:this={container} class="fixed inset-0 w-full h-full z-0 pointer-events-none">
     <canvas bind:this={canvas} class="w-full h-full block"></canvas>
 </div>
