@@ -24,7 +24,8 @@ const config = {
             // If the env var is set (e.g. in GitHub Actions), use it.
             // Otherwise, default to '' for local development.
             // CAUTION: For GitHub Pages project sites, this usually needs to be '/repo-name'.
-            base: process.env.BASE_PATH !== undefined ? process.env.BASE_PATH : ''
+            base: process.env.BASE_PATH !== undefined ? process.env.BASE_PATH : '',
+            relative: false
         }
 	}
 };
