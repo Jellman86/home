@@ -50,14 +50,14 @@
     let target = new THREE.Vector3();
     
     // Boid Parameters - Reactive based on mode
-    let SPEED_LIMIT = $derived(mode === 'fish' ? 0.5 : 0.6);
-    let VISUAL_RANGE = $derived(mode === 'fish' ? 40 : 25);
+    let SPEED_LIMIT = $derived(mode === 'fish' ? 0.4 : 0.8);
+    let VISUAL_RANGE = $derived(mode === 'fish' ? 50 : 25);
     let VISUAL_RANGE_SQ = $derived(VISUAL_RANGE * VISUAL_RANGE);
     const BOUNDARY_SIZE = 120; // World size
     
     // Rule weights - Reactive based on mode
-    let SEPARATION_WEIGHT = $derived(mode === 'fish' ? 3.0 : 1.5);
-    let ALIGNMENT_WEIGHT = $derived(mode === 'fish' ? 3.0 : 1.0);
+    let SEPARATION_WEIGHT = $derived(mode === 'fish' ? 1.0 : 1.5);
+    let ALIGNMENT_WEIGHT = $derived(mode === 'fish' ? 4.0 : 1.0);
     let COHESION_WEIGHT = $derived(mode === 'fish' ? 4.0 : 1.0);
     const MOUSE_REPULSION_WEIGHT = 5.0;
 
