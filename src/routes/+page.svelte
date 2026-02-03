@@ -10,7 +10,7 @@
     let boidColor = $derived(mode === 'bird' ? '#e2e8f0' : '#fbbf24'); // Slate-200 (White Birds) vs Amber-400 (Gold Fish)
 </script>
 
-<div class="relative min-h-screen w-full text-white overflow-hidden font-sans transition-colors duration-1000" style="background-color: {backgroundColor}">
+<div class="relative min-h-screen w-full text-white overflow-hidden font-sans transition-colors duration-1000">
     <!-- WebGL Background Layer -->
     <BoidBackground boidCount={600} color={boidColor} {backgroundColor} {mode} bind:fps bind:zoom />
 
