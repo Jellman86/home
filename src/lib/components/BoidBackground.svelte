@@ -57,7 +57,7 @@
     let COHESION_WEIGHT = $derived(mode === 'fish' ? 0.8 : 0.4); 
     const MOUSE_REPULSION_WEIGHT = 8.0;
 
-    // Advanced FBM Cloud Shader
+    // Perspectival Environment Shader
     const skyVertexShader = `
         varying vec2 vUv;
         varying vec3 vWorldPosition;
@@ -100,20 +100,32 @@
         }
 
         void main() {
-            vec3 finalColor = bgColor;
+            vec3 finalColor;
+            
             if (isFish > 0.5) {
-                // Underwater shafts
-                float rays = pow(sin(vUv.x * 15.0 + time * 0.5) * 0.5 + 0.5, 10.0) * 0.2;
-                finalColor += rays * vec3(0.4, 0.8, 1.0);
-                finalColor = mix(finalColor * 0.8, finalColor, vUv.y);
+                // SEA SLICE VIEW: Bright top, dark deep bottom
+                float gradient = smoothstep(-0.8, 0.8, vUv.y * 2.0 - 1.0);
+                vec3 topColor = bgColor + vec3(0.1, 0.3, 0.4);
+                vec3 bottomColor = bgColor * 0.2;
+                finalColor = mix(bottomColor, topColor, gradient);
+                
+                // Sunlight shafts from the surface
+                float rays = pow(sin(vUv.x * 10.0 + time * 0.3) * 0.5 + 0.5, 12.0) * 0.3 * gradient;
+                finalColor += rays * vec3(0.5, 0.9, 1.0);
             } else {
-                // FBM Clouds
-                vec2 p = vUv * 3.0;
-                p.x += time * 0.05;
-                float d = fbm(p);
-                float f = smoothstep(0.4, 0.9, d);
-                finalColor = mix(finalColor, vec3(1.0), f * 0.25);
+                // PERSPECTIVE SKY: Look up from ground
+                vec3 skyTop = bgColor;
+                vec3 skyHorizon = bgColor + vec3(0.1, 0.1, 0.2);
+                finalColor = mix(skyHorizon, skyTop, vUv.y);
+                
+                // High-altitude clouds
+                vec2 p = vUv * vec2(2.0, 1.0); // Stretch for horizon feel
+                p.x += time * 0.02;
+                float d = fbm(p * 2.5);
+                float f = smoothstep(0.5, 0.9, d);
+                finalColor = mix(finalColor, vec3(1.0), f * 0.3);
             }
+            
             gl_FragColor = vec4(finalColor, 1.0);
         }
     `;
@@ -129,7 +141,7 @@
         renderer.setSize(window.innerWidth, window.innerHeight);
         renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 
-        const skyGeo = new THREE.PlaneGeometry(2000, 2000);
+        const skyGeo = new THREE.PlaneGeometry(3000, 2000);
         skyShaderMaterial = new THREE.ShaderMaterial({
             uniforms: {
                 time: { value: 0 },
@@ -141,7 +153,7 @@
             depthWrite: false
         });
         const sky = new THREE.Mesh(skyGeo, skyShaderMaterial);
-        sky.position.z = -400;
+        sky.position.z = -500;
         scene.add(sky);
 
         const birdGeo = new THREE.ConeGeometry(0.6, 2.5, 4);
@@ -165,7 +177,7 @@
         }
         bubbleGeo.setAttribute('position', new THREE.BufferAttribute(bubblePos, 3));
         bubbleParticles = new THREE.Points(bubbleGeo, new THREE.PointsMaterial({ 
-            color: 0xffffff, size: 3.0, transparent: true, opacity: 0.4, sizeAttenuation: true
+            color: 0xffffff, size: 3.5, transparent: true, opacity: 0.4, sizeAttenuation: true
         }));
         bubbleParticles.visible = mode === 'fish';
         scene.add(bubbleParticles);
@@ -209,12 +221,11 @@
         if (mode === 'fish' && bubbleParticles) {
             const attr = bubbleParticles.geometry.attributes.position as THREE.BufferAttribute;
             for(let i=0; i<attr.count; i++) {
-                let y = attr.getY(i) + 0.4;
+                let y = attr.getY(i) + 0.5;
                 if (y > 400) y = -400;
                 attr.setY(i, y);
-                // Drift
                 let x = attr.getX(i);
-                x += Math.sin(now * 0.001 + i) * 0.1;
+                x += Math.sin(now * 0.001 + i) * 0.15;
                 attr.setX(i, x);
             }
             attr.needsUpdate = true;
@@ -255,19 +266,19 @@
                 }
             }
 
-            if (sC > 0) _acceleration.add(sepF.divideScalar(sC).normalize().multiplyScalar(SEPARATION_WEIGHT * 0.1));
+            if (sC > 0) _acceleration.add(sepF.divideScalar(sC).normalize().multiplyScalar(SEPARATION_WEIGHT * 0.12));
             if (cC > 0) _acceleration.add(cohF.divideScalar(cC).sub(_position).normalize().multiplyScalar(COHESION_WEIGHT * 0.01));
-            if (aC > 0) _acceleration.add(alignF.divideScalar(aC).normalize().sub(_velocity).multiplyScalar(ALIGNMENT_WEIGHT * 0.05));
+            if (aC > 0) _acceleration.add(alignF.divideScalar(aC).normalize().sub(_velocity).multiplyScalar(ALIGNMENT_WEIGHT * 0.06));
 
             const distM = _position.distanceToSquared(target);
-            if (distM < 4000) _acceleration.add(_diff.copy(_position).sub(target).normalize().multiplyScalar(MOUSE_REPULSION_WEIGHT * 0.03));
+            if (distM < 4000) _acceleration.add(_diff.copy(_position).sub(target).normalize().multiplyScalar(MOUSE_REPULSION_WEIGHT * 0.035));
 
             const lim = BOUNDARY_SIZE * 1.2;
-            if (Math.abs(_position.x) > lim) _acceleration.x -= Math.sign(_position.x) * 0.04;
-            if (Math.abs(_position.y) > lim) _acceleration.y -= Math.sign(_position.y) * 0.04;
-            if (Math.abs(_position.z) > lim) _acceleration.z -= Math.sign(_position.z) * 0.04;
+            if (Math.abs(_position.x) > lim) _acceleration.x -= Math.sign(_position.x) * 0.05;
+            if (Math.abs(_position.y) > lim) _acceleration.y -= Math.sign(_position.y) * 0.05;
+            if (Math.abs(_position.z) > lim) _acceleration.z -= Math.sign(_position.z) * 0.05;
 
-            _acceleration.clampLength(0, 0.03);
+            _acceleration.clampLength(0, 0.04);
             _velocity.add(_acceleration).clampLength(0.2, SPEED_LIMIT);
             _position.add(_velocity);
 

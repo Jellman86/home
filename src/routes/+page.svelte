@@ -25,7 +25,7 @@
             </div>
 
             <p class="text-xl text-slate-300 font-light leading-relaxed">
-                Work in Progress (Build v1.1.9)
+                Work in Progress (Build v1.2.0)
             </p>
             
             <div class="flex flex-wrap gap-4 justify-center pt-8">
