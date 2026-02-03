@@ -111,22 +111,22 @@
                 float rays = pow(sin(vUv.x * 15.0 + time * 0.5) * 0.5 + 0.5, 12.0) * 0.2 * surface;
                 finalColor += rays * vec3(0.5, 0.9, 1.0);
             } else {
-                // STANDING POSITION SKY: Zenith to Horizon
-                vec3 zenithColor = vec3(0.02, 0.1, 0.35); // Deep Blue
-                vec3 horizonColor = vec3(0.2, 0.5, 0.8); // Lighter Cerulean
+                // STANDING POSITION SKY: Deep Prussian Blue Zenith to Bright Cerulean Horizon
+                vec3 zenithColor = vec3(0.01, 0.05, 0.2); // Much richer, deeper blue
+                vec3 horizonColor = vec3(0.2, 0.5, 0.8); // Cerulean
                 
-                finalColor = mix(horizonColor, zenithColor, pow(vUv.y, 0.6));
+                finalColor = mix(horizonColor, zenithColor, pow(vUv.y, 0.7));
                 
-                // Taper towards sun glow
-                float sun = exp(-distance(vUv, vec2(0.8, 0.9)) * 3.0);
-                finalColor = mix(finalColor, vec3(1.0, 0.95, 0.8), sun * 0.4);
+                // Sun glow influence
+                float sun = exp(-distance(vUv, vec2(0.8, 0.9)) * 2.5);
+                finalColor = mix(finalColor, vec3(1.0, 0.95, 0.85), sun * 0.45);
                 
                 // Sharp high-altitude clouds
                 vec2 cloudP = vUv * vec2(3.0, 1.5);
                 cloudP.x += time * 0.02;
                 float d = fbm(cloudP * 2.5);
                 float mask = smoothstep(0.55, 0.65, d);
-                finalColor = mix(finalColor, vec3(1.0), mask * 0.3);
+                finalColor = mix(finalColor, vec3(1.0), mask * 0.35);
             }
             
             gl_FragColor = vec4(finalColor, 1.0);
