@@ -3,11 +3,15 @@
     
     let mode = $state<'bird' | 'fish'>('bird');
     let fps = $state(0);
+
+    // Theme Configuration
+    let backgroundColor = $derived(mode === 'bird' ? '#0f172a' : '#06202a'); // Slate-900 (Night Sky) vs ~Cyan-950 (Deep Sea)
+    let boidColor = $derived(mode === 'bird' ? '#e2e8f0' : '#fbbf24'); // Slate-200 (White Birds) vs Amber-400 (Gold Fish)
 </script>
 
-<div class="relative min-h-screen w-full text-white overflow-hidden font-sans">
+<div class="relative min-h-screen w-full text-white overflow-hidden font-sans transition-colors duration-1000" style="background-color: {backgroundColor}">
     <!-- WebGL Background Layer -->
-    <BoidBackground boidCount={600} color="#38bdf8" {mode} bind:fps />
+    <BoidBackground boidCount={600} color={boidColor} {backgroundColor} {mode} bind:fps />
 
     <!-- UI Overlay -->
     <div class="relative z-10 flex flex-col items-center justify-center min-h-screen p-8 pointer-events-none">

@@ -155,6 +155,20 @@
         }
     });
 
+    // Reactive Color/Theme Update
+    $effect(() => {
+        if (scene && mesh) {
+            // Update Background & Fog
+            const bg = new THREE.Color(backgroundColor);
+            scene.background = bg;
+            scene.fog = new THREE.Fog(backgroundColor, 50, 200);
+
+            // Update Material Color
+            const material = mesh.material as THREE.MeshBasicMaterial;
+            material.color.set(color);
+        }
+    });
+
     function animate() {
         frameId = requestAnimationFrame(animate);
 
