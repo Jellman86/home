@@ -19,8 +19,8 @@
     <!-- WebGL Background Layer -->
     <BoidBackground boidCount={600} color={boidColor} {backgroundColor} {mode} bind:fps />
 
-    <!-- UI Overlay (hidden temporarily for simulation review) -->
-    <div class="relative z-10 hidden flex-col items-center justify-center min-h-screen p-8 pointer-events-none">
+    <!-- UI Overlay -->
+    <div class="relative z-10 flex flex-col items-center justify-center min-h-screen p-8 pointer-events-none">
         <main class="pointer-events-auto max-w-2xl w-full text-center space-y-8 backdrop-blur-md bg-white/5 p-12 rounded-3xl border border-white/10 shadow-2xl transition-all hover:bg-white/10 hover:border-white/20 hover:scale-[1.01] duration-500">
             
             <div class="space-y-2">
@@ -55,7 +55,7 @@
     </div>
 
     <!-- Controls Overlay -->
-    <div class="fixed bottom-6 right-6 z-50 hidden pointer-events-auto flex flex-col gap-3 p-3 rounded-2xl bg-slate-900/50 backdrop-blur-lg border border-white/10 shadow-lg min-w-[150px]">
+    <div class="fixed bottom-6 right-6 z-50 pointer-events-auto flex flex-col gap-3 p-3 rounded-2xl bg-slate-900/50 backdrop-blur-lg border border-white/10 shadow-lg min-w-[150px]">
         <div class="flex items-center justify-between gap-4">
             <div class="flex bg-slate-800/80 rounded-lg p-1">
                 <button

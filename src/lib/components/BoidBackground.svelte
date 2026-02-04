@@ -34,6 +34,7 @@
     let cloudGroup: THREE.Group;
     let cloudSprites: THREE.Sprite[] = [];
     let cloudSpeeds: number[] = [];
+    let cloudClusterCount = 0;
 
     let lastTime = performance.now();
     let frameCount = 0;
@@ -94,9 +95,11 @@
             vec2 uv = vUv;
             
             // 1. SKY CALCULATIONS
-            vec3 zenithColor = vec3(0.0, 0.02, 0.12); // Deep midnight blue
-            vec3 horizonColor = vec3(0.12, 0.35, 0.7); // Cool blue, no purple
-            vec3 skyResult = mix(horizonColor, zenithColor, pow(uv.y, 0.7));
+            vec3 zenithColor = vec3(0.14, 0.36, 0.74); // Bright summer sky
+            vec3 horizonColor = vec3(0.62, 0.84, 0.98); // Hazy afternoon horizon
+            vec3 skyResult = mix(horizonColor, zenithColor, pow(uv.y, 0.65));
+            float hazeBand = smoothstep(0.15, 0.35, uv.y) * (1.0 - smoothstep(0.35, 0.55, uv.y));
+            skyResult = mix(skyResult, vec3(0.72, 0.88, 1.0), hazeBand * 0.35);
             
             // 2. SEA CALCULATIONS
             float surface = smoothstep(0.3, 1.0, uv.y);
@@ -124,10 +127,10 @@
             ripples = pow(ripples, 2.1) * surfaceBand;
             seaResult += ripples * vec3(0.22, 0.55, 0.65);
 
-            // Brighter surface shimmer line for readability
-            float shimmer = smoothstep(0.28, 0.32, uv.y) * (1.0 - smoothstep(0.32, 0.36, uv.y));
-            shimmer *= 0.6 + 0.4 * sin(uv.x * 12.0 + time * 1.2);
-            seaResult += shimmer * vec3(0.35, 0.75, 0.9);
+            // Brighter surface shimmer with softer edges
+            float shimmer = smoothstep(0.27, 0.32, uv.y) * (1.0 - smoothstep(0.34, 0.4, uv.y));
+            shimmer *= 0.55 + 0.45 * sin(uv.x * 10.0 + time * 1.2);
+            seaResult += shimmer * vec3(0.25, 0.6, 0.8);
 
             // 3. FINAL MIX (Controlled by isFish uniform)
             vec3 finalColor = mix(skyResult, seaResult, isFish);
@@ -171,21 +174,31 @@
             map: cloudTex,
             transparent: true,
             depthWrite: false,
-            opacity: 0.6
+            opacity: 0.7,
+            color: new THREE.Color(0xffffff)
         });
-        const cloudCount = 16;
+        const cloudCount = 10;
+        const spritesPerCloud = 4;
+        cloudClusterCount = cloudCount;
         for (let i = 0; i < cloudCount; i++) {
-            const sprite = new THREE.Sprite(cloudMat.clone());
-            const scale = 35 + Math.random() * 55;
-            sprite.scale.set(scale, scale * 0.65, 1);
-            sprite.position.set(
-                (Math.random() - 0.5) * 260,
-                60 + Math.random() * 70,
-                -160 - Math.random() * 60
-            );
-            cloudGroup.add(sprite);
-            cloudSprites.push(sprite);
-            cloudSpeeds.push(0.06 + Math.random() * 0.1);
+            const baseX = (Math.random() - 0.5) * 260;
+            const baseY = 70 + Math.random() * 60;
+            const baseZ = -150 - Math.random() * 70;
+            const baseScale = 40 + Math.random() * 50;
+            for (let j = 0; j < spritesPerCloud; j++) {
+                const sprite = new THREE.Sprite(cloudMat.clone());
+                const scale = baseScale * (0.7 + Math.random() * 0.6);
+                sprite.scale.set(scale, scale * (0.6 + Math.random() * 0.2), 1);
+                sprite.position.set(
+                    baseX + (Math.random() - 0.5) * 25,
+                    baseY + (Math.random() - 0.5) * 12,
+                    baseZ + (Math.random() - 0.5) * 10
+                );
+                (sprite.material as THREE.SpriteMaterial).opacity = 0.35 + Math.random() * 0.35;
+                cloudGroup.add(sprite);
+                cloudSprites.push(sprite);
+                cloudSpeeds.push(0.04 + Math.random() * 0.08);
+            }
         }
         cloudGroup.visible = mode === 'bird';
         scene.add(cloudGroup);
@@ -334,8 +347,10 @@
             for (let i = 0; i < cloudSprites.length; i++) {
                 const sprite = cloudSprites[i];
                 sprite.position.x += cloudSpeeds[i];
-                if (sprite.position.x > 160) sprite.position.x = -160;
-                (sprite.material as THREE.SpriteMaterial).opacity = 0.45 + 0.2 * Math.sin(t * 0.2 + i);
+                if (sprite.position.x > 170) sprite.position.x = -170;
+                const flicker = 0.15 * Math.sin(t * 0.15 + i);
+                const base = (sprite.material as THREE.SpriteMaterial).opacity;
+                (sprite.material as THREE.SpriteMaterial).opacity = Math.max(0.2, Math.min(0.85, base + flicker));
             }
         }
 
