@@ -157,6 +157,12 @@
             float hazeBand = smoothstep(0.08, 0.22, uv.y) * (1.0 - smoothstep(0.22, 0.42, uv.y));
             skyResult = mix(skyResult, horizonColor, hazeBand * 0.18);
 
+            // Stars (night only)
+            float night = 1.0 - sun;
+            float starNoise = hash(uv * vec2(640.0, 360.0));
+            float stars = step(0.997, starNoise) * night;
+            skyResult += stars * vec3(0.8, 0.9, 1.0);
+
             // Simple exposure curve
             float exposure = 0.25 + 0.75 * sun;
             skyResult *= exposure;
