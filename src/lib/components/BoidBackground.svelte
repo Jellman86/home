@@ -6,7 +6,7 @@
         boidCount?: number;
         color?: string;
         backgroundColor?: string;
-        mode?: 'bird' | 'fish' | 'grass';
+        // mode removed: birds-only scene
         fps?: number;
     }
 
@@ -14,9 +14,10 @@
         boidCount = 800, 
         color = '#00ffff',
         backgroundColor = '#0f172a',
-        mode = 'bird',
         fps = $bindable(0)
     }: Props = $props();
+
+    const mode: 'bird' = 'bird';
 
     let container: HTMLDivElement;
     let canvas: HTMLCanvasElement;
@@ -78,8 +79,6 @@
 
     const bgFragmentShader = `
         uniform float time;
-        uniform float isFish; // 0.0 = Bird/Grass, 1.0 = Fish
-        uniform float isGrass; // 1.0 = Grass
         varying vec2 vUv;
 
         float hash31(vec3 p) {
@@ -132,33 +131,14 @@
             vec2 uv = vUv;
             
             // 1. SKY CALCULATIONS
-            vec3 zenithColor = vec3(0.1, 0.2, 0.42); // Richer blue top, less black
-            vec3 horizonColor = vec3(0.32, 0.52, 0.78); // Lighter blue bottom
+            vec3 zenithColor = vec3(0.12, 0.24, 0.52); // Richer blue top, less black
+            vec3 horizonColor = vec3(0.4, 0.6, 0.82); // Lighter blue bottom
             vec3 skyResult = mix(horizonColor, zenithColor, pow(uv.y, 0.78));
             float hazeBand = smoothstep(0.06, 0.2, uv.y) * (1.0 - smoothstep(0.2, 0.38, uv.y));
             skyResult = mix(skyResult, vec3(0.38, 0.58, 0.82), hazeBand * 0.25);
 
-            // Clouds removed for a clean sky
-            
-            // 2. SEA CALCULATIONS
-            float surface = smoothstep(0.3, 1.0, uv.y);
-            vec3 seaTopColor = vec3(0.25, 0.62, 0.86); // Brighter surface blue
-            vec3 seaBottomColor = vec3(0.04, 0.12, 0.28); // Less dark bottom
-            vec3 seaResult = mix(seaBottomColor, seaTopColor, surface);
-            
-            // Reflection band removed for a smoother gradient
-
-            // 3. GRASS CALCULATIONS
-            vec3 grassTop = vec3(0.18, 0.38, 0.22);
-            vec3 grassBottom = vec3(0.06, 0.18, 0.1);
-            float grassBand = smoothstep(0.2, 0.9, uv.y);
-            vec3 grassResult = mix(grassBottom, grassTop, grassBand);
-            float blades = noise(uv * 40.0 + vec2(0.0, time * 0.02));
-            grassResult += blades * 0.06;
-
-            // 4. FINAL MIX (Controlled by isFish/isGrass uniform)
-            vec3 seaOrSky = mix(skyResult, seaResult, isFish);
-            vec3 finalColor = mix(seaOrSky, grassResult, isGrass);
+            // Birds-only scene
+            vec3 finalColor = skyResult;
 
             // Soft vignette for depth and focus
             // Vignette removed for a clean scene
@@ -169,7 +149,7 @@
 
     function init() {
         scene = new THREE.Scene();
-        scene.fog = new THREE.FogExp2(mode === 'fish' ? 0x0b2a3a : 0x7aa6d6, mode === 'fish' ? 0.0028 : 0.0020);
+        scene.fog = new THREE.FogExp2(0x7aa6d6, 0.0020);
         camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 2000);
         camera.position.z = 180;
 
@@ -181,9 +161,7 @@
         const bgGeo = new THREE.PlaneGeometry(2, 2);
         bgMesh = new THREE.Mesh(bgGeo, new THREE.ShaderMaterial({
             uniforms: { 
-                time: { value: 0 }, 
-                isFish: { value: mode === 'fish' ? 1.0 : 0.0 },
-                isGrass: { value: mode === 'grass' ? 1.0 : 0.0 }
+                time: { value: 0 }
             },
             vertexShader: bgVertexShader, 
             fragmentShader: bgFragmentShader, 
@@ -195,67 +173,17 @@
         birdGeo = new THREE.ConeGeometry(0.6, 2.5, 4);
         birdGeo.rotateX(Math.PI / 2);
 
-        fishGeo = new THREE.ConeGeometry(0.7, 2.0, 8);
-        fishGeo.rotateX(Math.PI / 2);
-        fishGeo.scale(0.4, 1, 1);
-        
-        const material = new THREE.MeshBasicMaterial({ color: new THREE.Color(0xffffff), transparent: true, opacity: 0.85, vertexColors: true });
-        mesh = new THREE.InstancedMesh(mode === 'fish' ? fishGeo : birdGeo, material, boidCount);
+        const material = new THREE.MeshBasicMaterial({ color: new THREE.Color(0xffffff), transparent: true, opacity: 0.95, vertexColors: true });
+        mesh = new THREE.InstancedMesh(birdGeo, material, boidCount);
         mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
         mesh.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(boidCount * 3), 3);
         scene.add(mesh);
-
-        // Grass mesh (always created, toggled by mode)
-        const grassCount = 1600;
-        const grassGeo = new THREE.PlaneGeometry(0.35, 2.4);
-        grassGeo.translate(0, 1.2, 0);
-        const grassMat = new THREE.MeshBasicMaterial({ color: new THREE.Color(0x2f5b34), side: THREE.DoubleSide });
-        grassMesh = new THREE.InstancedMesh(grassGeo, grassMat, grassCount);
-        grassMesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
-        grassPositions = new Float32Array(grassCount * 3);
-        grassPhase = new Float32Array(grassCount);
-        for (let i = 0; i < grassCount; i++) {
-            const x = (Math.random() - 0.5) * 220;
-            const z = (Math.random() - 0.5) * 220;
-            const y = -70;
-            grassPositions[i * 3] = x;
-            grassPositions[i * 3 + 1] = y;
-            grassPositions[i * 3 + 2] = z;
-            grassPhase[i] = Math.random() * Math.PI * 2;
-            _dummy.position.set(x, y, z);
-            _dummy.rotation.set(0, Math.random() * Math.PI * 2, 0);
-            _dummy.updateMatrix();
-            grassMesh.setMatrixAt(i, _dummy.matrix);
-        }
-        grassMesh.visible = (mode === 'grass');
-        scene.add(grassMesh);
-
-        const bubbleGeo = new THREE.BufferGeometry();
-        const bubbleCount = 220;
-        const bubblePos = new Float32Array(bubbleCount * 3);
-        for(let i=0; i<bubbleCount; i++) {
-            bubblePos[i*3] = (Math.random()-0.5) * 800;
-            bubblePos[i*3+1] = (Math.random()-0.5) * 800;
-            bubblePos[i*3+2] = (Math.random()-0.5) * 400 - 200;
-        }
-        bubbleGeo.setAttribute('position', new THREE.BufferAttribute(bubblePos, 3));
-        bubbleParticles = new THREE.Points(bubbleGeo, new THREE.PointsMaterial({ 
-            color: 0xffffff, size: 3.0, transparent: true, opacity: 0.25, sizeAttenuation: true
-        }));
-        bubbleParticles.visible = (mode === 'fish');
-        scene.add(bubbleParticles);
-
         positions = new Float32Array(boidCount * 3);
         velocities = new Float32Array(boidCount * 3);
         scales = new Float32Array(boidCount);
 
         const baseColor = new THREE.Color(color);
         const tempColor = new THREE.Color();
-        if (mode === 'fish') {
-            _fishTop.set('#e6f5ff'); // silvery highlight
-            _fishBottom.set('#3b5a73'); // mid silver-blue shadow (not black)
-        }
-
         for (let i = 0; i < boidCount; i++) {
             _position.set((Math.random()-0.5)*BOUNDARY_SIZE*2, (Math.random()-0.5)*BOUNDARY_SIZE*2, (Math.random()-0.5)*BOUNDARY_SIZE);
             _velocity.set((Math.random()-0.5), (Math.random()-0.5), (Math.random()-0.5)).normalize().multiplyScalar(SPEED_LIMIT);
@@ -304,9 +232,19 @@
             // Update Fog to match scene
             if (scene && scene.fog) {
                 (scene.fog as THREE.FogExp2).color.set(
-                    mode === 'fish' ? 0x0b2a3a : mode === 'grass' ? 0x1f2f1f : 0x7aa6d6
+                    mode === 'fish' ? 0x0b2a3a : mode === 'grass' ? 0x1a251b : 0x7aa6d6
                 );
-                (scene.fog as THREE.FogExp2).density = mode === 'fish' ? 0.0028 : 0.0020;
+                (scene.fog as THREE.FogExp2).density = mode === 'fish' ? 0.0028 : mode === 'grass' ? 0.0045 : 0.0020;
+            }
+
+            if (camera) {
+                if (mode === 'grass') {
+                    camera.position.set(0, 70, 110);
+                    camera.lookAt(0, -30, 0);
+                } else {
+                    camera.position.set(0, 0, 180);
+                    camera.lookAt(0, 0, 0);
+                }
             }
 
             // Update Boid Color
@@ -315,15 +253,15 @@
             material.opacity = isFish ? 0.95 : 0.85;
 
             if (isFish) {
-                _fishTop.set('#e6f5ff'); // silvery highlight
-                _fishBottom.set('#3b5a73'); // mid silver-blue shadow
+                _fishTop.set('#f2fbff'); // bright silver highlight
+                _fishBottom.set('#6f8698'); // mid silver-blue shadow
                 for (let i = 0; i < boidCount; i++) {
                     const idx = i * 3;
                     const y = positions ? positions[idx + 1] : 0;
                     const depthT = Math.max(0, Math.min(1, (y + BOUNDARY_SIZE) / (BOUNDARY_SIZE * 2)));
                     _tempColor.copy(_fishBottom).lerp(_fishTop, depthT);
                     const s = scales ? scales[i] : 1;
-                    _tempColor.multiplyScalar(0.85 + s * 0.25);
+                    _tempColor.multiplyScalar(1.0 + s * 0.35);
                     mesh.setColorAt(i, _tempColor);
                 }
                 if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
@@ -358,9 +296,10 @@
         }
 
         if (mode === 'grass' && grassMesh) {
-            const mx = target.x * 0.15;
-            const my = target.y * 0.15;
-            const influenceRadius = 60;
+            const mx = target.x * 0.2;
+            const my = target.y * 0.2;
+            const influenceRadius = 70;
+            const wind = Math.sin(t * 0.7) * 0.25;
             for (let i = 0; i < grassMesh.count; i++) {
                 const x = grassPositions[i * 3];
                 const y = grassPositions[i * 3 + 1];
@@ -368,10 +307,10 @@
                 const dx = x - mx;
                 const dz = z - my;
                 const dist = Math.sqrt(dx * dx + dz * dz);
-                const sway = Math.sin(t * 2.0 + grassPhase[i]) * 0.25;
-                const push = dist < influenceRadius ? (1.0 - dist / influenceRadius) * 0.6 : 0.0;
+                const sway = Math.sin(t * 2.2 + grassPhase[i]) * 0.25 + wind;
+                const push = dist < influenceRadius ? (1.0 - dist / influenceRadius) * 0.7 : 0.0;
                 _dummy.position.set(x, y, z);
-                _dummy.rotation.set(0, Math.atan2(dz, dx) + sway * 0.2, 0);
+                _dummy.rotation.set(0, Math.atan2(dz, dx), 0);
                 _dummy.rotateZ(sway + push);
                 _dummy.updateMatrix();
                 grassMesh.setMatrixAt(i, _dummy.matrix);

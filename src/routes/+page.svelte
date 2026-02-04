@@ -1,14 +1,12 @@
 <script lang="ts">
     import BoidBackground from '$lib/components/BoidBackground.svelte';
     
-    let mode = $state<'bird' | 'fish' | 'grass'>('bird');
+    const mode = 'bird';
     let fps = $state(0);
 
     // Theme Configuration - Deeper, more professional colors
     let backgroundColor = $derived(mode === 'bird' ? '#0f172a' : '#01161e'); // Dark Twilight vs Deepest Teal
-    let boidColor = $derived(
-        mode === 'bird' ? '#1a212d' : mode === 'fish' ? '#cfe7f1' : '#1b2a1f'
-    ); // Birds, Fish, Grass
+    let boidColor = $derived('#1a212d'); // Birds only
 </script>
 
 <svelte:head>
@@ -19,7 +17,7 @@
 
 <div class="relative min-h-screen w-full text-white overflow-hidden font-sans transition-colors duration-1000">
     <!-- WebGL Background Layer -->
-    <BoidBackground boidCount={600} color={boidColor} {backgroundColor} {mode} bind:fps />
+    <BoidBackground boidCount={600} color={boidColor} {backgroundColor} bind:fps />
 
     <!-- UI Overlay removed for simulation review -->
 
@@ -27,24 +25,9 @@
     <div class="fixed bottom-6 right-6 z-50 pointer-events-auto flex flex-col gap-3 p-3 rounded-2xl bg-slate-900/50 backdrop-blur-lg border border-white/10 shadow-lg min-w-[150px]">
         <div class="flex items-center justify-between gap-4">
             <div class="flex bg-slate-800/80 rounded-lg p-1">
-                <button
-                    class="px-3 py-1.5 rounded-md text-xs font-bold transition-all {mode === 'bird' ? 'bg-sky-500 text-white shadow-md' : 'text-slate-400 hover:text-white'}"
-                    onclick={() => mode = 'bird'}
-                >
+                <div class="px-3 py-1.5 rounded-md text-xs font-bold bg-sky-500 text-white shadow-md">
                     Birds
-                </button>
-                <button
-                    class="px-3 py-1.5 rounded-md text-xs font-bold transition-all {mode === 'fish' ? 'bg-sky-500 text-white shadow-md' : 'text-slate-400 hover:text-white'}"
-                    onclick={() => mode = 'fish'}
-                >
-                    Fish
-                </button>
-                <button
-                    class="px-3 py-1.5 rounded-md text-xs font-bold transition-all {mode === 'grass' ? 'bg-sky-500 text-white shadow-md' : 'text-slate-400 hover:text-white'}"
-                    onclick={() => mode = 'grass'}
-                >
-                    Grass
-                </button>
+                </div>
             </div>
             <div class="px-2 border-l border-white/10">
                 <p class="text-[10px] font-mono font-bold text-slate-400">
