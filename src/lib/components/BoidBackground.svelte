@@ -84,6 +84,7 @@
 
     const bgFragmentShader = `
         uniform float time;
+        uniform float dayPhase;
         varying vec2 vUv;
 
         float hash31(vec3 p) {
@@ -136,11 +137,29 @@
             vec2 uv = vUv;
             
             // 1. SKY CALCULATIONS
-            vec3 zenithColor = vec3(0.03, 0.1, 0.4); // Much darker rich blue top
-            vec3 horizonColor = vec3(0.22, 0.4, 0.65); // Richer lower blue
+            float sun = clamp(sin(dayPhase * 6.28318) * 0.5 + 0.5, 0.0, 1.0);
+            float dawn = smoothstep(0.05, 0.2, sun);
+            float dusk = 1.0 - smoothstep(0.8, 0.95, sun);
+
+            vec3 nightZenith = vec3(0.01, 0.03, 0.12);
+            vec3 nightHorizon = vec3(0.03, 0.06, 0.18);
+            vec3 dayZenith = vec3(0.08, 0.22, 0.62);
+            vec3 dayHorizon = vec3(0.25, 0.45, 0.72);
+            vec3 dawnHorizon = vec3(0.7, 0.45, 0.2);
+            vec3 duskHorizon = vec3(0.6, 0.3, 0.15);
+
+            vec3 zenithColor = mix(nightZenith, dayZenith, sun);
+            vec3 horizonColor = mix(nightHorizon, dayHorizon, sun);
+            horizonColor = mix(horizonColor, dawnHorizon, dawn * 0.35);
+            horizonColor = mix(horizonColor, duskHorizon, dusk * 0.25);
+
             vec3 skyResult = mix(horizonColor, zenithColor, pow(uv.y, 0.82));
             float hazeBand = smoothstep(0.08, 0.22, uv.y) * (1.0 - smoothstep(0.22, 0.42, uv.y));
-            skyResult = mix(skyResult, vec3(0.36, 0.55, 0.78), hazeBand * 0.22);
+            skyResult = mix(skyResult, horizonColor, hazeBand * 0.18);
+
+            // Simple exposure curve
+            float exposure = 0.25 + 0.75 * sun;
+            skyResult *= exposure;
 
             // Birds-only scene
             vec3 finalColor = skyResult;
@@ -166,7 +185,8 @@
         const bgGeo = new THREE.PlaneGeometry(2, 2);
         bgMesh = new THREE.Mesh(bgGeo, new THREE.ShaderMaterial({
             uniforms: { 
-                time: { value: 0 }
+                time: { value: 0 },
+                dayPhase: { value: 0.2 }
             },
             vertexShader: bgVertexShader, 
             fragmentShader: bgFragmentShader, 
@@ -284,6 +304,7 @@
         if (bgMesh) {
             const material = bgMesh.material as THREE.ShaderMaterial;
             material.uniforms.time.value = t;
+            material.uniforms.dayPhase.value = (t * 0.01) % 1.0; // slow day/night cycle
         }
 
         target.set((mouse.x * window.innerWidth) / 20, -(mouse.y * window.innerHeight) / 20, 0);
