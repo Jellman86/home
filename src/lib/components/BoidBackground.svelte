@@ -135,7 +135,7 @@
             // Soft vignette for depth and focus
             vec2 v = uv - 0.5;
             float vignette = 1.0 - smoothstep(0.25, 0.7, dot(v, v));
-            finalColor *= vignette;
+            finalColor *= mix(1.0, vignette, isFish);
             
             gl_FragColor = vec4(finalColor, 1.0);
         }
