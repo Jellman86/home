@@ -37,6 +37,7 @@
 
     let positions: Float32Array;
     let velocities: Float32Array;
+    let scales: Float32Array;
     
     const _position = new THREE.Vector3();
     const _velocity = new THREE.Vector3();
@@ -70,6 +71,8 @@
     const bgFragmentShader = `
         uniform float time;
         uniform float isFish; // 0.0 = Bird, 1.0 = Fish
+        uniform float cloudBoost;
+        uniform float cloudSpeed;
         varying vec2 vUv;
 
         float hash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
@@ -96,11 +99,32 @@
             float sun = exp(-distance(uv, vec2(0.8, 0.9)) * 3.0);
             skyResult = mix(skyResult, vec3(1.0, 0.95, 0.8), sun * 0.5);
             
-            vec2 cloudP = uv * vec2(3.5, 1.8);
-            cloudP.x += time * 0.015;
-            float d = fbm(cloudP * 2.0);
-            float cloudMask = smoothstep(0.58, 0.62, d); // Much sharper edges
-            skyResult = mix(skyResult, vec3(1.0), cloudMask * 0.4);
+            // Parallax-like layered clouds for depth
+            vec2 base = uv * vec2(3.2, 1.6);
+            base.x += time * (0.010 + cloudSpeed);
+            base.y += sin(time * 0.05) * 0.03;
+
+            vec2 layerA = base * 1.0 + vec2(time * 0.015, 0.0);
+            vec2 layerB = base * 1.8 + vec2(-time * 0.010, 0.0);
+            vec2 layerC = base * 2.6 + vec2(time * 0.006, 0.0);
+
+            float a = fbm(layerA * 1.8);
+            float b = fbm(layerB * 1.4);
+            float c = fbm(layerC * 1.2);
+            float d = (a * 0.6 + b * 0.3 + c * 0.1);
+
+            float threshold = 0.56 - cloudBoost * 0.12;
+            float cloudMask = smoothstep(threshold, threshold + 0.08 + cloudBoost * 0.05, d);
+
+            // Soft lighting to add volume
+            float dX = fbm(layerA * 1.8 + vec2(0.015, 0.0)) - fbm(layerA * 1.8 - vec2(0.015, 0.0));
+            float dY = fbm(layerA * 1.8 + vec2(0.0, 0.015)) - fbm(layerA * 1.8 - vec2(0.0, 0.015));
+            vec3 normal = normalize(vec3(dX, dY, 0.35));
+            vec3 lightDir = normalize(vec3(-0.4, 0.6, 0.7));
+            float lighting = clamp(dot(normal, lightDir) * 0.6 + 0.4, 0.0, 1.0);
+
+            vec3 cloudColor = mix(vec3(1.0), vec3(0.85, 0.9, 1.0), 0.5) * lighting;
+            skyResult = mix(skyResult, cloudColor, cloudMask * (0.35 + cloudBoost * 0.35));
 
             // 2. SEA CALCULATIONS
             float surface = smoothstep(0.3, 1.0, uv.y);
@@ -111,8 +135,18 @@
             float rays = pow(sin(uv.x * 10.0 + time * 0.4) * 0.5 + 0.5, 15.0) * 0.5 * surface;
             seaResult += rays * vec3(0.5, 0.9, 1.0);
 
+            // Subtle caustics for fish scene only
+            float caustics = sin((uv.x + time * 0.2) * 22.0) * sin((uv.y + time * 0.15) * 18.0);
+            caustics = pow(abs(caustics), 3.0) * 0.15 * surface;
+            seaResult += caustics * vec3(0.35, 0.9, 1.0);
+
             // 3. FINAL MIX (Controlled by isFish uniform)
             vec3 finalColor = mix(skyResult, seaResult, isFish);
+
+            // Soft vignette for depth and focus
+            vec2 v = uv - 0.5;
+            float vignette = 1.0 - smoothstep(0.25, 0.7, dot(v, v));
+            finalColor *= vignette;
             
             gl_FragColor = vec4(finalColor, 1.0);
         }
@@ -120,6 +154,7 @@
 
     function init() {
         scene = new THREE.Scene();
+        scene.fog = new THREE.FogExp2(mode === 'fish' ? 0x041016 : 0x0b1020, mode === 'fish' ? 0.0028 : 0.0022);
         camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 2000);
         camera.position.z = 180;
 
@@ -132,7 +167,9 @@
         bgMesh = new THREE.Mesh(bgGeo, new THREE.ShaderMaterial({
             uniforms: { 
                 time: { value: 0 }, 
-                isFish: { value: mode === 'fish' ? 1.0 : 0.0 } 
+                isFish: { value: mode === 'fish' ? 1.0 : 0.0 },
+                cloudBoost: { value: 0.0 },
+                cloudSpeed: { value: 0.0 }
             },
             vertexShader: bgVertexShader, 
             fragmentShader: bgFragmentShader, 
@@ -144,7 +181,7 @@
         birdGeo = new THREE.ConeGeometry(0.6, 2.5, 4); birdGeo.rotateX(Math.PI / 2);
         fishGeo = new THREE.ConeGeometry(0.7, 2.0, 8); fishGeo.rotateX(Math.PI / 2); fishGeo.scale(0.4, 1, 1);
         
-        const material = new THREE.MeshBasicMaterial({ color: new THREE.Color(color), transparent: true, opacity: 0.8 });
+        const material = new THREE.MeshBasicMaterial({ color: new THREE.Color(color), transparent: true, opacity: 0.85, vertexColors: true });
         mesh = new THREE.InstancedMesh(mode === 'fish' ? fishGeo : birdGeo, material, boidCount);
         mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
         scene.add(mesh);
@@ -166,33 +203,65 @@
 
         positions = new Float32Array(boidCount * 3);
         velocities = new Float32Array(boidCount * 3);
+        scales = new Float32Array(boidCount);
+
+        const baseColor = new THREE.Color(color);
+        const tempColor = new THREE.Color();
 
         for (let i = 0; i < boidCount; i++) {
             _position.set((Math.random()-0.5)*BOUNDARY_SIZE*2, (Math.random()-0.5)*BOUNDARY_SIZE*2, (Math.random()-0.5)*BOUNDARY_SIZE);
             _velocity.set((Math.random()-0.5), (Math.random()-0.5), (Math.random()-0.5)).normalize().multiplyScalar(SPEED_LIMIT);
             positions[i*3]=_position.x; positions[i*3+1]=_position.y; positions[i*3+2]=_position.z;
             velocities[i*3]=_velocity.x; velocities[i*3+1]=_velocity.y; velocities[i*3+2]=_velocity.z;
-            _dummy.position.copy(_position); _dummy.updateMatrix();
+            const scale = 0.85 + Math.random() * 0.45;
+            scales[i] = scale;
+            _dummy.position.copy(_position);
+            _dummy.scale.set(scale, scale, scale);
+            _dummy.updateMatrix();
             mesh.setMatrixAt(i, _dummy.matrix);
+
+            tempColor.copy(baseColor).multiplyScalar(0.85 + Math.random() * 0.25);
+            mesh.setColorAt(i, tempColor);
         }
+        if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
     }
 
     $effect(() => {
+        const isFish = mode === 'fish';
+        const currentColor = color;
+
         if (mesh && bgMesh && birdGeo && fishGeo) {
             // Update Uniform (immediate visual switch)
-            (bgMesh.material as THREE.ShaderMaterial).uniforms.isFish.value = (mode === 'fish') ? 1.0 : 0.0;
-            
+            (bgMesh.material as THREE.ShaderMaterial).uniforms.isFish.value = isFish ? 1.0 : 0.0;
+
             // Update Bubble Visibility
-            if (bubbleParticles) bubbleParticles.visible = (mode === 'fish');
-            
+            if (bubbleParticles) bubbleParticles.visible = isFish;
+
             // Update Boid Shape
-            mesh.geometry = (mode === 'fish') ? fishGeo : birdGeo;
-            
+            mesh.geometry = isFish ? fishGeo : birdGeo;
+
+            // Update Fog to match scene
+            if (scene && scene.fog) {
+                (scene.fog as THREE.FogExp2).color.set(isFish ? 0x041016 : 0x0b1020);
+                (scene.fog as THREE.FogExp2).density = isFish ? 0.0028 : 0.0022;
+            }
+
             // Update Boid Color
             const material = mesh.material as THREE.MeshBasicMaterial;
-            material.color.set(color);
+            material.color.set(currentColor);
+
+            const baseColor = new THREE.Color(currentColor);
+            const tempColor = new THREE.Color();
+            for (let i = 0; i < boidCount; i++) {
+                tempColor.copy(baseColor).multiplyScalar(0.85 + (i % 7) * 0.03);
+                mesh.setColorAt(i, tempColor);
+            }
+            if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
         }
     });
+
+    let lastRushAt = performance.now();
+    let rushStartAt = 0;
 
     function animate() {
         frameId = requestAnimationFrame(animate);
@@ -201,7 +270,22 @@
         if (now - lastTime >= 1000) { fps = frameCount; frameCount = 0; lastTime = now; }
 
         const t = now * 0.001;
-        if (bgMesh) (bgMesh.material as THREE.ShaderMaterial).uniforms.time.value = t;
+        if (bgMesh) {
+            const material = bgMesh.material as THREE.ShaderMaterial;
+            material.uniforms.time.value = t;
+
+            const isFish = mode === 'fish';
+            if (!isFish) {
+                const isMouseReady = mouse.x > -9000 && mouse.y > -9000;
+                const mouseMag = isMouseReady ? Math.min(1, Math.hypot(mouse.x, mouse.y)) : 0;
+                const pulse = 0.5 + 0.5 * Math.sin(t * 0.6);
+                material.uniforms.cloudBoost.value = 0.25 + pulse * 0.35 + mouseMag * 0.2;
+                material.uniforms.cloudSpeed.value = 0.004 + pulse * 0.008 + mouseMag * 0.006;
+            } else {
+                material.uniforms.cloudBoost.value = 0.0;
+                material.uniforms.cloudSpeed.value = 0.0;
+            }
+        }
 
         if (mode === 'fish' && bubbleParticles) {
             const attr = bubbleParticles.geometry.attributes.position as THREE.BufferAttribute;
@@ -213,6 +297,23 @@
         }
 
         target.set((mouse.x * window.innerWidth) / 20, -(mouse.y * window.innerHeight) / 20, 0);
+
+        const rushInterval = 5 * 60 * 1000;
+        if (now - lastRushAt > rushInterval && rushStartAt === 0) {
+            rushStartAt = now;
+        }
+        const rushDuration = 8000;
+        let rushStrength = 0;
+        if (rushStartAt > 0) {
+            const tRush = (now - rushStartAt) / rushDuration;
+            if (tRush >= 1) {
+                rushStartAt = 0;
+                lastRushAt = now;
+            } else {
+                const eased = tRush < 0.5 ? (tRush * 2.0) : (2.0 - tRush * 2.0);
+                rushStrength = eased * 0.8;
+            }
+        }
 
         for (let i = 0; i < boidCount; i++) {
             const idx = i * 3;
@@ -248,6 +349,17 @@
             const distM = _position.distanceToSquared(target);
             if (distM < 4000) _acceleration.add(_diff.copy(_position).sub(target).normalize().multiplyScalar(MOUSE_REPULSION_WEIGHT * 0.035));
 
+            // Gentle global flow field to add realism
+            const flowX = Math.sin(_position.y * 0.02 + t * 0.8) * 0.006;
+            const flowY = Math.cos(_position.x * 0.015 + t * 0.6) * 0.006;
+            const flowZ = Math.sin(_position.x * 0.01 + _position.y * 0.01 + t * 0.4) * 0.004;
+            _acceleration.add(_diff.set(flowX, flowY, flowZ));
+
+            // Occasional camera rush to feel "inside the school"
+            if (rushStrength > 0 && (i % 5 === 0)) {
+                _acceleration.add(_diff.set(0, 0, 1).multiplyScalar(rushStrength * 0.02));
+            }
+
             const lim = BOUNDARY_SIZE * 1.2;
             if (Math.abs(_position.x) > lim) _acceleration.x -= Math.sign(_position.x) * 0.05;
             if (Math.abs(_position.y) > lim) _acceleration.y -= Math.sign(_position.y) * 0.05;
@@ -262,6 +374,12 @@
 
             _dummy.position.copy(_position);
             if (_velocity.lengthSq() > 0.0001) _dummy.lookAt(_lookAt.copy(_position).add(_velocity));
+            if (mode === 'bird') {
+                const bank = Math.max(-0.6, Math.min(0.6, -_velocity.x * 1.2));
+                _dummy.rotateZ(bank);
+            }
+            const scale = scales ? scales[i] : 1;
+            _dummy.scale.set(scale, scale, scale);
             _dummy.updateMatrix();
             mesh.setMatrixAt(i, _dummy.matrix);
         }

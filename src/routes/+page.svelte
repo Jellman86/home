@@ -6,8 +6,14 @@
 
     // Theme Configuration - Deeper, more professional colors
     let backgroundColor = $derived(mode === 'bird' ? '#0f172a' : '#01161e'); // Dark Twilight vs Deepest Teal
-    let boidColor = $derived(mode === 'bird' ? '#000000' : '#a8dadc'); // Black Birds vs Silvery Fish
+    let boidColor = $derived(mode === 'bird' ? '#0b0f16' : '#a8dadc'); // Off-black Birds vs Silvery Fish
 </script>
+
+<svelte:head>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet" />
+</svelte:head>
 
 <div class="relative min-h-screen w-full text-white overflow-hidden font-sans transition-colors duration-1000">
     <!-- WebGL Background Layer -->
@@ -18,13 +24,13 @@
         <main class="pointer-events-auto max-w-2xl w-full text-center space-y-8 backdrop-blur-md bg-white/5 p-12 rounded-3xl border border-white/10 shadow-2xl transition-all hover:bg-white/10 hover:border-white/20 hover:scale-[1.01] duration-500">
             
             <div class="space-y-2">
-                <h1 class="text-7xl font-black tracking-tighter bg-clip-text text-transparent bg-gradient-to-r from-sky-400 to-indigo-500 animate-gradient">
+                <h1 class="text-6xl sm:text-7xl font-bold tracking-tight uppercase text-white drop-shadow-[0_8px_24px_rgba(15,23,42,0.7)]">
                     Jellman86
                 </h1>
-                <p class="text-xs font-mono uppercase tracking-[0.3em] text-sky-300/80">Infrastructure Engineer</p>
+                <p class="text-xs font-mono uppercase tracking-[0.4em] text-sky-300/80">Infrastructure Engineer</p>
             </div>
 
-            <p class="text-xl text-slate-300 font-light leading-relaxed">
+            <p class="text-xl text-slate-200 font-medium leading-relaxed">
                 Work in Progress (Build v1.2.7)
             </p>
             
@@ -78,16 +84,11 @@
     :global(body) {
         margin: 0;
         overflow: hidden;
+        font-family: 'Space Grotesk', system-ui, -apple-system, sans-serif;
     }
-    
-    .animate-gradient {
-        background-size: 200% auto;
-        animation: shine 4s linear infinite;
-    }
-    
-    @keyframes shine {
-        to {
-            background-position: 200% center;
-        }
+
+    :global(.font-mono) {
+        font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace;
+        letter-spacing: 0.2em;
     }
 </style>
