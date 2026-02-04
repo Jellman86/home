@@ -203,8 +203,19 @@
         cloudGroup.visible = mode === 'bird';
         scene.add(cloudGroup);
 
-        birdGeo = new THREE.ConeGeometry(0.6, 2.5, 4); birdGeo.rotateX(Math.PI / 2);
-        fishGeo = new THREE.ConeGeometry(0.7, 2.0, 8); fishGeo.rotateX(Math.PI / 2); fishGeo.scale(0.4, 1, 1);
+        // Simple "V" bird silhouette (two triangles) for a more bird-like read
+        const birdPositions = new Float32Array([
+            0.0, 0.0, 0.0,   -1.2, 0.0, 0.0,   -1.9, 0.25, 0.0,  // left wing
+            0.0, 0.0, 0.0,    1.2, 0.0, 0.0,    1.9, 0.25, 0.0   // right wing
+        ]);
+        birdGeo = new THREE.BufferGeometry();
+        birdGeo.setAttribute('position', new THREE.BufferAttribute(birdPositions, 3));
+        birdGeo.computeVertexNormals();
+        birdGeo.rotateX(Math.PI / 2);
+
+        fishGeo = new THREE.ConeGeometry(0.7, 2.0, 8);
+        fishGeo.rotateX(Math.PI / 2);
+        fishGeo.scale(0.4, 1, 1);
         
         const material = new THREE.MeshBasicMaterial({ color: new THREE.Color(0xffffff), transparent: true, opacity: 0.85, vertexColors: true });
         mesh = new THREE.InstancedMesh(mode === 'fish' ? fishGeo : birdGeo, material, boidCount);
