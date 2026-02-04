@@ -107,13 +107,10 @@
             vec3 seaBottomColor = vec3(0.0, 0.03, 0.08); // Deep dark
             vec3 seaResult = mix(seaBottomColor, seaTopColor, surface);
             
-            float rays = pow(sin(uv.x * 10.0 + time * 0.4) * 0.5 + 0.5, 15.0) * 0.5 * surface;
-            seaResult += rays * vec3(0.6, 1.0, 1.2);
-
-            // Subtle caustics for fish scene only
-            float caustics = sin((uv.x + time * 0.2) * 22.0) * sin((uv.y + time * 0.15) * 18.0);
-            caustics = pow(abs(caustics), 3.0) * 0.15 * surface;
-            seaResult += caustics * vec3(0.45, 0.95, 1.1);
+            // Subtle caustics for fish scene only (keep minimal, avoid disco)
+            float caustics = sin((uv.x + time * 0.2) * 16.0) * sin((uv.y + time * 0.15) * 12.0);
+            caustics = pow(abs(caustics), 2.8) * 0.08 * surface;
+            seaResult += caustics * vec3(0.35, 0.7, 0.85);
 
             // Surface ripples near the top of the sea for a fluid feel
             float surfaceBand = smoothstep(0.12, 0.32, uv.y) * (1.0 - smoothstep(0.36, 0.55, uv.y));
@@ -127,10 +124,10 @@
             ripples = pow(ripples, 2.1) * surfaceBand;
             seaResult += ripples * vec3(0.22, 0.55, 0.65);
 
-            // Brighter surface shimmer with softer edges
+            // Softer surface shimmer with reduced intensity
             float shimmer = smoothstep(0.24, 0.3, uv.y) * (1.0 - smoothstep(0.32, 0.4, uv.y));
-            shimmer *= 0.55 + 0.45 * sin(uv.x * 10.0 + time * 1.2);
-            seaResult += shimmer * vec3(0.35, 0.75, 0.95);
+            shimmer *= 0.4 + 0.6 * sin(uv.x * 8.0 + time * 0.9);
+            seaResult += shimmer * vec3(0.22, 0.5, 0.7);
 
             // 3. FINAL MIX (Controlled by isFish uniform)
             vec3 finalColor = mix(skyResult, seaResult, isFish);
@@ -174,43 +171,36 @@
             map: cloudTex,
             transparent: true,
             depthWrite: false,
-            opacity: 0.45,
-            color: new THREE.Color(0xfff6ea)
+            opacity: 0.55,
+            color: new THREE.Color(0xffffff)
         });
-        const cloudCount = 6;
-        const spritesPerCloud = 4;
+        const cloudCount = 7;
+        const spritesPerCloud = 6;
         cloudClusterCount = cloudCount;
         for (let i = 0; i < cloudCount; i++) {
             const baseX = (Math.random() - 0.5) * 260;
             const baseY = 85 + Math.random() * 45;
             const baseZ = -160 - Math.random() * 50;
-            const baseScale = 40 + Math.random() * 50;
+            const baseScale = 36 + Math.random() * 45;
             for (let j = 0; j < spritesPerCloud; j++) {
                 const sprite = new THREE.Sprite(cloudMat.clone());
-                const scale = baseScale * (0.7 + Math.random() * 0.6);
-                sprite.scale.set(scale, scale * (0.6 + Math.random() * 0.2), 1);
+                const scale = baseScale * (0.7 + Math.random() * 0.65);
+                sprite.scale.set(scale, scale * (0.55 + Math.random() * 0.25), 1);
                 sprite.position.set(
                     baseX + (Math.random() - 0.5) * 25,
-                    baseY + (Math.random() - 0.5) * 12,
+                    baseY + (Math.random() - 0.5) * 14,
                     baseZ + (Math.random() - 0.5) * 10
                 );
-                (sprite.material as THREE.SpriteMaterial).opacity = 0.35 + Math.random() * 0.35;
+                (sprite.material as THREE.SpriteMaterial).opacity = 0.3 + Math.random() * 0.35;
                 cloudGroup.add(sprite);
                 cloudSprites.push(sprite);
-                cloudSpeeds.push(0.04 + Math.random() * 0.08);
+                cloudSpeeds.push(0.03 + Math.random() * 0.06);
             }
         }
         cloudGroup.visible = mode === 'bird';
         scene.add(cloudGroup);
 
-        // Simple "V" bird silhouette (two triangles) for a more bird-like read
-        const birdPositions = new Float32Array([
-            0.0, 0.0, 0.0,   -1.2, 0.0, 0.0,   -1.9, 0.25, 0.0,  // left wing
-            0.0, 0.0, 0.0,    1.2, 0.0, 0.0,    1.9, 0.25, 0.0   // right wing
-        ]);
-        birdGeo = new THREE.BufferGeometry();
-        birdGeo.setAttribute('position', new THREE.BufferAttribute(birdPositions, 3));
-        birdGeo.computeVertexNormals();
+        birdGeo = new THREE.ConeGeometry(0.6, 2.5, 4);
         birdGeo.rotateX(Math.PI / 2);
 
         fishGeo = new THREE.ConeGeometry(0.7, 2.0, 8);
