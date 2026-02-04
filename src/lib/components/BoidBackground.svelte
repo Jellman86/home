@@ -29,12 +29,7 @@
     let frameId: number;
 
     let bgMesh: THREE.Mesh;
-    let bubbleParticles: THREE.Points;
     let birdGeo: THREE.BufferGeometry;
-    let fishGeo: THREE.BufferGeometry;
-    let grassMesh: THREE.InstancedMesh;
-    let grassPositions: Float32Array;
-    let grassPhase: Float32Array;
     // Volumetric clouds are now handled in the shader
 
     let lastTime = performance.now();
@@ -51,22 +46,26 @@
     const _diff = new THREE.Vector3();
     const _lookAt = new THREE.Vector3();
     const _tempColor = new THREE.Color();
-    const _fishTop = new THREE.Color();
-    const _fishBottom = new THREE.Color();
 
     let mouse = new THREE.Vector2(-9999, -9999);
     let target = new THREE.Vector3();
     let uiRect: DOMRect | null = null;
     
     // BOID PARAMETERS
-    let SPEED_LIMIT = $derived(mode === 'fish' ? 0.4 : 0.8);
-    let VISUAL_RANGE = $derived(mode === 'fish' ? 40 : 50); 
-    let PROTECTED_RANGE = $derived(mode === 'fish' ? 10 : 15);
+    let SPEED_LIMIT = $derived(0.8);
+    let VISUAL_RANGE = $derived(50); 
+    let PROTECTED_RANGE = $derived(15);
     const BOUNDARY_SIZE = 120;
+    const NEIGHBOR_COUNT = 7; // Topological neighbors for realism
+    const TARGET_SPEED = 0.55;
+    const SPEED_FORCE = 0.02;
+    const PREDATOR_INTERVAL = 180000;
+    const PREDATOR_DURATION = 6000;
+    const PREDATOR_RADIUS = 45;
     
-    let SEPARATION_WEIGHT = $derived(mode === 'fish' ? 4.0 : 3.0); 
-    let ALIGNMENT_WEIGHT = $derived(mode === 'fish' ? 3.0 : 4.5); 
-    let COHESION_WEIGHT = $derived(mode === 'fish' ? 0.8 : 0.4); 
+    let SEPARATION_WEIGHT = $derived(3.0); 
+    let ALIGNMENT_WEIGHT = $derived(4.5); 
+    let COHESION_WEIGHT = $derived(0.4); 
     const MOUSE_REPULSION_WEIGHT = 8.0;
 
     const bgVertexShader = `
@@ -196,85 +195,39 @@
             _dummy.updateMatrix();
             mesh.setMatrixAt(i, _dummy.matrix);
 
-            if (mode === 'fish' && mesh.instanceColor) {
-                const depthT = Math.max(0, Math.min(1, (_position.y + BOUNDARY_SIZE) / (BOUNDARY_SIZE * 2)));
-                _tempColor.copy(_fishBottom).lerp(_fishTop, depthT);
-                mesh.setColorAt(i, _tempColor);
-            } else {
-                tempColor.copy(baseColor).multiplyScalar(0.85 + Math.random() * 0.25);
-                mesh.setColorAt(i, tempColor);
-            }
+            tempColor.copy(baseColor).multiplyScalar(0.85 + Math.random() * 0.25);
+            mesh.setColorAt(i, tempColor);
         }
         if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
     }
 
 
     $effect(() => {
-        const isFish = mode === 'fish';
         const currentColor = color;
 
-        if (mesh && bgMesh && birdGeo && fishGeo) {
-            // Update Uniform (immediate visual switch)
-            const bgMat = bgMesh.material as THREE.ShaderMaterial;
-            bgMat.uniforms.isFish.value = isFish ? 1.0 : 0.0;
-            bgMat.uniforms.isGrass.value = (mode === 'grass') ? 1.0 : 0.0;
-
-            // Update Bubble Visibility
-            if (bubbleParticles) bubbleParticles.visible = isFish;
-
-            // Toggle grass vs boids
-            if (grassMesh) grassMesh.visible = (mode === 'grass');
-            if (mesh) mesh.visible = (mode !== 'grass');
-
+        if (mesh && bgMesh && birdGeo) {
             // Update Boid Shape
-            mesh.geometry = isFish ? fishGeo : birdGeo;
+            mesh.geometry = birdGeo;
 
             // Update Fog to match scene
             if (scene && scene.fog) {
-                (scene.fog as THREE.FogExp2).color.set(
-                    mode === 'fish' ? 0x0b2a3a : mode === 'grass' ? 0x1a251b : 0x7aa6d6
-                );
-                (scene.fog as THREE.FogExp2).density = mode === 'fish' ? 0.0028 : mode === 'grass' ? 0.0045 : 0.0020;
-            }
-
-            if (camera) {
-                if (mode === 'grass') {
-                    camera.position.set(0, 70, 110);
-                    camera.lookAt(0, -30, 0);
-                } else {
-                    camera.position.set(0, 0, 180);
-                    camera.lookAt(0, 0, 0);
-                }
+                (scene.fog as THREE.FogExp2).color.set(0x7aa6d6);
+                (scene.fog as THREE.FogExp2).density = 0.0020;
             }
 
             // Update Boid Color
             const material = mesh.material as THREE.MeshBasicMaterial;
-            material.color.set(isFish ? '#ffffff' : currentColor);
-            material.opacity = isFish ? 0.95 : 0.85;
+            material.color.set(currentColor);
+            material.opacity = 0.85;
 
-            if (isFish) {
-                _fishTop.set('#f2fbff'); // bright silver highlight
-                _fishBottom.set('#6f8698'); // mid silver-blue shadow
-                for (let i = 0; i < boidCount; i++) {
-                    const idx = i * 3;
-                    const y = positions ? positions[idx + 1] : 0;
-                    const depthT = Math.max(0, Math.min(1, (y + BOUNDARY_SIZE) / (BOUNDARY_SIZE * 2)));
-                    _tempColor.copy(_fishBottom).lerp(_fishTop, depthT);
-                    const s = scales ? scales[i] : 1;
-                    _tempColor.multiplyScalar(1.0 + s * 0.35);
-                    mesh.setColorAt(i, _tempColor);
-                }
-                if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
-            } else {
-                const baseColor = new THREE.Color(currentColor);
-                const tempColor = new THREE.Color();
-                for (let i = 0; i < boidCount; i++) {
-                    const s = scales ? scales[i] : 1;
-                    tempColor.copy(baseColor).multiplyScalar(0.78 + s * 0.45);
-                    mesh.setColorAt(i, tempColor);
-                }
-                if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
+            const baseColor = new THREE.Color(currentColor);
+            const tempColor = new THREE.Color();
+            for (let i = 0; i < boidCount; i++) {
+                const s = scales ? scales[i] : 1;
+                tempColor.copy(baseColor).multiplyScalar(0.78 + s * 0.45);
+                mesh.setColorAt(i, tempColor);
             }
+            if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
         }
     });
 
@@ -282,6 +235,9 @@
     const INITIAL_RUSH_DELAY = 30 * 1000;
     let lastRushAt = performance.now() - (RUSH_INTERVAL - INITIAL_RUSH_DELAY);
     let rushStartAt = 0;
+    let lastPredAt = performance.now();
+    let predStartAt = 0;
+    const predPos = new THREE.Vector3();
 
     function animate() {
         frameId = requestAnimationFrame(animate);
@@ -293,39 +249,6 @@
         if (bgMesh) {
             const material = bgMesh.material as THREE.ShaderMaterial;
             material.uniforms.time.value = t;
-        }
-
-        if (mode === 'grass' && grassMesh) {
-            const mx = target.x * 0.2;
-            const my = target.y * 0.2;
-            const influenceRadius = 70;
-            const wind = Math.sin(t * 0.7) * 0.25;
-            for (let i = 0; i < grassMesh.count; i++) {
-                const x = grassPositions[i * 3];
-                const y = grassPositions[i * 3 + 1];
-                const z = grassPositions[i * 3 + 2];
-                const dx = x - mx;
-                const dz = z - my;
-                const dist = Math.sqrt(dx * dx + dz * dz);
-                const sway = Math.sin(t * 2.2 + grassPhase[i]) * 0.25 + wind;
-                const push = dist < influenceRadius ? (1.0 - dist / influenceRadius) * 0.7 : 0.0;
-                _dummy.position.set(x, y, z);
-                _dummy.rotation.set(0, Math.atan2(dz, dx), 0);
-                _dummy.rotateZ(sway + push);
-                _dummy.updateMatrix();
-                grassMesh.setMatrixAt(i, _dummy.matrix);
-            }
-            grassMesh.instanceMatrix.needsUpdate = true;
-        }
-
-
-        if (mode === 'fish' && bubbleParticles) {
-            const attr = bubbleParticles.geometry.attributes.position as THREE.BufferAttribute;
-            for(let i=0; i<attr.count; i++) {
-                let y = attr.getY(i) + 0.6; if (y > 400) y = -400; attr.setY(i, y);
-                attr.setX(i, attr.getX(i) + Math.sin(now * 0.001 + i) * 0.2);
-            }
-            attr.needsUpdate = true;
         }
 
         target.set((mouse.x * window.innerWidth) / 20, -(mouse.y * window.innerHeight) / 20, 0);
@@ -346,6 +269,22 @@
             }
         }
 
+        if (now - lastPredAt > PREDATOR_INTERVAL && predStartAt === 0) {
+            predStartAt = now;
+        }
+        let predActive = false;
+        if (predStartAt > 0) {
+            const tPred = (now - predStartAt) / PREDATOR_DURATION;
+            if (tPred >= 1) {
+                predStartAt = 0;
+                lastPredAt = now;
+            } else {
+                predActive = true;
+                const angle = t * 0.7;
+                predPos.set(Math.sin(angle) * 90, Math.cos(t * 0.3) * 40, Math.cos(angle) * 60);
+            }
+        }
+
         for (let i = 0; i < boidCount; i++) {
             const idx = i * 3;
             _position.set(positions[idx], positions[idx + 1], positions[idx + 2]);
@@ -355,21 +294,46 @@
             let alignF = new THREE.Vector3(), cohF = new THREE.Vector3(), sepF = new THREE.Vector3();
             let aC = 0, cC = 0, sC = 0;
 
-            const SAMPLE = 40; 
-            for (let j = 0; j < SAMPLE; j++) {
-                let oIdx = Math.floor(Math.random() * boidCount) * 3;
+            const nearestDist = new Float32Array(NEIGHBOR_COUNT);
+            const nearestIdx = new Int32Array(NEIGHBOR_COUNT);
+            for (let k = 0; k < NEIGHBOR_COUNT; k++) {
+                nearestDist[k] = Infinity;
+                nearestIdx[k] = -1;
+            }
+
+            for (let j = 0; j < boidCount; j++) {
+                const oIdx = j * 3;
                 if (oIdx === idx) continue;
-                const dx = _position.x - positions[oIdx], dy = _position.y - positions[oIdx+1], dz = _position.z - positions[oIdx+2];
-                const dSq = dx*dx + dy*dy + dz*dz;
+                const dx = _position.x - positions[oIdx];
+                const dy = _position.y - positions[oIdx + 1];
+                const dz = _position.z - positions[oIdx + 2];
+                const dSq = dx * dx + dy * dy + dz * dz;
                 const dist = Math.sqrt(dSq);
 
+                if (dist < PROTECTED_RANGE && dist > 0.01) {
+                    sepF.x += dx / dist; sepF.y += dy / dist; sepF.z += dz / dist; sC++;
+                }
+
+                let maxK = 0;
+                for (let k = 1; k < NEIGHBOR_COUNT; k++) {
+                    if (nearestDist[k] > nearestDist[maxK]) maxK = k;
+                }
+                if (dist < nearestDist[maxK]) {
+                    nearestDist[maxK] = dist;
+                    nearestIdx[maxK] = oIdx;
+                }
+            }
+
+            for (let k = 0; k < NEIGHBOR_COUNT; k++) {
+                const oIdx = nearestIdx[k];
+                if (oIdx < 0) continue;
+                const dx = _position.x - positions[oIdx];
+                const dy = _position.y - positions[oIdx + 1];
+                const dz = _position.z - positions[oIdx + 2];
+                const dist = Math.sqrt(dx * dx + dy * dy + dz * dz);
                 if (dist < VISUAL_RANGE && dist > 0.01) {
-                    if (dist < PROTECTED_RANGE) {
-                        sepF.x += dx / dist; sepF.y += dy / dist; sepF.z += dz / dist; sC++;
-                    } else {
-                        cohF.x += positions[oIdx]; cohF.y += positions[oIdx+1]; cohF.z += positions[oIdx+2]; cC++;
-                        alignF.x += velocities[oIdx]; alignF.y += velocities[oIdx+1]; alignF.z += velocities[oIdx+2]; aC++;
-                    }
+                    cohF.x += positions[oIdx]; cohF.y += positions[oIdx + 1]; cohF.z += positions[oIdx + 2]; cC++;
+                    alignF.x += velocities[oIdx]; alignF.y += velocities[oIdx + 1]; alignF.z += velocities[oIdx + 2]; aC++;
                 }
             }
 
@@ -381,10 +345,25 @@
             if (distM < 4000) _acceleration.add(_diff.copy(_position).sub(target).normalize().multiplyScalar(MOUSE_REPULSION_WEIGHT * 0.035));
 
             // Gentle global flow field to add realism
-            const flowX = Math.sin(_position.y * 0.02 + t * 0.8) * 0.006;
-            const flowY = Math.cos(_position.x * 0.015 + t * 0.6) * 0.006;
-            const flowZ = Math.sin(_position.x * 0.01 + _position.y * 0.01 + t * 0.4) * 0.004;
+            const flowX = Math.sin(_position.y * 0.015 + t * 0.6) * 0.008;
+            const flowY = Math.cos(_position.x * 0.012 + t * 0.5) * 0.008;
+            const flowZ = Math.sin((_position.x + _position.y) * 0.01 + t * 0.4) * 0.006;
             _acceleration.add(_diff.set(flowX, flowY, flowZ));
+
+            // Predator impulse (occasional)
+            if (predActive) {
+                const dPred = _position.distanceTo(predPos);
+                if (dPred < PREDATOR_RADIUS) {
+                    _acceleration.add(_diff.copy(_position).sub(predPos).normalize().multiplyScalar(0.12));
+                }
+            }
+
+            // Preferred speed regulation
+            const speed = _velocity.length();
+            if (speed > 0.0001) {
+                const desired = _diff.copy(_velocity).setLength(TARGET_SPEED);
+                _acceleration.add(desired.sub(_velocity).multiplyScalar(SPEED_FORCE));
+            }
 
             // Occasional camera rush to feel "inside the school"
             if (rushStrength > 0 && (i % 5 === 0)) {
@@ -418,14 +397,6 @@
             positions[idx] = _position.x; positions[idx+1] = _position.y; positions[idx+2] = _position.z;
             velocities[idx] = _velocity.x; velocities[idx+1] = _velocity.y; velocities[idx+2] = _velocity.z;
 
-            if (mode === 'fish' && mesh.instanceColor) {
-                const depthT = Math.max(0, Math.min(1, (_position.y + BOUNDARY_SIZE) / (BOUNDARY_SIZE * 2)));
-                _tempColor.copy(_fishBottom).lerp(_fishTop, depthT);
-                const s = scales ? scales[i] : 1;
-                _tempColor.multiplyScalar(0.85 + s * 0.25);
-                mesh.setColorAt(i, _tempColor);
-            }
-
             _dummy.position.copy(_position);
             if (_velocity.lengthSq() > 0.0001) _dummy.lookAt(_lookAt.copy(_position).add(_velocity));
             if (mode === 'bird') {
@@ -438,7 +409,7 @@
             mesh.setMatrixAt(i, _dummy.matrix);
         }
         mesh.instanceMatrix.needsUpdate = true;
-        if (mode === 'fish' && mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
+        if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
         renderer.render(scene, camera);
     }
 
