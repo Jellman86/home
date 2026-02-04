@@ -31,6 +31,9 @@
     let bubbleParticles: THREE.Points;
     let birdGeo: THREE.BufferGeometry;
     let fishGeo: THREE.BufferGeometry;
+    let cloudGroup: THREE.Group;
+    let cloudSprites: THREE.Sprite[] = [];
+    let cloudSpeeds: number[] = [];
 
     let lastTime = performance.now();
     let frameCount = 0;
@@ -72,8 +75,6 @@
     const bgFragmentShader = `
         uniform float time;
         uniform float isFish; // 0.0 = Bird, 1.0 = Fish
-        uniform float cloudBoost;
-        uniform float cloudSpeed;
         varying vec2 vUv;
 
         float hash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
@@ -97,40 +98,6 @@
             vec3 horizonColor = vec3(0.12, 0.35, 0.7); // Cool blue, no purple
             vec3 skyResult = mix(horizonColor, zenithColor, pow(uv.y, 0.7));
             
-            // Layered, stable clouds with rotated UVs to avoid grid artifacts
-            mat2 rot1 = mat2(0.96, -0.28, 0.28, 0.96);
-            mat2 rot2 = mat2(0.86, -0.5, 0.5, 0.86);
-
-            vec2 base = uv * vec2(4.0, 2.0);
-            base.x += time * (0.006 + cloudSpeed);
-            base.y += sin(time * 0.04) * 0.015;
-
-            vec2 p1 = rot1 * base;
-            vec2 p2 = rot2 * base + vec2(3.7, -2.1);
-
-            float warpA = fbm(p1 + vec2(time * 0.025, 0.0));
-            float warpB = fbm(p2 * 1.2 + vec2(5.2, -time * 0.02));
-            vec2 warp = vec2(warpA, warpB) * (0.18 + cloudBoost * 0.12);
-
-            vec2 p = p1 + warp;
-            float n1 = fbm(p * 1.3);
-            float n2 = fbm((p2 + warp * 0.6) * 1.9);
-            float d = mix(n1, n2, 0.4);
-
-            float threshold = 0.58 - cloudBoost * 0.08;
-            float cloudMask = smoothstep(threshold, threshold + 0.08 + cloudBoost * 0.03, d);
-            cloudMask *= smoothstep(0.25, 0.85, uv.y);
-
-            // Soft lighting for volume without harsh artifacts
-            float dX = fbm(p + vec2(0.012, 0.0)) - fbm(p - vec2(0.012, 0.0));
-            float dY = fbm(p + vec2(0.0, 0.012)) - fbm(p - vec2(0.0, 0.012));
-            vec3 normal = normalize(vec3(dX, dY, 0.35));
-            vec3 lightDir = normalize(vec3(-0.35, 0.55, 0.75));
-            float lighting = clamp(dot(normal, lightDir) * 0.7 + 0.3, 0.0, 1.0);
-
-            vec3 cloudColor = mix(vec3(1.0), vec3(0.8, 0.88, 1.0), 0.45) * lighting;
-            skyResult = mix(skyResult, cloudColor, cloudMask * (0.26 + cloudBoost * 0.28));
-
             // 2. SEA CALCULATIONS
             float surface = smoothstep(0.3, 1.0, uv.y);
             vec3 seaTopColor = vec3(0.02, 0.35, 0.5); // Bright surface
@@ -146,16 +113,21 @@
             seaResult += caustics * vec3(0.35, 0.9, 1.0);
 
             // Surface ripples near the top of the sea for a fluid feel
-            float surfaceBand = smoothstep(0.18, 0.38, uv.y) * (1.0 - smoothstep(0.45, 0.75, uv.y));
-            vec2 waveP = uv * vec2(18.0, 10.0);
-            waveP.x += time * 0.8;
-            waveP.y += time * 0.35;
-            float w1 = sin(waveP.x + sin(waveP.y * 1.4)) * 0.5 + 0.5;
-            float w2 = sin(waveP.x * 1.6 - time * 0.6) * 0.5 + 0.5;
-            float w3 = sin((waveP.x + waveP.y) * 0.8 + time * 0.9) * 0.5 + 0.5;
+            float surfaceBand = smoothstep(0.15, 0.35, uv.y) * (1.0 - smoothstep(0.38, 0.6, uv.y));
+            vec2 waveP = uv * vec2(22.0, 12.0);
+            waveP.x += time * 0.9;
+            waveP.y += time * 0.4;
+            float w1 = sin(waveP.x + sin(waveP.y * 1.2)) * 0.5 + 0.5;
+            float w2 = sin(waveP.x * 1.7 - time * 0.7) * 0.5 + 0.5;
+            float w3 = sin((waveP.x + waveP.y) * 0.9 + time * 1.0) * 0.5 + 0.5;
             float ripples = (w1 * 0.5 + w2 * 0.35 + w3 * 0.15);
-            ripples = pow(ripples, 2.4) * surfaceBand;
-            seaResult += ripples * vec3(0.18, 0.45, 0.55);
+            ripples = pow(ripples, 2.1) * surfaceBand;
+            seaResult += ripples * vec3(0.22, 0.55, 0.65);
+
+            // Brighter surface shimmer line for readability
+            float shimmer = smoothstep(0.28, 0.32, uv.y) * (1.0 - smoothstep(0.32, 0.36, uv.y));
+            shimmer *= 0.6 + 0.4 * sin(uv.x * 12.0 + time * 1.2);
+            seaResult += shimmer * vec3(0.35, 0.75, 0.9);
 
             // 3. FINAL MIX (Controlled by isFish uniform)
             vec3 finalColor = mix(skyResult, seaResult, isFish);
@@ -184,9 +156,7 @@
         bgMesh = new THREE.Mesh(bgGeo, new THREE.ShaderMaterial({
             uniforms: { 
                 time: { value: 0 }, 
-                isFish: { value: mode === 'fish' ? 1.0 : 0.0 },
-                cloudBoost: { value: 0.0 },
-                cloudSpeed: { value: 0.0 }
+                isFish: { value: mode === 'fish' ? 1.0 : 0.0 }
             },
             vertexShader: bgVertexShader, 
             fragmentShader: bgFragmentShader, 
@@ -194,6 +164,31 @@
         }));
         bgMesh.renderOrder = -1;
         scene.add(bgMesh);
+
+        const cloudTex = createCloudTexture();
+        cloudGroup = new THREE.Group();
+        const cloudMat = new THREE.SpriteMaterial({
+            map: cloudTex,
+            transparent: true,
+            depthWrite: false,
+            opacity: 0.6
+        });
+        const cloudCount = 16;
+        for (let i = 0; i < cloudCount; i++) {
+            const sprite = new THREE.Sprite(cloudMat.clone());
+            const scale = 35 + Math.random() * 55;
+            sprite.scale.set(scale, scale * 0.65, 1);
+            sprite.position.set(
+                (Math.random() - 0.5) * 260,
+                60 + Math.random() * 70,
+                -160 - Math.random() * 60
+            );
+            cloudGroup.add(sprite);
+            cloudSprites.push(sprite);
+            cloudSpeeds.push(0.06 + Math.random() * 0.1);
+        }
+        cloudGroup.visible = mode === 'bird';
+        scene.add(cloudGroup);
 
         birdGeo = new THREE.ConeGeometry(0.6, 2.5, 4); birdGeo.rotateX(Math.PI / 2);
         fishGeo = new THREE.ConeGeometry(0.7, 2.0, 8); fishGeo.rotateX(Math.PI / 2); fishGeo.scale(0.4, 1, 1);
@@ -244,6 +239,39 @@
         if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
     }
 
+    function createCloudTexture(): THREE.CanvasTexture {
+        const size = 256;
+        const canvasEl = document.createElement('canvas');
+        canvasEl.width = size;
+        canvasEl.height = size;
+        const ctx = canvasEl.getContext('2d');
+        if (!ctx) {
+            return new THREE.CanvasTexture(canvasEl);
+        }
+
+        ctx.clearRect(0, 0, size, size);
+        ctx.filter = 'blur(12px)';
+        for (let i = 0; i < 6; i++) {
+            const x = size * (0.2 + Math.random() * 0.6);
+            const y = size * (0.3 + Math.random() * 0.4);
+            const r = size * (0.18 + Math.random() * 0.18);
+            const grd = ctx.createRadialGradient(x, y, r * 0.2, x, y, r);
+            grd.addColorStop(0, 'rgba(255,255,255,0.9)');
+            grd.addColorStop(1, 'rgba(255,255,255,0.0)');
+            ctx.fillStyle = grd;
+            ctx.beginPath();
+            ctx.arc(x, y, r, 0, Math.PI * 2);
+            ctx.fill();
+        }
+        ctx.filter = 'none';
+
+        const texture = new THREE.CanvasTexture(canvasEl);
+        texture.wrapS = THREE.ClampToEdgeWrapping;
+        texture.wrapT = THREE.ClampToEdgeWrapping;
+        texture.needsUpdate = true;
+        return texture;
+    }
+
     $effect(() => {
         const isFish = mode === 'fish';
         const currentColor = color;
@@ -254,6 +282,8 @@
 
             // Update Bubble Visibility
             if (bubbleParticles) bubbleParticles.visible = isFish;
+
+            if (cloudGroup) cloudGroup.visible = !isFish;
 
             // Update Boid Shape
             mesh.geometry = isFish ? fishGeo : birdGeo;
@@ -298,18 +328,6 @@
         if (bgMesh) {
             const material = bgMesh.material as THREE.ShaderMaterial;
             material.uniforms.time.value = t;
-
-            const isFish = mode === 'fish';
-            if (!isFish) {
-                const isMouseReady = mouse.x > -9000 && mouse.y > -9000;
-                const mouseMag = isMouseReady ? Math.min(1, Math.hypot(mouse.x, mouse.y)) : 0;
-                const pulse = 0.5 + 0.5 * Math.sin(t * 0.6);
-                material.uniforms.cloudBoost.value = 0.25 + pulse * 0.35 + mouseMag * 0.2;
-                material.uniforms.cloudSpeed.value = 0.004 + pulse * 0.008 + mouseMag * 0.006;
-            } else {
-                material.uniforms.cloudBoost.value = 0.0;
-                material.uniforms.cloudSpeed.value = 0.0;
-            }
         }
 
         if (mode === 'fish' && bubbleParticles) {
@@ -457,3 +475,11 @@
 <div bind:this={container} class="fixed inset-0 w-full h-full z-0">
     <canvas bind:this={canvas} class="w-full h-full block"></canvas>
 </div>
+        if (cloudGroup && cloudGroup.visible) {
+            for (let i = 0; i < cloudSprites.length; i++) {
+                const sprite = cloudSprites[i];
+                sprite.position.x += cloudSpeeds[i];
+                if (sprite.position.x > 160) sprite.position.x = -160;
+                sprite.material.opacity = 0.45 + 0.2 * Math.sin(t * 0.2 + i);
+            }
+        }
