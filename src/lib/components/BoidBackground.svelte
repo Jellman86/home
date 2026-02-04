@@ -31,10 +31,7 @@
     let bubbleParticles: THREE.Points;
     let birdGeo: THREE.BufferGeometry;
     let fishGeo: THREE.BufferGeometry;
-    let cloudGroup: THREE.Group;
-    let cloudSprites: THREE.Sprite[] = [];
-    let cloudSpeeds: number[] = [];
-    let cloudClusterCount = 0;
+    // Volumetric clouds are now handled in the shader
 
     let lastTime = performance.now();
     let frameCount = 0;
@@ -78,6 +75,39 @@
         uniform float isFish; // 0.0 = Bird, 1.0 = Fish
         varying vec2 vUv;
 
+        float hash31(vec3 p) {
+            return fract(sin(dot(p, vec3(127.1, 311.7, 74.7))) * 43758.5453);
+        }
+        float noise3(vec3 p) {
+            vec3 i = floor(p);
+            vec3 f = fract(p);
+            f = f * f * (3.0 - 2.0 * f);
+            float n000 = hash31(i + vec3(0,0,0));
+            float n100 = hash31(i + vec3(1,0,0));
+            float n010 = hash31(i + vec3(0,1,0));
+            float n110 = hash31(i + vec3(1,1,0));
+            float n001 = hash31(i + vec3(0,0,1));
+            float n101 = hash31(i + vec3(1,0,1));
+            float n011 = hash31(i + vec3(0,1,1));
+            float n111 = hash31(i + vec3(1,1,1));
+            float nx00 = mix(n000, n100, f.x);
+            float nx10 = mix(n010, n110, f.x);
+            float nx01 = mix(n001, n101, f.x);
+            float nx11 = mix(n011, n111, f.x);
+            float nxy0 = mix(nx00, nx10, f.y);
+            float nxy1 = mix(nx01, nx11, f.y);
+            return mix(nxy0, nxy1, f.z);
+        }
+        float fbm3(vec3 p) {
+            float v = 0.0;
+            float a = 0.5;
+            for (int i = 0; i < 4; i++) {
+                v += a * noise3(p);
+                p *= 2.0;
+                a *= 0.5;
+            }
+            return v;
+        }
         float hash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
         float noise(vec2 p) {
             vec2 i = floor(p); vec2 f = fract(p);
@@ -100,6 +130,30 @@
             vec3 skyResult = mix(horizonColor, zenithColor, pow(uv.y, 0.75));
             float hazeBand = smoothstep(0.05, 0.25, uv.y) * (1.0 - smoothstep(0.25, 0.45, uv.y));
             skyResult = mix(skyResult, vec3(0.98, 0.86, 0.7), hazeBand * 0.5);
+
+            // Volumetric raymarched clouds (bird scene only)
+            if (isFish < 0.5) {
+                vec2 p = uv * 2.0 - 1.0;
+                vec3 ro = vec3(0.0, 0.0, 0.0);
+                vec3 rd = normalize(vec3(p.x, p.y * 0.7 + 0.3, 1.2));
+                float t = 0.0;
+                float density = 0.0;
+                vec3 col = vec3(0.0);
+                for (int i = 0; i < 12; i++) {
+                    vec3 pos = ro + rd * t;
+                    vec3 q = pos * vec3(0.65, 1.1, 0.65);
+                    q.y += time * 0.02;
+                    float d = fbm3(q * 1.4 + vec3(0.0, 3.0, 0.0));
+                    d = smoothstep(0.55, 0.75, d) * smoothstep(0.1, 0.9, pos.y + 0.4);
+                    float light = clamp(0.6 + 0.4 * dot(normalize(vec3(-0.3, 0.6, 0.7)), rd), 0.0, 1.0);
+                    vec3 cloudCol = mix(vec3(1.0), vec3(0.92, 0.95, 1.0), 0.5) * light;
+                    float a = d * 0.15;
+                    col = mix(col, cloudCol, a);
+                    density += a;
+                    t += 0.12;
+                }
+                skyResult = mix(skyResult, col, clamp(density, 0.0, 0.7));
+            }
             
             // 2. SEA CALCULATIONS
             float surface = smoothstep(0.3, 1.0, uv.y);
@@ -107,10 +161,10 @@
             vec3 seaBottomColor = vec3(0.0, 0.03, 0.08); // Deep dark
             vec3 seaResult = mix(seaBottomColor, seaTopColor, surface);
             
-            // Subtle caustics for fish scene only (keep minimal, avoid disco)
-            float caustics = sin((uv.x + time * 0.2) * 16.0) * sin((uv.y + time * 0.15) * 12.0);
-            caustics = pow(abs(caustics), 2.8) * 0.08 * surface;
-            seaResult += caustics * vec3(0.35, 0.7, 0.85);
+            // Minimal caustics (very subtle)
+            float caustics = sin((uv.x + time * 0.15) * 12.0) * sin((uv.y + time * 0.12) * 10.0);
+            caustics = pow(abs(caustics), 2.2) * 0.03 * surface;
+            seaResult += caustics * vec3(0.2, 0.4, 0.55);
 
             // Surface ripples near the top of the sea for a fluid feel
             float surfaceBand = smoothstep(0.12, 0.32, uv.y) * (1.0 - smoothstep(0.36, 0.55, uv.y));
@@ -124,10 +178,10 @@
             ripples = pow(ripples, 2.1) * surfaceBand;
             seaResult += ripples * vec3(0.22, 0.55, 0.65);
 
-            // Softer surface shimmer with reduced intensity
+            // Very soft surface shimmer
             float shimmer = smoothstep(0.24, 0.3, uv.y) * (1.0 - smoothstep(0.32, 0.4, uv.y));
-            shimmer *= 0.4 + 0.6 * sin(uv.x * 8.0 + time * 0.9);
-            seaResult += shimmer * vec3(0.22, 0.5, 0.7);
+            shimmer *= 0.25 + 0.35 * sin(uv.x * 6.0 + time * 0.6);
+            seaResult += shimmer * vec3(0.15, 0.35, 0.5);
 
             // 3. FINAL MIX (Controlled by isFish uniform)
             vec3 finalColor = mix(skyResult, seaResult, isFish);
@@ -164,41 +218,6 @@
         }));
         bgMesh.renderOrder = -1;
         scene.add(bgMesh);
-
-        const cloudTex = createCloudTexture();
-        cloudGroup = new THREE.Group();
-        const cloudMat = new THREE.SpriteMaterial({
-            map: cloudTex,
-            transparent: true,
-            depthWrite: false,
-            opacity: 0.55,
-            color: new THREE.Color(0xffffff)
-        });
-        const cloudCount = 7;
-        const spritesPerCloud = 6;
-        cloudClusterCount = cloudCount;
-        for (let i = 0; i < cloudCount; i++) {
-            const baseX = (Math.random() - 0.5) * 260;
-            const baseY = 85 + Math.random() * 45;
-            const baseZ = -160 - Math.random() * 50;
-            const baseScale = 36 + Math.random() * 45;
-            for (let j = 0; j < spritesPerCloud; j++) {
-                const sprite = new THREE.Sprite(cloudMat.clone());
-                const scale = baseScale * (0.7 + Math.random() * 0.65);
-                sprite.scale.set(scale, scale * (0.55 + Math.random() * 0.25), 1);
-                sprite.position.set(
-                    baseX + (Math.random() - 0.5) * 25,
-                    baseY + (Math.random() - 0.5) * 14,
-                    baseZ + (Math.random() - 0.5) * 10
-                );
-                (sprite.material as THREE.SpriteMaterial).opacity = 0.3 + Math.random() * 0.35;
-                cloudGroup.add(sprite);
-                cloudSprites.push(sprite);
-                cloudSpeeds.push(0.03 + Math.random() * 0.06);
-            }
-        }
-        cloudGroup.visible = mode === 'bird';
-        scene.add(cloudGroup);
 
         birdGeo = new THREE.ConeGeometry(0.6, 2.5, 4);
         birdGeo.rotateX(Math.PI / 2);
@@ -253,38 +272,6 @@
         if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
     }
 
-    function createCloudTexture(): THREE.CanvasTexture {
-        const size = 256;
-        const canvasEl = document.createElement('canvas');
-        canvasEl.width = size;
-        canvasEl.height = size;
-        const ctx = canvasEl.getContext('2d');
-        if (!ctx) {
-            return new THREE.CanvasTexture(canvasEl);
-        }
-
-        ctx.clearRect(0, 0, size, size);
-        ctx.filter = 'blur(12px)';
-        for (let i = 0; i < 6; i++) {
-            const x = size * (0.2 + Math.random() * 0.6);
-            const y = size * (0.3 + Math.random() * 0.4);
-            const r = size * (0.18 + Math.random() * 0.18);
-            const grd = ctx.createRadialGradient(x, y, r * 0.2, x, y, r);
-            grd.addColorStop(0, 'rgba(255,255,255,0.9)');
-            grd.addColorStop(1, 'rgba(255,255,255,0.0)');
-            ctx.fillStyle = grd;
-            ctx.beginPath();
-            ctx.arc(x, y, r, 0, Math.PI * 2);
-            ctx.fill();
-        }
-        ctx.filter = 'none';
-
-        const texture = new THREE.CanvasTexture(canvasEl);
-        texture.wrapS = THREE.ClampToEdgeWrapping;
-        texture.wrapT = THREE.ClampToEdgeWrapping;
-        texture.needsUpdate = true;
-        return texture;
-    }
 
     $effect(() => {
         const isFish = mode === 'fish';
@@ -296,8 +283,6 @@
 
             // Update Bubble Visibility
             if (bubbleParticles) bubbleParticles.visible = isFish;
-
-            if (cloudGroup) cloudGroup.visible = !isFish;
 
             // Update Boid Shape
             mesh.geometry = isFish ? fishGeo : birdGeo;
@@ -317,9 +302,9 @@
             const tempColor = new THREE.Color();
             for (let i = 0; i < boidCount; i++) {
                 const s = scales ? scales[i] : 1;
-                tempColor.copy(baseColor).multiplyScalar(0.72 + s * 0.4);
+                tempColor.copy(baseColor).multiplyScalar(0.78 + s * 0.45);
                 if (isFish) {
-                    tempColor.offsetHSL(0.02, -0.1, 0.12);
+                    tempColor.offsetHSL(0.01, -0.12, 0.18);
                 }
                 mesh.setColorAt(i, tempColor);
             }
@@ -344,16 +329,6 @@
             material.uniforms.time.value = t;
         }
 
-        if (cloudGroup && cloudGroup.visible) {
-            for (let i = 0; i < cloudSprites.length; i++) {
-                const sprite = cloudSprites[i];
-                sprite.position.x += cloudSpeeds[i];
-                if (sprite.position.x > 170) sprite.position.x = -170;
-                const flicker = 0.15 * Math.sin(t * 0.15 + i);
-                const base = (sprite.material as THREE.SpriteMaterial).opacity;
-                (sprite.material as THREE.SpriteMaterial).opacity = Math.max(0.2, Math.min(0.85, base + flicker));
-            }
-        }
 
         if (mode === 'fish' && bubbleParticles) {
             const attr = bubbleParticles.geometry.attributes.position as THREE.BufferAttribute;
