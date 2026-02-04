@@ -47,6 +47,8 @@
     const _diff = new THREE.Vector3();
     const _lookAt = new THREE.Vector3();
     const _tempColor = new THREE.Color();
+    const _predPos = new THREE.Vector3();
+    const _predVel = new THREE.Vector3();
 
     let mouse = new THREE.Vector2(-9999, -9999);
     let target = new THREE.Vector3();
@@ -60,11 +62,11 @@
     const NEIGHBOR_COUNT = 7; // Topological neighbors for realism
     const TARGET_SPEED = 0.75;
     const SPEED_FORCE = 0.025;
-    const PREDATOR_INTERVAL = 30000;
-    const PREDATOR_DURATION = 9000;
     const PREDATOR_RADIUS = 55;
-    const PREDATOR_SPEED = 1.2;
-    const PREDATOR_FORCE = 0.2;
+    const PREDATOR_SPEED = 0.9; // slightly faster than boids
+    const PREDATOR_MAX_STEER = 0.015; // less maneuverable
+    const PREDATOR_KILL_RADIUS = 4.5;
+    const PREDATOR_PREDICT_T = 18;
     
     let SEPARATION_WEIGHT = $derived(3.0); 
     let ALIGNMENT_WEIGHT = $derived(4.5); 
@@ -133,7 +135,7 @@
             vec2 uv = vUv;
             
             // 1. SKY CALCULATIONS
-            vec3 zenithColor = vec3(0.06, 0.16, 0.5); // Darker, richer top
+            vec3 zenithColor = vec3(0.08, 0.22, 0.62); // Richer blue top
             vec3 horizonColor = vec3(0.36, 0.58, 0.82); // Lighter blue bottom
             vec3 skyResult = mix(horizonColor, zenithColor, pow(uv.y, 0.82));
             float hazeBand = smoothstep(0.06, 0.2, uv.y) * (1.0 - smoothstep(0.2, 0.38, uv.y));
@@ -187,6 +189,9 @@
         predator = new THREE.Mesh(predatorGeo, predatorMat);
         predator.visible = false;
         scene.add(predator);
+
+        _predPos.set(0, 0, 0);
+        _predVel.set(0.6, 0.1, -0.4).setLength(PREDATOR_SPEED);
         positions = new Float32Array(boidCount * 3);
         velocities = new Float32Array(boidCount * 3);
         scales = new Float32Array(boidCount);
@@ -250,10 +255,7 @@
     const INITIAL_RUSH_DELAY = 30 * 1000;
     let lastRushAt = performance.now() - (RUSH_INTERVAL - INITIAL_RUSH_DELAY);
     let rushStartAt = 0;
-    let lastPredAt = performance.now() - (PREDATOR_INTERVAL - 5000);
-    let predStartAt = 0;
-    const predPos = new THREE.Vector3();
-    const predVel = new THREE.Vector3();
+    let predTargetIdx = -1;
 
     function animate() {
         frameId = requestAnimationFrame(animate);
@@ -285,23 +287,9 @@
             }
         }
 
-        if (now - lastPredAt > PREDATOR_INTERVAL && predStartAt === 0) {
-            predStartAt = now;
-        }
-        let predActive = false;
-        if (predStartAt > 0) {
-            const tPred = (now - predStartAt) / PREDATOR_DURATION;
-            if (tPred >= 1) {
-                predStartAt = 0;
-                lastPredAt = now;
-                if (predator) predator.visible = false;
-            } else {
-                predActive = true;
-                const angle = t * 0.7;
-                predPos.set(Math.sin(angle) * 90, Math.sin(t * 0.5) * 55, Math.cos(angle) * 70);
-                predVel.set(Math.cos(angle), Math.sin(t * 0.5), -Math.sin(angle)).multiplyScalar(PREDATOR_SPEED);
-                if (predator) predator.visible = true;
-            }
+        if (predator) predator.visible = true;
+        if (predTargetIdx < 0 || predTargetIdx >= boidCount) {
+            predTargetIdx = Math.floor(Math.random() * boidCount);
         }
 
         for (let i = 0; i < boidCount; i++) {
@@ -370,11 +358,9 @@
             _acceleration.add(_diff.set(flowX, flowY, flowZ));
 
             // Predator impulse (occasional)
-            if (predActive) {
-                const dPred = _position.distanceTo(predPos);
-                if (dPred < PREDATOR_RADIUS) {
-                    _acceleration.add(_diff.copy(_position).sub(predPos).normalize().multiplyScalar(PREDATOR_FORCE));
-                }
+            const dPred = _position.distanceTo(_predPos);
+            if (dPred < PREDATOR_RADIUS) {
+                _acceleration.add(_diff.copy(_position).sub(_predPos).normalize().multiplyScalar(0.18));
             }
 
             // Preferred speed regulation
@@ -429,9 +415,40 @@
         }
         mesh.instanceMatrix.needsUpdate = true;
         if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
+        // Predator pursuit update
+        if (predTargetIdx >= 0) {
+            const tIdx = predTargetIdx * 3;
+            const tx = positions[tIdx];
+            const ty = positions[tIdx + 1];
+            const tz = positions[tIdx + 2];
+            const tvx = velocities[tIdx];
+            const tvy = velocities[tIdx + 1];
+            const tvz = velocities[tIdx + 2];
+
+            const predict = _lookAt.set(
+                tx + tvx * PREDATOR_PREDICT_T,
+                ty + tvy * PREDATOR_PREDICT_T,
+                tz + tvz * PREDATOR_PREDICT_T
+            );
+            const desired = _diff.copy(predict).sub(_predPos).setLength(PREDATOR_SPEED);
+            const steer = desired.sub(_predVel);
+            steer.clampLength(0, PREDATOR_MAX_STEER);
+            _predVel.add(steer).clampLength(0.2, PREDATOR_SPEED);
+            _predPos.add(_predVel);
+
+            const lim = BOUNDARY_SIZE * 1.1;
+            if (Math.abs(_predPos.x) > lim) _predVel.x *= -1;
+            if (Math.abs(_predPos.y) > lim) _predVel.y *= -1;
+            if (Math.abs(_predPos.z) > lim) _predVel.z *= -1;
+
+            if (_predPos.distanceTo(predict) < PREDATOR_KILL_RADIUS) {
+                predTargetIdx = Math.floor(Math.random() * boidCount);
+            }
+        }
+
         if (predator && predator.visible) {
-            predator.position.copy(predPos);
-            predator.lookAt(_lookAt.copy(predPos).add(predVel));
+            predator.position.copy(_predPos);
+            predator.lookAt(_lookAt.copy(_predPos).add(_predVel));
         }
         renderer.render(scene, camera);
     }
