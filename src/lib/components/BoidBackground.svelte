@@ -46,6 +46,7 @@
     const _dummy = new THREE.Object3D();
     const _diff = new THREE.Vector3();
     const _lookAt = new THREE.Vector3();
+    const _tempColor = new THREE.Color();
 
     let mouse = new THREE.Vector2(-9999, -9999);
     let target = new THREE.Vector3();
@@ -125,7 +126,7 @@
             vec2 uv = vUv;
             
             // 1. SKY CALCULATIONS
-            vec3 zenithColor = vec3(0.34, 0.54, 0.82); // Late afternoon blue
+            vec3 zenithColor = vec3(0.4, 0.62, 0.88); // Richer top blue, less dark
             vec3 horizonColor = vec3(0.95, 0.82, 0.65); // Warm horizon glow
             vec3 skyResult = mix(horizonColor, zenithColor, pow(uv.y, 0.75));
             float hazeBand = smoothstep(0.05, 0.25, uv.y) * (1.0 - smoothstep(0.25, 0.45, uv.y));
@@ -139,49 +140,31 @@
                 float t = 0.0;
                 float density = 0.0;
                 vec3 col = vec3(0.0);
-                for (int i = 0; i < 12; i++) {
+                for (int i = 0; i < 16; i++) {
                     vec3 pos = ro + rd * t;
                     vec3 q = pos * vec3(0.65, 1.1, 0.65);
                     q.y += time * 0.02;
-                    float d = fbm3(q * 1.4 + vec3(0.0, 3.0, 0.0));
-                    d = smoothstep(0.55, 0.75, d) * smoothstep(0.1, 0.9, pos.y + 0.4);
+                    float d = fbm3(q * 1.3 + vec3(0.0, 3.0, 0.0));
+                    d = smoothstep(0.5, 0.72, d) * smoothstep(0.05, 0.9, pos.y + 0.45);
                     float light = clamp(0.6 + 0.4 * dot(normalize(vec3(-0.3, 0.6, 0.7)), rd), 0.0, 1.0);
                     vec3 cloudCol = mix(vec3(1.0), vec3(0.92, 0.95, 1.0), 0.5) * light;
-                    float a = d * 0.15;
+                    float a = d * 0.22;
                     col = mix(col, cloudCol, a);
                     density += a;
                     t += 0.12;
                 }
-                skyResult = mix(skyResult, col, clamp(density, 0.0, 0.7));
+                skyResult = mix(skyResult, col, clamp(density, 0.0, 0.8));
             }
             
             // 2. SEA CALCULATIONS
             float surface = smoothstep(0.3, 1.0, uv.y);
-            vec3 seaTopColor = vec3(0.18, 0.55, 0.78); // Reference-like surface blue
-            vec3 seaBottomColor = vec3(0.02, 0.08, 0.22); // Deeper blue tone
+            vec3 seaTopColor = vec3(0.22, 0.6, 0.82); // Reference-like surface blue
+            vec3 seaBottomColor = vec3(0.02, 0.07, 0.18); // Deeper blue tone
             vec3 seaResult = mix(seaBottomColor, seaTopColor, surface);
             
-            // Minimal caustics (very subtle)
-            float caustics = sin((uv.x + time * 0.15) * 12.0) * sin((uv.y + time * 0.12) * 10.0);
-            caustics = pow(abs(caustics), 2.2) * 0.03 * surface;
-            seaResult += caustics * vec3(0.18, 0.35, 0.5);
-
-            // Surface ripples near the top of the sea for a fluid feel
-            float surfaceBand = smoothstep(0.12, 0.32, uv.y) * (1.0 - smoothstep(0.36, 0.55, uv.y));
-            vec2 waveP = uv * vec2(22.0, 12.0);
-            waveP.x += time * 0.9;
-            waveP.y += time * 0.4;
-            float w1 = sin(waveP.x + sin(waveP.y * 1.2)) * 0.5 + 0.5;
-            float w2 = sin(waveP.x * 1.7 - time * 0.7) * 0.5 + 0.5;
-            float w3 = sin((waveP.x + waveP.y) * 0.9 + time * 1.0) * 0.5 + 0.5;
-            float ripples = (w1 * 0.5 + w2 * 0.35 + w3 * 0.15);
-            ripples = pow(ripples, 2.1) * surfaceBand;
-            seaResult += ripples * vec3(0.22, 0.55, 0.65);
-
-            // Very soft surface shimmer
-            float shimmer = smoothstep(0.24, 0.3, uv.y) * (1.0 - smoothstep(0.32, 0.4, uv.y));
-            shimmer *= 0.25 + 0.35 * sin(uv.x * 6.0 + time * 0.6);
-            seaResult += shimmer * vec3(0.12, 0.3, 0.45);
+            // Simple surface reflection band (no moving texture)
+            float reflection = smoothstep(0.18, 0.28, uv.y) * (1.0 - smoothstep(0.32, 0.45, uv.y));
+            seaResult += reflection * vec3(0.28, 0.6, 0.78);
 
             // 3. FINAL MIX (Controlled by isFish uniform)
             vec3 finalColor = mix(skyResult, seaResult, isFish);
@@ -261,6 +244,14 @@
             velocities[i*3]=_velocity.x; velocities[i*3+1]=_velocity.y; velocities[i*3+2]=_velocity.z;
             const scale = 0.85 + Math.random() * 0.45;
             scales[i] = scale;
+            // Fish shading: brighter near surface, darker deeper
+            if (mode === 'fish' && mesh.instanceColor) {
+                const depthT = Math.max(0, Math.min(1, (_position.y + BOUNDARY_SIZE) / (BOUNDARY_SIZE * 2)));
+                const bright = 0.55 + depthT * 0.6;
+                _tempColor.set(color).multiplyScalar(bright);
+                mesh.setColorAt(i, _tempColor);
+            }
+
             _dummy.position.copy(_position);
             _dummy.scale.set(scale, scale, scale);
             _dummy.updateMatrix();
