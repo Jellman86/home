@@ -260,7 +260,9 @@
         }
     });
 
-    let lastRushAt = performance.now();
+    const RUSH_INTERVAL = 5 * 60 * 1000;
+    const INITIAL_RUSH_DELAY = 30 * 1000;
+    let lastRushAt = performance.now() - (RUSH_INTERVAL - INITIAL_RUSH_DELAY);
     let rushStartAt = 0;
 
     function animate() {
@@ -298,8 +300,7 @@
 
         target.set((mouse.x * window.innerWidth) / 20, -(mouse.y * window.innerHeight) / 20, 0);
 
-        const rushInterval = 5 * 60 * 1000;
-        if (now - lastRushAt > rushInterval && rushStartAt === 0) {
+        if (now - lastRushAt > RUSH_INTERVAL && rushStartAt === 0) {
             rushStartAt = now;
         }
         const rushDuration = 8000;
