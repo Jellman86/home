@@ -58,10 +58,10 @@
     let PROTECTED_RANGE = $derived(15);
     const BOUNDARY_SIZE = 120;
     const NEIGHBOR_COUNT = 7; // Topological neighbors for realism
-    const TARGET_SPEED = 0.63;
-    const SPEED_FORCE = 0.02;
-    const PREDATOR_INTERVAL = 180000;
-    const PREDATOR_DURATION = 6000;
+    const TARGET_SPEED = 0.75;
+    const SPEED_FORCE = 0.025;
+    const PREDATOR_INTERVAL = 30000;
+    const PREDATOR_DURATION = 8000;
     const PREDATOR_RADIUS = 45;
     const PREDATOR_SPEED = 0.9;
     const PREDATOR_FORCE = 0.14;
@@ -181,9 +181,9 @@
         mesh.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(boidCount * 3), 3);
         scene.add(mesh);
 
-        const predatorGeo = new THREE.ConeGeometry(1.6, 5.5, 6);
+        const predatorGeo = new THREE.ConeGeometry(2.2, 7.5, 6);
         predatorGeo.rotateX(Math.PI / 2);
-        const predatorMat = new THREE.MeshBasicMaterial({ color: new THREE.Color(0x0a0f14), opacity: 0.9, transparent: true });
+        const predatorMat = new THREE.MeshBasicMaterial({ color: new THREE.Color(0x101820), opacity: 0.95, transparent: true });
         predator = new THREE.Mesh(predatorGeo, predatorMat);
         predator.visible = false;
         scene.add(predator);
@@ -198,14 +198,22 @@
             _velocity.set((Math.random()-0.5), (Math.random()-0.5), (Math.random()-0.5)).normalize().multiplyScalar(SPEED_LIMIT);
             positions[i*3]=_position.x; positions[i*3+1]=_position.y; positions[i*3+2]=_position.z;
             velocities[i*3]=_velocity.x; velocities[i*3+1]=_velocity.y; velocities[i*3+2]=_velocity.z;
-            const scale = 0.85 + Math.random() * 0.45;
+            const scale = 0.75 + Math.random() * 0.55;
             scales[i] = scale;
+            const depthT = Math.max(0, Math.min(1, (_position.z + BOUNDARY_SIZE) / (BOUNDARY_SIZE * 2)));
+            const depthShade = 0.7 + depthT * 0.35;
+            const baseColor = new THREE.Color(color);
+            _tempColor.copy(baseColor).multiplyScalar(depthShade);
+            mesh.setColorAt(i, _tempColor);
+
             _dummy.position.copy(_position);
             _dummy.scale.set(scale, scale, scale);
             _dummy.updateMatrix();
             mesh.setMatrixAt(i, _dummy.matrix);
 
-            tempColor.copy(baseColor).multiplyScalar(0.85 + Math.random() * 0.25);
+            const depthT = Math.max(0, Math.min(1, (_position.z + BOUNDARY_SIZE) / (BOUNDARY_SIZE * 2)));
+            const depthShade = 0.7 + depthT * 0.35;
+            tempColor.copy(baseColor).multiplyScalar(depthShade);
             mesh.setColorAt(i, tempColor);
         }
         if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
@@ -245,7 +253,7 @@
     const INITIAL_RUSH_DELAY = 30 * 1000;
     let lastRushAt = performance.now() - (RUSH_INTERVAL - INITIAL_RUSH_DELAY);
     let rushStartAt = 0;
-    let lastPredAt = performance.now();
+    let lastPredAt = performance.now() - (PREDATOR_INTERVAL - 5000);
     let predStartAt = 0;
     const predPos = new THREE.Vector3();
     const predVel = new THREE.Vector3();
