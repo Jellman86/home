@@ -48,6 +48,7 @@
 
     let mouse = new THREE.Vector2(-9999, -9999);
     let target = new THREE.Vector3();
+    let uiRect: DOMRect | null = null;
     
     // BOID PARAMETERS
     let SPEED_LIMIT = $derived(mode === 'fish' ? 0.4 : 0.8);
@@ -92,39 +93,36 @@
             vec2 uv = vUv;
             
             // 1. SKY CALCULATIONS
-            vec3 zenithColor = vec3(0.005, 0.03, 0.15); // Darker, richer Prussian Blue
-            vec3 horizonColor = vec3(0.2, 0.5, 0.85); // Vibrant Cerulean
+            vec3 zenithColor = vec3(0.0, 0.02, 0.12); // Deep midnight blue
+            vec3 horizonColor = vec3(0.12, 0.35, 0.7); // Cool blue, no purple
             vec3 skyResult = mix(horizonColor, zenithColor, pow(uv.y, 0.7));
             
-            float sun = exp(-distance(uv, vec2(0.8, 0.9)) * 3.0);
-            skyResult = mix(skyResult, vec3(1.0, 0.95, 0.8), sun * 0.5);
-            
             // Parallax-like layered clouds for depth
-            vec2 base = uv * vec2(3.2, 1.6);
-            base.x += time * (0.010 + cloudSpeed);
-            base.y += sin(time * 0.05) * 0.03;
+            vec2 base = uv * vec2(6.0, 3.2);
+            base.x += time * (0.008 + cloudSpeed);
+            base.y += sin(time * 0.05) * 0.02;
 
-            vec2 layerA = base * 1.0 + vec2(time * 0.015, 0.0);
-            vec2 layerB = base * 1.8 + vec2(-time * 0.010, 0.0);
-            vec2 layerC = base * 2.6 + vec2(time * 0.006, 0.0);
+            vec2 layerA = base * 1.2 + vec2(time * 0.014, 0.0);
+            vec2 layerB = base * 2.1 + vec2(-time * 0.010, 0.0);
+            vec2 layerC = base * 3.0 + vec2(time * 0.006, 0.0);
 
             float a = fbm(layerA * 1.8);
             float b = fbm(layerB * 1.4);
             float c = fbm(layerC * 1.2);
             float d = (a * 0.6 + b * 0.3 + c * 0.1);
 
-            float threshold = 0.56 - cloudBoost * 0.12;
-            float cloudMask = smoothstep(threshold, threshold + 0.08 + cloudBoost * 0.05, d);
+            float threshold = 0.62 - cloudBoost * 0.10;
+            float cloudMask = smoothstep(threshold, threshold + 0.06 + cloudBoost * 0.04, d);
 
             // Soft lighting to add volume
             float dX = fbm(layerA * 1.8 + vec2(0.015, 0.0)) - fbm(layerA * 1.8 - vec2(0.015, 0.0));
             float dY = fbm(layerA * 1.8 + vec2(0.0, 0.015)) - fbm(layerA * 1.8 - vec2(0.0, 0.015));
-            vec3 normal = normalize(vec3(dX, dY, 0.35));
-            vec3 lightDir = normalize(vec3(-0.4, 0.6, 0.7));
-            float lighting = clamp(dot(normal, lightDir) * 0.6 + 0.4, 0.0, 1.0);
+            vec3 normal = normalize(vec3(dX, dY, 0.25));
+            vec3 lightDir = normalize(vec3(-0.35, 0.55, 0.75));
+            float lighting = clamp(dot(normal, lightDir) * 0.8 + 0.2, 0.0, 1.0);
 
-            vec3 cloudColor = mix(vec3(1.0), vec3(0.85, 0.9, 1.0), 0.5) * lighting;
-            skyResult = mix(skyResult, cloudColor, cloudMask * (0.35 + cloudBoost * 0.35));
+            vec3 cloudColor = mix(vec3(1.0), vec3(0.8, 0.88, 1.0), 0.45) * lighting;
+            skyResult = mix(skyResult, cloudColor, cloudMask * (0.28 + cloudBoost * 0.3));
 
             // 2. SEA CALCULATIONS
             float surface = smoothstep(0.3, 1.0, uv.y);
@@ -361,6 +359,21 @@
                 _acceleration.add(_diff.set(0, 0, 1).multiplyScalar(rushStrength * 0.02));
             }
 
+            // UI avoidance: steer away from the main panel in screen space
+            if (uiRect) {
+                _diff.copy(_position).project(camera);
+                const sx = (_diff.x * 0.5 + 0.5) * window.innerWidth;
+                const sy = (-_diff.y * 0.5 + 0.5) * window.innerHeight;
+                if (sx > uiRect.left && sx < uiRect.right && sy > uiRect.top && sy < uiRect.bottom) {
+                    const cx = (uiRect.left + uiRect.right) * 0.5;
+                    const cy = (uiRect.top + uiRect.bottom) * 0.5;
+                    const dx = sx - cx;
+                    const dy = sy - cy;
+                    const len = Math.hypot(dx, dy) || 1;
+                    _acceleration.add(_diff.set(dx / len, -dy / len, 0).multiplyScalar(0.04));
+                }
+            }
+
             const lim = BOUNDARY_SIZE * 1.2;
             if (Math.abs(_position.x) > lim) _acceleration.x -= Math.sign(_position.x) * 0.05;
             if (Math.abs(_position.y) > lim) _acceleration.y -= Math.sign(_position.y) * 0.05;
@@ -396,7 +409,13 @@
 
     onMount(() => {
         init(); animate();
+        const updateUIRect = () => {
+            const ui = document.querySelector('main') as HTMLElement | null;
+            uiRect = ui ? ui.getBoundingClientRect() : null;
+        };
+        updateUIRect();
         window.addEventListener('resize', onWindowResize);
+        window.addEventListener('resize', updateUIRect);
         window.addEventListener('mousemove', (e) => {
             mouse.x = (e.clientX/window.innerWidth)*2-1; mouse.y = -(e.clientY/window.innerHeight)*2+1;
         });
