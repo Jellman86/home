@@ -183,7 +183,7 @@
 
         const predatorGeo = new THREE.ConeGeometry(2.2, 7.5, 6);
         predatorGeo.rotateX(Math.PI / 2);
-        const predatorMat = new THREE.MeshBasicMaterial({ color: new THREE.Color(0x101820), opacity: 0.95, transparent: true });
+        const predatorMat = new THREE.MeshBasicMaterial({ color: new THREE.Color(0x7b2d2d), opacity: 0.95, transparent: true });
         predator = new THREE.Mesh(predatorGeo, predatorMat);
         predator.visible = false;
         scene.add(predator);
