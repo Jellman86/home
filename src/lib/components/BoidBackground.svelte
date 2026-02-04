@@ -136,8 +136,8 @@
             vec2 uv = vUv;
             
             // 1. SKY CALCULATIONS
-            vec3 zenithColor = vec3(0.07, 0.2, 0.58); // Richer blue top, slightly desaturated
-            vec3 horizonColor = vec3(0.34, 0.55, 0.8); // Lighter blue bottom
+            vec3 zenithColor = vec3(0.03, 0.1, 0.4); // Much darker rich blue top
+            vec3 horizonColor = vec3(0.22, 0.4, 0.65); // Richer lower blue
             vec3 skyResult = mix(horizonColor, zenithColor, pow(uv.y, 0.82));
             float hazeBand = smoothstep(0.08, 0.22, uv.y) * (1.0 - smoothstep(0.22, 0.42, uv.y));
             skyResult = mix(skyResult, vec3(0.36, 0.55, 0.78), hazeBand * 0.22);
