@@ -211,10 +211,7 @@
             _dummy.updateMatrix();
             mesh.setMatrixAt(i, _dummy.matrix);
 
-            const depthTz = Math.max(0, Math.min(1, (_position.z + BOUNDARY_SIZE) / (BOUNDARY_SIZE * 2)));
-            const depthShade = 0.7 + depthTz * 0.35;
-            tempColor.copy(baseColor).multiplyScalar(depthShade);
-            mesh.setColorAt(i, tempColor);
+            // color already set above
         }
         if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
     }
