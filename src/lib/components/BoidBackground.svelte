@@ -58,7 +58,7 @@
     let PROTECTED_RANGE = $derived(15);
     const BOUNDARY_SIZE = 120;
     const NEIGHBOR_COUNT = 7; // Topological neighbors for realism
-    const TARGET_SPEED = 0.55;
+    const TARGET_SPEED = 0.63;
     const SPEED_FORCE = 0.02;
     const PREDATOR_INTERVAL = 180000;
     const PREDATOR_DURATION = 6000;
@@ -133,7 +133,7 @@
             vec2 uv = vUv;
             
             // 1. SKY CALCULATIONS
-            vec3 zenithColor = vec3(0.12, 0.24, 0.52); // Richer blue top, less black
+            vec3 zenithColor = vec3(0.1, 0.22, 0.58); // Richer blue top
             vec3 horizonColor = vec3(0.4, 0.6, 0.82); // Lighter blue bottom
             vec3 skyResult = mix(horizonColor, zenithColor, pow(uv.y, 0.78));
             float hazeBand = smoothstep(0.06, 0.2, uv.y) * (1.0 - smoothstep(0.2, 0.38, uv.y));
