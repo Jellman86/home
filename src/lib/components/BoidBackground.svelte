@@ -47,6 +47,8 @@
     const _diff = new THREE.Vector3();
     const _lookAt = new THREE.Vector3();
     const _tempColor = new THREE.Color();
+    const _fishTop = new THREE.Color();
+    const _fishBottom = new THREE.Color();
 
     let mouse = new THREE.Vector2(-9999, -9999);
     let target = new THREE.Vector3();
@@ -126,35 +128,13 @@
             vec2 uv = vUv;
             
             // 1. SKY CALCULATIONS
-            vec3 zenithColor = vec3(0.43, 0.63, 0.88); // Home-birds-like top blue (less dark)
-            vec3 horizonColor = vec3(0.93, 0.86, 0.76); // Warm horizon glow
-            vec3 skyResult = mix(horizonColor, zenithColor, pow(uv.y, 0.72));
-            float hazeBand = smoothstep(0.04, 0.22, uv.y) * (1.0 - smoothstep(0.22, 0.4, uv.y));
-            skyResult = mix(skyResult, vec3(0.97, 0.9, 0.8), hazeBand * 0.45);
+            vec3 zenithColor = vec3(0.46, 0.64, 0.86); // Match home-birds.png top blue
+            vec3 horizonColor = vec3(0.86, 0.81, 0.72); // Match home-birds.png horizon
+            vec3 skyResult = mix(horizonColor, zenithColor, pow(uv.y, 0.7));
+            float hazeBand = smoothstep(0.05, 0.22, uv.y) * (1.0 - smoothstep(0.22, 0.42, uv.y));
+            skyResult = mix(skyResult, vec3(0.9, 0.85, 0.76), hazeBand * 0.35);
 
-            // Volumetric raymarched clouds (bird scene only)
-            if (isFish < 0.5) {
-                vec2 p = uv * 2.0 - 1.0;
-                vec3 ro = vec3(0.0, 0.0, 0.0);
-                vec3 rd = normalize(vec3(p.x, p.y * 0.7 + 0.3, 1.2));
-                float t = 0.0;
-                float density = 0.0;
-                vec3 col = vec3(0.0);
-                for (int i = 0; i < 20; i++) {
-                    vec3 pos = ro + rd * t;
-                    vec3 q = pos * vec3(0.65, 1.1, 0.65);
-                    q.y += time * 0.02;
-                    float d = fbm3(q * 1.2 + vec3(0.0, 3.0, 0.0));
-                    d = smoothstep(0.45, 0.7, d) * smoothstep(0.0, 0.9, pos.y + 0.5);
-                    float light = clamp(0.6 + 0.4 * dot(normalize(vec3(-0.3, 0.6, 0.7)), rd), 0.0, 1.0);
-                    vec3 cloudCol = mix(vec3(1.0), vec3(0.92, 0.95, 1.0), 0.5) * light;
-                    float a = d * 0.28;
-                    col = mix(col, cloudCol, a);
-                    density += a;
-                    t += 0.12;
-                }
-                skyResult = mix(skyResult, col, clamp(density, 0.0, 0.9));
-            }
+            // Clouds removed for a clean sky
             
             // 2. SEA CALCULATIONS
             float surface = smoothstep(0.3, 1.0, uv.y);
@@ -162,9 +142,7 @@
             vec3 seaBottomColor = vec3(0.02, 0.06, 0.16); // Deep blue
             vec3 seaResult = mix(seaBottomColor, seaTopColor, surface);
             
-            // Thin surface reflection near the top
-            float reflection = smoothstep(0.12, 0.18, uv.y) * (1.0 - smoothstep(0.18, 0.26, uv.y));
-            seaResult += reflection * vec3(0.35, 0.7, 0.9);
+            // Reflection band removed for a smoother gradient
 
             // 3. FINAL MIX (Controlled by isFish uniform)
             vec3 finalColor = mix(skyResult, seaResult, isFish);
@@ -236,6 +214,10 @@
 
         const baseColor = new THREE.Color(color);
         const tempColor = new THREE.Color();
+        if (mode === 'fish') {
+            _fishTop.copy(baseColor);
+            _fishBottom.copy(_fishTop).multiplyScalar(0.28).lerp(new THREE.Color(0x1b2b35), 0.6);
+        }
 
         for (let i = 0; i < boidCount; i++) {
             _position.set((Math.random()-0.5)*BOUNDARY_SIZE*2, (Math.random()-0.5)*BOUNDARY_SIZE*2, (Math.random()-0.5)*BOUNDARY_SIZE);
@@ -244,21 +226,19 @@
             velocities[i*3]=_velocity.x; velocities[i*3+1]=_velocity.y; velocities[i*3+2]=_velocity.z;
             const scale = 0.85 + Math.random() * 0.45;
             scales[i] = scale;
-            // Fish shading: brighter near surface, darker deeper
-            if (mode === 'fish' && mesh.instanceColor) {
-                const depthT = Math.max(0, Math.min(1, (_position.y + BOUNDARY_SIZE) / (BOUNDARY_SIZE * 2)));
-                const bright = 0.4 + depthT * 0.9; // brighter near surface
-                _tempColor.set(color).multiplyScalar(bright);
-                mesh.setColorAt(i, _tempColor);
-            }
-
             _dummy.position.copy(_position);
             _dummy.scale.set(scale, scale, scale);
             _dummy.updateMatrix();
             mesh.setMatrixAt(i, _dummy.matrix);
 
-            tempColor.copy(baseColor).multiplyScalar(0.85 + Math.random() * 0.25);
-            mesh.setColorAt(i, tempColor);
+            if (mode === 'fish' && mesh.instanceColor) {
+                const depthT = Math.max(0, Math.min(1, (_position.y + BOUNDARY_SIZE) / (BOUNDARY_SIZE * 2)));
+                _tempColor.copy(_fishBottom).lerp(_fishTop, depthT);
+                mesh.setColorAt(i, _tempColor);
+            } else {
+                tempColor.copy(baseColor).multiplyScalar(0.85 + Math.random() * 0.25);
+                mesh.setColorAt(i, tempColor);
+            }
         }
         if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
     }
@@ -289,17 +269,19 @@
             material.color.set(isFish ? '#ffffff' : currentColor);
             material.opacity = isFish ? 0.95 : 0.85;
 
-            const baseColor = new THREE.Color(currentColor);
-            const tempColor = new THREE.Color();
-            for (let i = 0; i < boidCount; i++) {
-                const s = scales ? scales[i] : 1;
-                tempColor.copy(baseColor).multiplyScalar(0.78 + s * 0.45);
-                if (isFish) {
-                    tempColor.offsetHSL(0.01, -0.12, 0.18);
+            if (isFish) {
+                _fishTop.set(currentColor);
+                _fishBottom.copy(_fishTop).multiplyScalar(0.28).lerp(new THREE.Color(0x1b2b35), 0.6);
+            } else {
+                const baseColor = new THREE.Color(currentColor);
+                const tempColor = new THREE.Color();
+                for (let i = 0; i < boidCount; i++) {
+                    const s = scales ? scales[i] : 1;
+                    tempColor.copy(baseColor).multiplyScalar(0.78 + s * 0.45);
+                    mesh.setColorAt(i, tempColor);
                 }
-                mesh.setColorAt(i, tempColor);
+                if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
             }
-            if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
         }
     });
 
@@ -420,6 +402,14 @@
             positions[idx] = _position.x; positions[idx+1] = _position.y; positions[idx+2] = _position.z;
             velocities[idx] = _velocity.x; velocities[idx+1] = _velocity.y; velocities[idx+2] = _velocity.z;
 
+            if (mode === 'fish' && mesh.instanceColor) {
+                const depthT = Math.max(0, Math.min(1, (_position.y + BOUNDARY_SIZE) / (BOUNDARY_SIZE * 2)));
+                _tempColor.copy(_fishBottom).lerp(_fishTop, depthT);
+                const s = scales ? scales[i] : 1;
+                _tempColor.multiplyScalar(0.85 + s * 0.25);
+                mesh.setColorAt(i, _tempColor);
+            }
+
             _dummy.position.copy(_position);
             if (_velocity.lengthSq() > 0.0001) _dummy.lookAt(_lookAt.copy(_position).add(_velocity));
             if (mode === 'bird') {
@@ -432,6 +422,7 @@
             mesh.setMatrixAt(i, _dummy.matrix);
         }
         mesh.instanceMatrix.needsUpdate = true;
+        if (mode === 'fish' && mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
         renderer.render(scene, camera);
     }
 
