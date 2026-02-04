@@ -57,8 +57,8 @@
     
     // BOID PARAMETERS
     let SPEED_LIMIT = $derived(0.8);
-    let VISUAL_RANGE = $derived(40); 
-    let PROTECTED_RANGE = $derived(11);
+    let VISUAL_RANGE = $derived(36); 
+    let PROTECTED_RANGE = $derived(9);
     const BOUNDARY_SIZE = 120;
     const NEIGHBOR_COUNT = 7; // Topological neighbors for realism
     const TARGET_SPEED = 0.83;
@@ -71,7 +71,7 @@
     
     let SEPARATION_WEIGHT = $derived(2.3); 
     let ALIGNMENT_WEIGHT = $derived(4.5); 
-    let COHESION_WEIGHT = $derived(0.75); 
+    let COHESION_WEIGHT = $derived(0.9); 
     const MOUSE_REPULSION_WEIGHT = 8.0;
 
     const bgVertexShader = `
@@ -210,9 +210,11 @@
             _position.set(
                 Math.sin(phi) * Math.cos(theta) * r,
                 Math.sin(phi) * Math.sin(theta) * r,
-                Math.cos(phi) * r
+                Math.cos(phi) * r - 30
             );
-            _velocity.set((Math.random()-0.5), (Math.random()-0.5), (Math.random()-0.5)).normalize().multiplyScalar(SPEED_LIMIT);
+            _velocity.set((Math.random()-0.5), (Math.random()-0.5), (Math.random()-0.2)).normalize().multiplyScalar(SPEED_LIMIT);
+            _velocity.z += 0.6;
+            _velocity.normalize().multiplyScalar(SPEED_LIMIT);
             positions[i*3]=_position.x; positions[i*3+1]=_position.y; positions[i*3+2]=_position.z;
             velocities[i*3]=_velocity.x; velocities[i*3+1]=_velocity.y; velocities[i*3+2]=_velocity.z;
             const scale = 0.75 + Math.random() * 0.55;
