@@ -3,6 +3,7 @@
     
     const mode = 'bird';
     let fps = $state(0);
+    const gitHash = 'f4783c9';
 
     // Theme Configuration - Deeper, more professional colors
     let backgroundColor = $derived(mode === 'bird' ? '#0f172a' : '#01161e'); // Dark Twilight vs Deepest Teal
@@ -29,9 +30,12 @@
                     Birds
                 </div>
             </div>
-            <div class="px-2 border-l border-white/10">
+            <div class="px-2 border-l border-white/10 flex flex-col items-end gap-0.5">
                 <p class="text-[10px] font-mono font-bold text-slate-400">
                     <span class="text-sky-400 text-sm">{fps}</span> FPS
+                </p>
+                <p class="text-[9px] font-mono text-slate-500">
+                    {gitHash}
                 </p>
             </div>
         </div>
