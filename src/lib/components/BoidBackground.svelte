@@ -95,28 +95,28 @@
             vec2 uv = vUv;
             
             // 1. SKY CALCULATIONS
-            vec3 zenithColor = vec3(0.14, 0.36, 0.74); // Bright summer sky
-            vec3 horizonColor = vec3(0.62, 0.84, 0.98); // Hazy afternoon horizon
-            vec3 skyResult = mix(horizonColor, zenithColor, pow(uv.y, 0.65));
-            float hazeBand = smoothstep(0.15, 0.35, uv.y) * (1.0 - smoothstep(0.35, 0.55, uv.y));
-            skyResult = mix(skyResult, vec3(0.72, 0.88, 1.0), hazeBand * 0.35);
+            vec3 zenithColor = vec3(0.34, 0.54, 0.82); // Late afternoon blue
+            vec3 horizonColor = vec3(0.95, 0.82, 0.65); // Warm horizon glow
+            vec3 skyResult = mix(horizonColor, zenithColor, pow(uv.y, 0.75));
+            float hazeBand = smoothstep(0.05, 0.25, uv.y) * (1.0 - smoothstep(0.25, 0.45, uv.y));
+            skyResult = mix(skyResult, vec3(0.98, 0.86, 0.7), hazeBand * 0.5);
             
             // 2. SEA CALCULATIONS
             float surface = smoothstep(0.3, 1.0, uv.y);
-            vec3 seaTopColor = vec3(0.02, 0.35, 0.5); // Bright surface
-            vec3 seaBottomColor = vec3(0.0, 0.02, 0.05); // Deep dark
+            vec3 seaTopColor = vec3(0.1, 0.45, 0.7); // Bright surface
+            vec3 seaBottomColor = vec3(0.0, 0.03, 0.08); // Deep dark
             vec3 seaResult = mix(seaBottomColor, seaTopColor, surface);
             
             float rays = pow(sin(uv.x * 10.0 + time * 0.4) * 0.5 + 0.5, 15.0) * 0.5 * surface;
-            seaResult += rays * vec3(0.5, 0.9, 1.0);
+            seaResult += rays * vec3(0.6, 1.0, 1.2);
 
             // Subtle caustics for fish scene only
             float caustics = sin((uv.x + time * 0.2) * 22.0) * sin((uv.y + time * 0.15) * 18.0);
             caustics = pow(abs(caustics), 3.0) * 0.15 * surface;
-            seaResult += caustics * vec3(0.35, 0.9, 1.0);
+            seaResult += caustics * vec3(0.45, 0.95, 1.1);
 
             // Surface ripples near the top of the sea for a fluid feel
-            float surfaceBand = smoothstep(0.15, 0.35, uv.y) * (1.0 - smoothstep(0.38, 0.6, uv.y));
+            float surfaceBand = smoothstep(0.12, 0.32, uv.y) * (1.0 - smoothstep(0.36, 0.55, uv.y));
             vec2 waveP = uv * vec2(22.0, 12.0);
             waveP.x += time * 0.9;
             waveP.y += time * 0.4;
@@ -128,9 +128,9 @@
             seaResult += ripples * vec3(0.22, 0.55, 0.65);
 
             // Brighter surface shimmer with softer edges
-            float shimmer = smoothstep(0.27, 0.32, uv.y) * (1.0 - smoothstep(0.34, 0.4, uv.y));
+            float shimmer = smoothstep(0.24, 0.3, uv.y) * (1.0 - smoothstep(0.32, 0.4, uv.y));
             shimmer *= 0.55 + 0.45 * sin(uv.x * 10.0 + time * 1.2);
-            seaResult += shimmer * vec3(0.25, 0.6, 0.8);
+            seaResult += shimmer * vec3(0.35, 0.75, 0.95);
 
             // 3. FINAL MIX (Controlled by isFish uniform)
             vec3 finalColor = mix(skyResult, seaResult, isFish);
@@ -146,7 +146,7 @@
 
     function init() {
         scene = new THREE.Scene();
-        scene.fog = new THREE.FogExp2(mode === 'fish' ? 0x041016 : 0x0b1020, mode === 'fish' ? 0.0028 : 0.0022);
+        scene.fog = new THREE.FogExp2(mode === 'fish' ? 0x0b2a3a : 0x7aa6d6, mode === 'fish' ? 0.0028 : 0.0020);
         camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 2000);
         camera.position.z = 180;
 
@@ -174,16 +174,16 @@
             map: cloudTex,
             transparent: true,
             depthWrite: false,
-            opacity: 0.7,
-            color: new THREE.Color(0xffffff)
+            opacity: 0.45,
+            color: new THREE.Color(0xfff6ea)
         });
-        const cloudCount = 10;
+        const cloudCount = 6;
         const spritesPerCloud = 4;
         cloudClusterCount = cloudCount;
         for (let i = 0; i < cloudCount; i++) {
             const baseX = (Math.random() - 0.5) * 260;
-            const baseY = 70 + Math.random() * 60;
-            const baseZ = -150 - Math.random() * 70;
+            const baseY = 85 + Math.random() * 45;
+            const baseZ = -160 - Math.random() * 50;
             const baseScale = 40 + Math.random() * 50;
             for (let j = 0; j < spritesPerCloud; j++) {
                 const sprite = new THREE.Sprite(cloudMat.clone());
@@ -314,8 +314,8 @@
 
             // Update Fog to match scene
             if (scene && scene.fog) {
-                (scene.fog as THREE.FogExp2).color.set(isFish ? 0x041016 : 0x0b1020);
-                (scene.fog as THREE.FogExp2).density = isFish ? 0.0028 : 0.0022;
+                (scene.fog as THREE.FogExp2).color.set(isFish ? 0x0b2a3a : 0x7aa6d6);
+                (scene.fog as THREE.FogExp2).density = isFish ? 0.0028 : 0.0020;
             }
 
             // Update Boid Color
