@@ -247,11 +247,13 @@
             // Update Boid Color
             const material = mesh.material as THREE.MeshBasicMaterial;
             material.color.set(currentColor);
+            material.opacity = isFish ? 0.9 : 0.85;
 
             const baseColor = new THREE.Color(currentColor);
             const tempColor = new THREE.Color();
             for (let i = 0; i < boidCount; i++) {
-                tempColor.copy(baseColor).multiplyScalar(0.85 + (i % 7) * 0.03);
+                const s = scales ? scales[i] : 1;
+                tempColor.copy(baseColor).multiplyScalar(0.75 + s * 0.35);
                 mesh.setColorAt(i, tempColor);
             }
             if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
