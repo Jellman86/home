@@ -97,27 +97,33 @@
             vec3 horizonColor = vec3(0.12, 0.35, 0.7); // Cool blue, no purple
             vec3 skyResult = mix(horizonColor, zenithColor, pow(uv.y, 0.7));
             
-            // Layered, stable clouds with gentle domain warping
-            vec2 base = uv * vec2(4.2, 2.0);
+            // Layered, stable clouds with rotated UVs to avoid grid artifacts
+            mat2 rot1 = mat2(0.96, -0.28, 0.28, 0.96);
+            mat2 rot2 = mat2(0.86, -0.5, 0.5, 0.86);
+
+            vec2 base = uv * vec2(4.0, 2.0);
             base.x += time * (0.006 + cloudSpeed);
             base.y += sin(time * 0.04) * 0.015;
 
-            float warpA = fbm(base + vec2(time * 0.03, 0.0));
-            float warpB = fbm(base * 1.4 + vec2(5.2, -time * 0.02));
-            vec2 warp = vec2(warpA, warpB) * (0.25 + cloudBoost * 0.15);
+            vec2 p1 = rot1 * base;
+            vec2 p2 = rot2 * base + vec2(3.7, -2.1);
 
-            vec2 p = base + warp;
-            float n1 = fbm(p * 1.4);
-            float n2 = fbm(p * 2.2);
-            float d = mix(n1, n2, 0.35);
+            float warpA = fbm(p1 + vec2(time * 0.025, 0.0));
+            float warpB = fbm(p2 * 1.2 + vec2(5.2, -time * 0.02));
+            vec2 warp = vec2(warpA, warpB) * (0.18 + cloudBoost * 0.12);
+
+            vec2 p = p1 + warp;
+            float n1 = fbm(p * 1.3);
+            float n2 = fbm((p2 + warp * 0.6) * 1.9);
+            float d = mix(n1, n2, 0.4);
 
             float threshold = 0.58 - cloudBoost * 0.08;
             float cloudMask = smoothstep(threshold, threshold + 0.08 + cloudBoost * 0.03, d);
             cloudMask *= smoothstep(0.25, 0.85, uv.y);
 
             // Soft lighting for volume without harsh artifacts
-            float dX = fbm(p + vec2(0.01, 0.0)) - fbm(p - vec2(0.01, 0.0));
-            float dY = fbm(p + vec2(0.0, 0.01)) - fbm(p - vec2(0.0, 0.01));
+            float dX = fbm(p + vec2(0.012, 0.0)) - fbm(p - vec2(0.012, 0.0));
+            float dY = fbm(p + vec2(0.0, 0.012)) - fbm(p - vec2(0.0, 0.012));
             vec3 normal = normalize(vec3(dX, dY, 0.35));
             vec3 lightDir = normalize(vec3(-0.35, 0.55, 0.75));
             float lighting = clamp(dot(normal, lightDir) * 0.7 + 0.3, 0.0, 1.0);
@@ -140,10 +146,16 @@
             seaResult += caustics * vec3(0.35, 0.9, 1.0);
 
             // Surface ripples near the top of the sea for a fluid feel
-            float surfaceBand = smoothstep(0.25, 0.45, uv.y) * (1.0 - smoothstep(0.45, 0.7, uv.y));
-            float ripples = sin(uv.x * 24.0 + time * 1.4) * sin(uv.y * 14.0 + time * 0.9);
-            ripples = pow(abs(ripples), 1.6) * surfaceBand;
-            seaResult += ripples * vec3(0.12, 0.35, 0.45);
+            float surfaceBand = smoothstep(0.18, 0.38, uv.y) * (1.0 - smoothstep(0.45, 0.75, uv.y));
+            vec2 waveP = uv * vec2(18.0, 10.0);
+            waveP.x += time * 0.8;
+            waveP.y += time * 0.35;
+            float w1 = sin(waveP.x + sin(waveP.y * 1.4)) * 0.5 + 0.5;
+            float w2 = sin(waveP.x * 1.6 - time * 0.6) * 0.5 + 0.5;
+            float w3 = sin((waveP.x + waveP.y) * 0.8 + time * 0.9) * 0.5 + 0.5;
+            float ripples = (w1 * 0.5 + w2 * 0.35 + w3 * 0.15);
+            ripples = pow(ripples, 2.4) * surfaceBand;
+            seaResult += ripples * vec3(0.18, 0.45, 0.55);
 
             // 3. FINAL MIX (Controlled by isFish uniform)
             vec3 finalColor = mix(skyResult, seaResult, isFish);
