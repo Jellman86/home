@@ -56,21 +56,21 @@
     
     // BOID PARAMETERS
     let SPEED_LIMIT = $derived(0.8);
-    let VISUAL_RANGE = $derived(50); 
-    let PROTECTED_RANGE = $derived(15);
+    let VISUAL_RANGE = $derived(45); 
+    let PROTECTED_RANGE = $derived(13);
     const BOUNDARY_SIZE = 120;
     const NEIGHBOR_COUNT = 7; // Topological neighbors for realism
-    const TARGET_SPEED = 0.75;
+    const TARGET_SPEED = 0.83;
     const SPEED_FORCE = 0.025;
     const PREDATOR_RADIUS = 55;
-    const PREDATOR_SPEED = 0.9; // slightly faster than boids
+    const PREDATOR_SPEED = 1.04; // 15% faster than boids
     const PREDATOR_MAX_STEER = 0.015; // less maneuverable
     const PREDATOR_KILL_RADIUS = 4.5;
     const PREDATOR_PREDICT_T = 18;
     
-    let SEPARATION_WEIGHT = $derived(3.0); 
+    let SEPARATION_WEIGHT = $derived(2.6); 
     let ALIGNMENT_WEIGHT = $derived(4.5); 
-    let COHESION_WEIGHT = $derived(0.4); 
+    let COHESION_WEIGHT = $derived(0.6); 
     const MOUSE_REPULSION_WEIGHT = 8.0;
 
     const bgVertexShader = `
