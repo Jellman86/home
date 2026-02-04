@@ -1,12 +1,14 @@
 <script lang="ts">
     import BoidBackground from '$lib/components/BoidBackground.svelte';
     
-    let mode = $state<'bird' | 'fish'>('bird');
+    let mode = $state<'bird' | 'fish' | 'grass'>('bird');
     let fps = $state(0);
 
     // Theme Configuration - Deeper, more professional colors
     let backgroundColor = $derived(mode === 'bird' ? '#0f172a' : '#01161e'); // Dark Twilight vs Deepest Teal
-    let boidColor = $derived(mode === 'bird' ? '#1a212d' : '#cfe7f1'); // Off-black Birds vs Silvery Fish
+    let boidColor = $derived(
+        mode === 'bird' ? '#1a212d' : mode === 'fish' ? '#cfe7f1' : '#1b2a1f'
+    ); // Birds, Fish, Grass
 </script>
 
 <svelte:head>
@@ -36,6 +38,12 @@
                     onclick={() => mode = 'fish'}
                 >
                     Fish
+                </button>
+                <button
+                    class="px-3 py-1.5 rounded-md text-xs font-bold transition-all {mode === 'grass' ? 'bg-sky-500 text-white shadow-md' : 'text-slate-400 hover:text-white'}"
+                    onclick={() => mode = 'grass'}
+                >
+                    Grass
                 </button>
             </div>
             <div class="px-2 border-l border-white/10">

@@ -6,7 +6,7 @@
         boidCount?: number;
         color?: string;
         backgroundColor?: string;
-        mode?: 'bird' | 'fish';
+        mode?: 'bird' | 'fish' | 'grass';
         fps?: number;
     }
 
@@ -75,7 +75,8 @@
 
     const bgFragmentShader = `
         uniform float time;
-        uniform float isFish; // 0.0 = Bird, 1.0 = Fish
+        uniform float isFish; // 0.0 = Bird/Grass, 1.0 = Fish
+        uniform float isGrass; // 1.0 = Grass
         varying vec2 vUv;
 
         float hash31(vec3 p) {
@@ -128,24 +129,33 @@
             vec2 uv = vUv;
             
             // 1. SKY CALCULATIONS
-            vec3 zenithColor = vec3(0.08, 0.13, 0.32); // Rich navy, slightly lighter than ref
-            vec3 horizonColor = vec3(0.18, 0.34, 0.62); // Deep mid-blue
-            vec3 skyResult = mix(horizonColor, zenithColor, pow(uv.y, 0.75));
-            float hazeBand = smoothstep(0.05, 0.2, uv.y) * (1.0 - smoothstep(0.2, 0.4, uv.y));
-            skyResult = mix(skyResult, vec3(0.22, 0.4, 0.68), hazeBand * 0.3);
+            vec3 zenithColor = vec3(0.1, 0.2, 0.42); // Richer blue top, less black
+            vec3 horizonColor = vec3(0.32, 0.52, 0.78); // Lighter blue bottom
+            vec3 skyResult = mix(horizonColor, zenithColor, pow(uv.y, 0.78));
+            float hazeBand = smoothstep(0.06, 0.2, uv.y) * (1.0 - smoothstep(0.2, 0.38, uv.y));
+            skyResult = mix(skyResult, vec3(0.38, 0.58, 0.82), hazeBand * 0.25);
 
             // Clouds removed for a clean sky
             
             // 2. SEA CALCULATIONS
             float surface = smoothstep(0.3, 1.0, uv.y);
             vec3 seaTopColor = vec3(0.25, 0.62, 0.86); // Brighter surface blue
-            vec3 seaBottomColor = vec3(0.02, 0.06, 0.16); // Deep blue
+            vec3 seaBottomColor = vec3(0.04, 0.12, 0.28); // Less dark bottom
             vec3 seaResult = mix(seaBottomColor, seaTopColor, surface);
             
             // Reflection band removed for a smoother gradient
 
-            // 3. FINAL MIX (Controlled by isFish uniform)
-            vec3 finalColor = mix(skyResult, seaResult, isFish);
+            // 3. GRASS CALCULATIONS
+            vec3 grassTop = vec3(0.18, 0.38, 0.22);
+            vec3 grassBottom = vec3(0.06, 0.18, 0.1);
+            float grassBand = smoothstep(0.2, 0.9, uv.y);
+            vec3 grassResult = mix(grassBottom, grassTop, grassBand);
+            float blades = noise(uv * 40.0 + vec2(0.0, time * 0.02));
+            grassResult += blades * 0.06;
+
+            // 4. FINAL MIX (Controlled by isFish/isGrass uniform)
+            vec3 seaOrSky = mix(skyResult, seaResult, isFish);
+            vec3 finalColor = mix(seaOrSky, grassResult, isGrass);
 
             // Soft vignette for depth and focus
             vec2 v = uv - 0.5;
@@ -171,7 +181,8 @@
         bgMesh = new THREE.Mesh(bgGeo, new THREE.ShaderMaterial({
             uniforms: { 
                 time: { value: 0 }, 
-                isFish: { value: mode === 'fish' ? 1.0 : 0.0 }
+                isFish: { value: mode === 'fish' ? 1.0 : 0.0 },
+                isGrass: { value: mode === 'grass' ? 1.0 : 0.0 }
             },
             vertexShader: bgVertexShader, 
             fragmentShader: bgFragmentShader, 
@@ -250,7 +261,9 @@
 
         if (mesh && bgMesh && birdGeo && fishGeo) {
             // Update Uniform (immediate visual switch)
-            (bgMesh.material as THREE.ShaderMaterial).uniforms.isFish.value = isFish ? 1.0 : 0.0;
+            const bgMat = bgMesh.material as THREE.ShaderMaterial;
+            bgMat.uniforms.isFish.value = isFish ? 1.0 : 0.0;
+            bgMat.uniforms.isGrass.value = (mode === 'grass') ? 1.0 : 0.0;
 
             // Update Bubble Visibility
             if (bubbleParticles) bubbleParticles.visible = isFish;
@@ -260,8 +273,10 @@
 
             // Update Fog to match scene
             if (scene && scene.fog) {
-                (scene.fog as THREE.FogExp2).color.set(isFish ? 0x0b2a3a : 0x7aa6d6);
-                (scene.fog as THREE.FogExp2).density = isFish ? 0.0028 : 0.0020;
+                (scene.fog as THREE.FogExp2).color.set(
+                    mode === 'fish' ? 0x0b2a3a : mode === 'grass' ? 0x1f2f1f : 0x7aa6d6
+                );
+                (scene.fog as THREE.FogExp2).density = mode === 'fish' ? 0.0028 : 0.0020;
             }
 
             // Update Boid Color
@@ -272,6 +287,16 @@
             if (isFish) {
                 _fishTop.set('#d6edf7'); // silvery highlight
                 _fishBottom.set('#1a2a38'); // deep blue shadow
+                for (let i = 0; i < boidCount; i++) {
+                    const idx = i * 3;
+                    const y = positions ? positions[idx + 1] : 0;
+                    const depthT = Math.max(0, Math.min(1, (y + BOUNDARY_SIZE) / (BOUNDARY_SIZE * 2)));
+                    _tempColor.copy(_fishBottom).lerp(_fishTop, depthT);
+                    const s = scales ? scales[i] : 1;
+                    _tempColor.multiplyScalar(0.85 + s * 0.25);
+                    mesh.setColorAt(i, _tempColor);
+                }
+                if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
             } else {
                 const baseColor = new THREE.Color(currentColor);
                 const tempColor = new THREE.Color();
