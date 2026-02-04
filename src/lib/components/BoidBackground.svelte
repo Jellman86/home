@@ -157,14 +157,14 @@
             
             // 2. SEA CALCULATIONS
             float surface = smoothstep(0.3, 1.0, uv.y);
-            vec3 seaTopColor = vec3(0.1, 0.45, 0.7); // Bright surface
-            vec3 seaBottomColor = vec3(0.0, 0.03, 0.08); // Deep dark
+            vec3 seaTopColor = vec3(0.18, 0.55, 0.78); // Reference-like surface blue
+            vec3 seaBottomColor = vec3(0.02, 0.08, 0.22); // Deeper blue tone
             vec3 seaResult = mix(seaBottomColor, seaTopColor, surface);
             
             // Minimal caustics (very subtle)
             float caustics = sin((uv.x + time * 0.15) * 12.0) * sin((uv.y + time * 0.12) * 10.0);
             caustics = pow(abs(caustics), 2.2) * 0.03 * surface;
-            seaResult += caustics * vec3(0.2, 0.4, 0.55);
+            seaResult += caustics * vec3(0.18, 0.35, 0.5);
 
             // Surface ripples near the top of the sea for a fluid feel
             float surfaceBand = smoothstep(0.12, 0.32, uv.y) * (1.0 - smoothstep(0.36, 0.55, uv.y));
@@ -181,7 +181,7 @@
             // Very soft surface shimmer
             float shimmer = smoothstep(0.24, 0.3, uv.y) * (1.0 - smoothstep(0.32, 0.4, uv.y));
             shimmer *= 0.25 + 0.35 * sin(uv.x * 6.0 + time * 0.6);
-            seaResult += shimmer * vec3(0.15, 0.35, 0.5);
+            seaResult += shimmer * vec3(0.12, 0.3, 0.45);
 
             // 3. FINAL MIX (Controlled by isFish uniform)
             vec3 finalColor = mix(skyResult, seaResult, isFish);
@@ -233,7 +233,7 @@
         scene.add(mesh);
 
         const bubbleGeo = new THREE.BufferGeometry();
-        const bubbleCount = 500;
+        const bubbleCount = 220;
         const bubblePos = new Float32Array(bubbleCount * 3);
         for(let i=0; i<bubbleCount; i++) {
             bubblePos[i*3] = (Math.random()-0.5) * 800;
@@ -242,7 +242,7 @@
         }
         bubbleGeo.setAttribute('position', new THREE.BufferAttribute(bubblePos, 3));
         bubbleParticles = new THREE.Points(bubbleGeo, new THREE.PointsMaterial({ 
-            color: 0xffffff, size: 4.0, transparent: true, opacity: 0.5, sizeAttenuation: true
+            color: 0xffffff, size: 3.0, transparent: true, opacity: 0.25, sizeAttenuation: true
         }));
         bubbleParticles.visible = (mode === 'fish');
         scene.add(bubbleParticles);
