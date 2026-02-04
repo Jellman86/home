@@ -61,10 +61,10 @@
     const TARGET_SPEED = 0.75;
     const SPEED_FORCE = 0.025;
     const PREDATOR_INTERVAL = 30000;
-    const PREDATOR_DURATION = 8000;
-    const PREDATOR_RADIUS = 45;
-    const PREDATOR_SPEED = 0.9;
-    const PREDATOR_FORCE = 0.14;
+    const PREDATOR_DURATION = 9000;
+    const PREDATOR_RADIUS = 55;
+    const PREDATOR_SPEED = 1.2;
+    const PREDATOR_FORCE = 0.2;
     
     let SEPARATION_WEIGHT = $derived(3.0); 
     let ALIGNMENT_WEIGHT = $derived(4.5); 
@@ -133,9 +133,9 @@
             vec2 uv = vUv;
             
             // 1. SKY CALCULATIONS
-            vec3 zenithColor = vec3(0.1, 0.22, 0.58); // Richer blue top
-            vec3 horizonColor = vec3(0.4, 0.6, 0.82); // Lighter blue bottom
-            vec3 skyResult = mix(horizonColor, zenithColor, pow(uv.y, 0.78));
+            vec3 zenithColor = vec3(0.06, 0.16, 0.5); // Darker, richer top
+            vec3 horizonColor = vec3(0.36, 0.58, 0.82); // Lighter blue bottom
+            vec3 skyResult = mix(horizonColor, zenithColor, pow(uv.y, 0.82));
             float hazeBand = smoothstep(0.06, 0.2, uv.y) * (1.0 - smoothstep(0.2, 0.38, uv.y));
             skyResult = mix(skyResult, vec3(0.38, 0.58, 0.82), hazeBand * 0.25);
 
@@ -298,8 +298,8 @@
             } else {
                 predActive = true;
                 const angle = t * 0.7;
-                predPos.set(Math.sin(angle) * 90, Math.cos(t * 0.3) * 40, Math.cos(angle) * 60);
-                predVel.set(Math.cos(angle), Math.sin(t * 0.3), -Math.sin(angle)).multiplyScalar(PREDATOR_SPEED);
+                predPos.set(Math.sin(angle) * 90, Math.sin(t * 0.5) * 55, Math.cos(angle) * 70);
+                predVel.set(Math.cos(angle), Math.sin(t * 0.5), -Math.sin(angle)).multiplyScalar(PREDATOR_SPEED);
                 if (predator) predator.visible = true;
             }
         }
