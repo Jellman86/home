@@ -18,7 +18,7 @@
 
 <div class="relative min-h-screen w-full text-white overflow-hidden font-sans transition-colors duration-1000">
     <!-- WebGL Background Layer -->
-    <BoidBackground boidCount={600} color={boidColor} {backgroundColor} bind:fps />
+    <BoidBackground boidCount={300} color={boidColor} {backgroundColor} bind:fps />
 
     <!-- UI Overlay removed for simulation review -->
 
