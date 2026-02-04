@@ -31,6 +31,9 @@
     let bubbleParticles: THREE.Points;
     let birdGeo: THREE.BufferGeometry;
     let fishGeo: THREE.BufferGeometry;
+    let grassMesh: THREE.InstancedMesh;
+    let grassPositions: Float32Array;
+    let grassPhase: Float32Array;
     // Volumetric clouds are now handled in the shader
 
     let lastTime = performance.now();
@@ -158,9 +161,7 @@
             vec3 finalColor = mix(seaOrSky, grassResult, isGrass);
 
             // Soft vignette for depth and focus
-            vec2 v = uv - 0.5;
-            float vignette = 1.0 - smoothstep(0.25, 0.7, dot(v, v));
-            finalColor *= mix(1.0, vignette, isFish);
+            // Vignette removed for a clean scene
             
             gl_FragColor = vec4(finalColor, 1.0);
         }
@@ -204,6 +205,31 @@
         mesh.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(boidCount * 3), 3);
         scene.add(mesh);
 
+        // Grass mesh (always created, toggled by mode)
+        const grassCount = 1600;
+        const grassGeo = new THREE.PlaneGeometry(0.35, 2.4);
+        grassGeo.translate(0, 1.2, 0);
+        const grassMat = new THREE.MeshBasicMaterial({ color: new THREE.Color(0x2f5b34), side: THREE.DoubleSide });
+        grassMesh = new THREE.InstancedMesh(grassGeo, grassMat, grassCount);
+        grassMesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+        grassPositions = new Float32Array(grassCount * 3);
+        grassPhase = new Float32Array(grassCount);
+        for (let i = 0; i < grassCount; i++) {
+            const x = (Math.random() - 0.5) * 220;
+            const z = (Math.random() - 0.5) * 220;
+            const y = -70;
+            grassPositions[i * 3] = x;
+            grassPositions[i * 3 + 1] = y;
+            grassPositions[i * 3 + 2] = z;
+            grassPhase[i] = Math.random() * Math.PI * 2;
+            _dummy.position.set(x, y, z);
+            _dummy.rotation.set(0, Math.random() * Math.PI * 2, 0);
+            _dummy.updateMatrix();
+            grassMesh.setMatrixAt(i, _dummy.matrix);
+        }
+        grassMesh.visible = (mode === 'grass');
+        scene.add(grassMesh);
+
         const bubbleGeo = new THREE.BufferGeometry();
         const bubbleCount = 220;
         const bubblePos = new Float32Array(bubbleCount * 3);
@@ -226,8 +252,8 @@
         const baseColor = new THREE.Color(color);
         const tempColor = new THREE.Color();
         if (mode === 'fish') {
-            _fishTop.set('#d6edf7'); // silvery highlight
-            _fishBottom.set('#1a2a38'); // deep blue shadow
+            _fishTop.set('#e6f5ff'); // silvery highlight
+            _fishBottom.set('#3b5a73'); // mid silver-blue shadow (not black)
         }
 
         for (let i = 0; i < boidCount; i++) {
@@ -268,6 +294,10 @@
             // Update Bubble Visibility
             if (bubbleParticles) bubbleParticles.visible = isFish;
 
+            // Toggle grass vs boids
+            if (grassMesh) grassMesh.visible = (mode === 'grass');
+            if (mesh) mesh.visible = (mode !== 'grass');
+
             // Update Boid Shape
             mesh.geometry = isFish ? fishGeo : birdGeo;
 
@@ -285,8 +315,8 @@
             material.opacity = isFish ? 0.95 : 0.85;
 
             if (isFish) {
-                _fishTop.set('#d6edf7'); // silvery highlight
-                _fishBottom.set('#1a2a38'); // deep blue shadow
+                _fishTop.set('#e6f5ff'); // silvery highlight
+                _fishBottom.set('#3b5a73'); // mid silver-blue shadow
                 for (let i = 0; i < boidCount; i++) {
                     const idx = i * 3;
                     const y = positions ? positions[idx + 1] : 0;
@@ -325,6 +355,28 @@
         if (bgMesh) {
             const material = bgMesh.material as THREE.ShaderMaterial;
             material.uniforms.time.value = t;
+        }
+
+        if (mode === 'grass' && grassMesh) {
+            const mx = target.x * 0.15;
+            const my = target.y * 0.15;
+            const influenceRadius = 60;
+            for (let i = 0; i < grassMesh.count; i++) {
+                const x = grassPositions[i * 3];
+                const y = grassPositions[i * 3 + 1];
+                const z = grassPositions[i * 3 + 2];
+                const dx = x - mx;
+                const dz = z - my;
+                const dist = Math.sqrt(dx * dx + dz * dz);
+                const sway = Math.sin(t * 2.0 + grassPhase[i]) * 0.25;
+                const push = dist < influenceRadius ? (1.0 - dist / influenceRadius) * 0.6 : 0.0;
+                _dummy.position.set(x, y, z);
+                _dummy.rotation.set(0, Math.atan2(dz, dx) + sway * 0.2, 0);
+                _dummy.rotateZ(sway + push);
+                _dummy.updateMatrix();
+                grassMesh.setMatrixAt(i, _dummy.matrix);
+            }
+            grassMesh.instanceMatrix.needsUpdate = true;
         }
 
 
