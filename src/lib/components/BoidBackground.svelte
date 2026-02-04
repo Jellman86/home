@@ -26,6 +26,7 @@
     let camera: THREE.PerspectiveCamera;
     let renderer: THREE.WebGLRenderer;
     let mesh: THREE.InstancedMesh;
+    let predator: THREE.Mesh;
     let frameId: number;
 
     let bgMesh: THREE.Mesh;
@@ -62,6 +63,8 @@
     const PREDATOR_INTERVAL = 180000;
     const PREDATOR_DURATION = 6000;
     const PREDATOR_RADIUS = 45;
+    const PREDATOR_SPEED = 0.9;
+    const PREDATOR_FORCE = 0.14;
     
     let SEPARATION_WEIGHT = $derived(3.0); 
     let ALIGNMENT_WEIGHT = $derived(4.5); 
@@ -177,6 +180,13 @@
         mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
         mesh.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(boidCount * 3), 3);
         scene.add(mesh);
+
+        const predatorGeo = new THREE.ConeGeometry(1.6, 5.5, 6);
+        predatorGeo.rotateX(Math.PI / 2);
+        const predatorMat = new THREE.MeshBasicMaterial({ color: new THREE.Color(0x0a0f14), opacity: 0.9, transparent: true });
+        predator = new THREE.Mesh(predatorGeo, predatorMat);
+        predator.visible = false;
+        scene.add(predator);
         positions = new Float32Array(boidCount * 3);
         velocities = new Float32Array(boidCount * 3);
         scales = new Float32Array(boidCount);
@@ -238,6 +248,7 @@
     let lastPredAt = performance.now();
     let predStartAt = 0;
     const predPos = new THREE.Vector3();
+    const predVel = new THREE.Vector3();
 
     function animate() {
         frameId = requestAnimationFrame(animate);
@@ -278,10 +289,13 @@
             if (tPred >= 1) {
                 predStartAt = 0;
                 lastPredAt = now;
+                if (predator) predator.visible = false;
             } else {
                 predActive = true;
                 const angle = t * 0.7;
                 predPos.set(Math.sin(angle) * 90, Math.cos(t * 0.3) * 40, Math.cos(angle) * 60);
+                predVel.set(Math.cos(angle), Math.sin(t * 0.3), -Math.sin(angle)).multiplyScalar(PREDATOR_SPEED);
+                if (predator) predator.visible = true;
             }
         }
 
@@ -354,7 +368,7 @@
             if (predActive) {
                 const dPred = _position.distanceTo(predPos);
                 if (dPred < PREDATOR_RADIUS) {
-                    _acceleration.add(_diff.copy(_position).sub(predPos).normalize().multiplyScalar(0.12));
+                    _acceleration.add(_diff.copy(_position).sub(predPos).normalize().multiplyScalar(PREDATOR_FORCE));
                 }
             }
 
@@ -410,6 +424,10 @@
         }
         mesh.instanceMatrix.needsUpdate = true;
         if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
+        if (predator && predator.visible) {
+            predator.position.copy(predPos);
+            predator.lookAt(_lookAt.copy(predPos).add(predVel));
+        }
         renderer.render(scene, camera);
     }
 
