@@ -97,32 +97,33 @@
             vec3 horizonColor = vec3(0.12, 0.35, 0.7); // Cool blue, no purple
             vec3 skyResult = mix(horizonColor, zenithColor, pow(uv.y, 0.7));
             
-            // Parallax-like layered clouds for depth
-            vec2 base = uv * vec2(6.0, 3.2);
-            base.x += time * (0.008 + cloudSpeed);
-            base.y += sin(time * 0.05) * 0.02;
+            // Layered, stable clouds with gentle domain warping
+            vec2 base = uv * vec2(4.2, 2.0);
+            base.x += time * (0.006 + cloudSpeed);
+            base.y += sin(time * 0.04) * 0.015;
 
-            vec2 layerA = base * 1.2 + vec2(time * 0.014, 0.0);
-            vec2 layerB = base * 2.1 + vec2(-time * 0.010, 0.0);
-            vec2 layerC = base * 3.0 + vec2(time * 0.006, 0.0);
+            float warpA = fbm(base + vec2(time * 0.03, 0.0));
+            float warpB = fbm(base * 1.4 + vec2(5.2, -time * 0.02));
+            vec2 warp = vec2(warpA, warpB) * (0.25 + cloudBoost * 0.15);
 
-            float a = fbm(layerA * 1.8);
-            float b = fbm(layerB * 1.4);
-            float c = fbm(layerC * 1.2);
-            float d = (a * 0.6 + b * 0.3 + c * 0.1);
+            vec2 p = base + warp;
+            float n1 = fbm(p * 1.4);
+            float n2 = fbm(p * 2.2);
+            float d = mix(n1, n2, 0.35);
 
-            float threshold = 0.62 - cloudBoost * 0.10;
-            float cloudMask = smoothstep(threshold, threshold + 0.06 + cloudBoost * 0.04, d);
+            float threshold = 0.58 - cloudBoost * 0.08;
+            float cloudMask = smoothstep(threshold, threshold + 0.08 + cloudBoost * 0.03, d);
+            cloudMask *= smoothstep(0.25, 0.85, uv.y);
 
-            // Soft lighting to add volume
-            float dX = fbm(layerA * 1.8 + vec2(0.015, 0.0)) - fbm(layerA * 1.8 - vec2(0.015, 0.0));
-            float dY = fbm(layerA * 1.8 + vec2(0.0, 0.015)) - fbm(layerA * 1.8 - vec2(0.0, 0.015));
-            vec3 normal = normalize(vec3(dX, dY, 0.25));
+            // Soft lighting for volume without harsh artifacts
+            float dX = fbm(p + vec2(0.01, 0.0)) - fbm(p - vec2(0.01, 0.0));
+            float dY = fbm(p + vec2(0.0, 0.01)) - fbm(p - vec2(0.0, 0.01));
+            vec3 normal = normalize(vec3(dX, dY, 0.35));
             vec3 lightDir = normalize(vec3(-0.35, 0.55, 0.75));
-            float lighting = clamp(dot(normal, lightDir) * 0.8 + 0.2, 0.0, 1.0);
+            float lighting = clamp(dot(normal, lightDir) * 0.7 + 0.3, 0.0, 1.0);
 
             vec3 cloudColor = mix(vec3(1.0), vec3(0.8, 0.88, 1.0), 0.45) * lighting;
-            skyResult = mix(skyResult, cloudColor, cloudMask * (0.28 + cloudBoost * 0.3));
+            skyResult = mix(skyResult, cloudColor, cloudMask * (0.26 + cloudBoost * 0.28));
 
             // 2. SEA CALCULATIONS
             float surface = smoothstep(0.3, 1.0, uv.y);
@@ -137,6 +138,12 @@
             float caustics = sin((uv.x + time * 0.2) * 22.0) * sin((uv.y + time * 0.15) * 18.0);
             caustics = pow(abs(caustics), 3.0) * 0.15 * surface;
             seaResult += caustics * vec3(0.35, 0.9, 1.0);
+
+            // Surface ripples near the top of the sea for a fluid feel
+            float surfaceBand = smoothstep(0.25, 0.45, uv.y) * (1.0 - smoothstep(0.45, 0.7, uv.y));
+            float ripples = sin(uv.x * 24.0 + time * 1.4) * sin(uv.y * 14.0 + time * 0.9);
+            ripples = pow(abs(ripples), 1.6) * surfaceBand;
+            seaResult += ripples * vec3(0.12, 0.35, 0.45);
 
             // 3. FINAL MIX (Controlled by isFish uniform)
             vec3 finalColor = mix(skyResult, seaResult, isFish);
@@ -179,9 +186,10 @@
         birdGeo = new THREE.ConeGeometry(0.6, 2.5, 4); birdGeo.rotateX(Math.PI / 2);
         fishGeo = new THREE.ConeGeometry(0.7, 2.0, 8); fishGeo.rotateX(Math.PI / 2); fishGeo.scale(0.4, 1, 1);
         
-        const material = new THREE.MeshBasicMaterial({ color: new THREE.Color(color), transparent: true, opacity: 0.85, vertexColors: true });
+        const material = new THREE.MeshBasicMaterial({ color: new THREE.Color(0xffffff), transparent: true, opacity: 0.85, vertexColors: true });
         mesh = new THREE.InstancedMesh(mode === 'fish' ? fishGeo : birdGeo, material, boidCount);
         mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+        mesh.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(boidCount * 3), 3);
         scene.add(mesh);
 
         const bubbleGeo = new THREE.BufferGeometry();
@@ -253,7 +261,10 @@
             const tempColor = new THREE.Color();
             for (let i = 0; i < boidCount; i++) {
                 const s = scales ? scales[i] : 1;
-                tempColor.copy(baseColor).multiplyScalar(0.75 + s * 0.35);
+                tempColor.copy(baseColor).multiplyScalar(0.72 + s * 0.4);
+                if (isFish) {
+                    tempColor.offsetHSL(0.02, -0.1, 0.12);
+                }
                 mesh.setColorAt(i, tempColor);
             }
             if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;

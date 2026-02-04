@@ -6,7 +6,7 @@
 
     // Theme Configuration - Deeper, more professional colors
     let backgroundColor = $derived(mode === 'bird' ? '#0f172a' : '#01161e'); // Dark Twilight vs Deepest Teal
-    let boidColor = $derived(mode === 'bird' ? '#0b0f16' : '#c7dde5'); // Off-black Birds vs Silvery Fish
+    let boidColor = $derived(mode === 'bird' ? '#141922' : '#d5edf5'); // Off-black Birds vs Silvery Fish
 </script>
 
 <svelte:head>
