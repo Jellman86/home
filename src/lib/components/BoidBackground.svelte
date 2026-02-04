@@ -138,33 +138,37 @@
             
             // 1. SKY CALCULATIONS
             float sun = clamp(sin(dayPhase * 6.28318) * 0.5 + 0.5, 0.0, 1.0);
-            float dawn = smoothstep(0.05, 0.2, sun);
-            float dusk = 1.0 - smoothstep(0.8, 0.95, sun);
+            float twilight = smoothstep(0.0, 0.18, sun) * (1.0 - smoothstep(0.22, 0.35, sun));
 
-            vec3 nightZenith = vec3(0.01, 0.03, 0.12);
-            vec3 nightHorizon = vec3(0.03, 0.06, 0.18);
-            vec3 dayZenith = vec3(0.08, 0.22, 0.62);
-            vec3 dayHorizon = vec3(0.25, 0.45, 0.72);
-            vec3 dawnHorizon = vec3(0.7, 0.45, 0.2);
-            vec3 duskHorizon = vec3(0.6, 0.3, 0.15);
+            vec3 nightZenith = vec3(0.01, 0.02, 0.08);
+            vec3 nightHorizon = vec3(0.02, 0.04, 0.1);
+            vec3 dayZenith = vec3(0.12, 0.32, 0.75);
+            vec3 dayHorizon = vec3(0.3, 0.55, 0.85);
+            vec3 warmTwilight = vec3(0.7, 0.4, 0.18);
 
-            vec3 zenithColor = mix(nightZenith, dayZenith, sun);
-            vec3 horizonColor = mix(nightHorizon, dayHorizon, sun);
-            horizonColor = mix(horizonColor, dawnHorizon, dawn * 0.35);
-            horizonColor = mix(horizonColor, duskHorizon, dusk * 0.25);
+            vec3 zenithColor = mix(nightZenith, dayZenith, pow(sun, 1.2));
+            vec3 horizonColor = mix(nightHorizon, dayHorizon, pow(sun, 1.1));
+            horizonColor = mix(horizonColor, warmTwilight, twilight * 0.35);
 
-            vec3 skyResult = mix(horizonColor, zenithColor, pow(uv.y, 0.82));
-            float hazeBand = smoothstep(0.08, 0.22, uv.y) * (1.0 - smoothstep(0.22, 0.42, uv.y));
-            skyResult = mix(skyResult, horizonColor, hazeBand * 0.18);
+            vec3 skyResult = mix(horizonColor, zenithColor, pow(uv.y, 0.85));
+            float hazeBand = smoothstep(0.08, 0.2, uv.y) * (1.0 - smoothstep(0.2, 0.38, uv.y));
+            skyResult = mix(skyResult, horizonColor, hazeBand * 0.12);
 
-            // Stars (night only)
+            // Stars (night only) + Milky Way band
             float night = 1.0 - sun;
-            float starNoise = hash(uv * vec2(640.0, 360.0));
-            float stars = step(0.997, starNoise) * night;
-            skyResult += stars * vec3(0.8, 0.9, 1.0);
+            float starNoise = hash(uv * vec2(820.0, 460.0));
+            float stars = step(0.996, starNoise) * night;
+            skyResult += stars * vec3(1.0, 1.0, 1.2) * (0.6 + night);
 
-            // Simple exposure curve
-            float exposure = 0.25 + 0.75 * sun;
+            // Milky Way: diagonal band with clustered noise
+            vec2 p = uv - vec2(0.5, 0.5);
+            float band = smoothstep(0.12, 0.0, abs(p.y + p.x * 0.6));
+            float mwNoise = noise(uv * 35.0 + vec2(0.0, time * 0.01));
+            float mw = band * pow(mwNoise, 2.0) * night;
+            skyResult += mw * vec3(0.5, 0.6, 0.9);
+
+            // Exposure curve
+            float exposure = mix(0.15, 1.0, pow(sun, 1.4));
             skyResult *= exposure;
 
             // Birds-only scene
