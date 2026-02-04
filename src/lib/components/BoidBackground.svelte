@@ -56,8 +56,8 @@
     
     // BOID PARAMETERS
     let SPEED_LIMIT = $derived(0.8);
-    let VISUAL_RANGE = $derived(45); 
-    let PROTECTED_RANGE = $derived(13);
+    let VISUAL_RANGE = $derived(40); 
+    let PROTECTED_RANGE = $derived(11);
     const BOUNDARY_SIZE = 120;
     const NEIGHBOR_COUNT = 7; // Topological neighbors for realism
     const TARGET_SPEED = 0.83;
@@ -68,9 +68,9 @@
     const PREDATOR_KILL_RADIUS = 4.5;
     const PREDATOR_PREDICT_T = 18;
     
-    let SEPARATION_WEIGHT = $derived(2.6); 
+    let SEPARATION_WEIGHT = $derived(2.3); 
     let ALIGNMENT_WEIGHT = $derived(4.5); 
-    let COHESION_WEIGHT = $derived(0.6); 
+    let COHESION_WEIGHT = $derived(0.75); 
     const MOUSE_REPULSION_WEIGHT = 8.0;
 
     const bgVertexShader = `
@@ -256,6 +256,8 @@
     let lastRushAt = performance.now() - (RUSH_INTERVAL - INITIAL_RUSH_DELAY);
     let rushStartAt = 0;
     let predTargetIdx = -1;
+    let predTargetUntil = 0;
+    const predAim = new THREE.Vector3();
 
     function animate() {
         frameId = requestAnimationFrame(animate);
@@ -288,8 +290,9 @@
         }
 
         if (predator) predator.visible = true;
-        if (predTargetIdx < 0 || predTargetIdx >= boidCount) {
+        if (predTargetIdx < 0 || predTargetIdx >= boidCount || now > predTargetUntil) {
             predTargetIdx = Math.floor(Math.random() * boidCount);
+            predTargetUntil = now + 3000 + Math.random() * 2000;
         }
 
         for (let i = 0; i < boidCount; i++) {
@@ -430,7 +433,8 @@
                 ty + tvy * PREDATOR_PREDICT_T,
                 tz + tvz * PREDATOR_PREDICT_T
             );
-            const desired = _diff.copy(predict).sub(_predPos).setLength(PREDATOR_SPEED);
+            predAim.lerp(predict, 0.12);
+            const desired = _diff.copy(predAim).sub(_predPos).setLength(PREDATOR_SPEED);
             const steer = desired.sub(_predVel);
             steer.clampLength(0, PREDATOR_MAX_STEER);
             _predVel.add(steer).clampLength(0.2, PREDATOR_SPEED);
