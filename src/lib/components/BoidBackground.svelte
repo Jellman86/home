@@ -126,11 +126,11 @@
             vec2 uv = vUv;
             
             // 1. SKY CALCULATIONS
-            vec3 zenithColor = vec3(0.4, 0.62, 0.88); // Richer top blue, less dark
-            vec3 horizonColor = vec3(0.95, 0.82, 0.65); // Warm horizon glow
-            vec3 skyResult = mix(horizonColor, zenithColor, pow(uv.y, 0.75));
-            float hazeBand = smoothstep(0.05, 0.25, uv.y) * (1.0 - smoothstep(0.25, 0.45, uv.y));
-            skyResult = mix(skyResult, vec3(0.98, 0.86, 0.7), hazeBand * 0.5);
+            vec3 zenithColor = vec3(0.43, 0.63, 0.88); // Home-birds-like top blue (less dark)
+            vec3 horizonColor = vec3(0.93, 0.86, 0.76); // Warm horizon glow
+            vec3 skyResult = mix(horizonColor, zenithColor, pow(uv.y, 0.72));
+            float hazeBand = smoothstep(0.04, 0.22, uv.y) * (1.0 - smoothstep(0.22, 0.4, uv.y));
+            skyResult = mix(skyResult, vec3(0.97, 0.9, 0.8), hazeBand * 0.45);
 
             // Volumetric raymarched clouds (bird scene only)
             if (isFish < 0.5) {
@@ -140,31 +140,31 @@
                 float t = 0.0;
                 float density = 0.0;
                 vec3 col = vec3(0.0);
-                for (int i = 0; i < 16; i++) {
+                for (int i = 0; i < 20; i++) {
                     vec3 pos = ro + rd * t;
                     vec3 q = pos * vec3(0.65, 1.1, 0.65);
                     q.y += time * 0.02;
-                    float d = fbm3(q * 1.3 + vec3(0.0, 3.0, 0.0));
-                    d = smoothstep(0.5, 0.72, d) * smoothstep(0.05, 0.9, pos.y + 0.45);
+                    float d = fbm3(q * 1.2 + vec3(0.0, 3.0, 0.0));
+                    d = smoothstep(0.45, 0.7, d) * smoothstep(0.0, 0.9, pos.y + 0.5);
                     float light = clamp(0.6 + 0.4 * dot(normalize(vec3(-0.3, 0.6, 0.7)), rd), 0.0, 1.0);
                     vec3 cloudCol = mix(vec3(1.0), vec3(0.92, 0.95, 1.0), 0.5) * light;
-                    float a = d * 0.22;
+                    float a = d * 0.28;
                     col = mix(col, cloudCol, a);
                     density += a;
                     t += 0.12;
                 }
-                skyResult = mix(skyResult, col, clamp(density, 0.0, 0.8));
+                skyResult = mix(skyResult, col, clamp(density, 0.0, 0.9));
             }
             
             // 2. SEA CALCULATIONS
             float surface = smoothstep(0.3, 1.0, uv.y);
-            vec3 seaTopColor = vec3(0.22, 0.6, 0.82); // Reference-like surface blue
-            vec3 seaBottomColor = vec3(0.02, 0.07, 0.18); // Deeper blue tone
+            vec3 seaTopColor = vec3(0.25, 0.62, 0.86); // Brighter surface blue
+            vec3 seaBottomColor = vec3(0.02, 0.06, 0.16); // Deep blue
             vec3 seaResult = mix(seaBottomColor, seaTopColor, surface);
             
-            // Simple surface reflection band (no moving texture)
-            float reflection = smoothstep(0.18, 0.28, uv.y) * (1.0 - smoothstep(0.32, 0.45, uv.y));
-            seaResult += reflection * vec3(0.28, 0.6, 0.78);
+            // Thin surface reflection near the top
+            float reflection = smoothstep(0.12, 0.18, uv.y) * (1.0 - smoothstep(0.18, 0.26, uv.y));
+            seaResult += reflection * vec3(0.35, 0.7, 0.9);
 
             // 3. FINAL MIX (Controlled by isFish uniform)
             vec3 finalColor = mix(skyResult, seaResult, isFish);
@@ -247,7 +247,7 @@
             // Fish shading: brighter near surface, darker deeper
             if (mode === 'fish' && mesh.instanceColor) {
                 const depthT = Math.max(0, Math.min(1, (_position.y + BOUNDARY_SIZE) / (BOUNDARY_SIZE * 2)));
-                const bright = 0.55 + depthT * 0.6;
+                const bright = 0.4 + depthT * 0.9; // brighter near surface
                 _tempColor.set(color).multiplyScalar(bright);
                 mesh.setColorAt(i, _tempColor);
             }
@@ -286,8 +286,8 @@
 
             // Update Boid Color
             const material = mesh.material as THREE.MeshBasicMaterial;
-            material.color.set(currentColor);
-            material.opacity = isFish ? 0.9 : 0.85;
+            material.color.set(isFish ? '#ffffff' : currentColor);
+            material.opacity = isFish ? 0.95 : 0.85;
 
             const baseColor = new THREE.Color(currentColor);
             const tempColor = new THREE.Color();
