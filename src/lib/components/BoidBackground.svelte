@@ -128,11 +128,11 @@
             vec2 uv = vUv;
             
             // 1. SKY CALCULATIONS
-            vec3 zenithColor = vec3(0.46, 0.64, 0.86); // Match home-birds.png top blue
-            vec3 horizonColor = vec3(0.86, 0.81, 0.72); // Match home-birds.png horizon
-            vec3 skyResult = mix(horizonColor, zenithColor, pow(uv.y, 0.7));
-            float hazeBand = smoothstep(0.05, 0.22, uv.y) * (1.0 - smoothstep(0.22, 0.42, uv.y));
-            skyResult = mix(skyResult, vec3(0.9, 0.85, 0.76), hazeBand * 0.35);
+            vec3 zenithColor = vec3(0.08, 0.13, 0.32); // Rich navy, slightly lighter than ref
+            vec3 horizonColor = vec3(0.18, 0.34, 0.62); // Deep mid-blue
+            vec3 skyResult = mix(horizonColor, zenithColor, pow(uv.y, 0.75));
+            float hazeBand = smoothstep(0.05, 0.2, uv.y) * (1.0 - smoothstep(0.2, 0.4, uv.y));
+            skyResult = mix(skyResult, vec3(0.22, 0.4, 0.68), hazeBand * 0.3);
 
             // Clouds removed for a clean sky
             
@@ -215,8 +215,8 @@
         const baseColor = new THREE.Color(color);
         const tempColor = new THREE.Color();
         if (mode === 'fish') {
-            _fishTop.copy(baseColor);
-            _fishBottom.copy(_fishTop).multiplyScalar(0.28).lerp(new THREE.Color(0x1b2b35), 0.6);
+            _fishTop.set('#d6edf7'); // silvery highlight
+            _fishBottom.set('#1a2a38'); // deep blue shadow
         }
 
         for (let i = 0; i < boidCount; i++) {
@@ -270,8 +270,8 @@
             material.opacity = isFish ? 0.95 : 0.85;
 
             if (isFish) {
-                _fishTop.set(currentColor);
-                _fishBottom.copy(_fishTop).multiplyScalar(0.28).lerp(new THREE.Color(0x1b2b35), 0.6);
+                _fishTop.set('#d6edf7'); // silvery highlight
+                _fishBottom.set('#1a2a38'); // deep blue shadow
             } else {
                 const baseColor = new THREE.Color(currentColor);
                 const tempColor = new THREE.Color();
