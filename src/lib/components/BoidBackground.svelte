@@ -330,6 +330,15 @@
             material.uniforms.time.value = t;
         }
 
+        if (cloudGroup && cloudGroup.visible) {
+            for (let i = 0; i < cloudSprites.length; i++) {
+                const sprite = cloudSprites[i];
+                sprite.position.x += cloudSpeeds[i];
+                if (sprite.position.x > 160) sprite.position.x = -160;
+                (sprite.material as THREE.SpriteMaterial).opacity = 0.45 + 0.2 * Math.sin(t * 0.2 + i);
+            }
+        }
+
         if (mode === 'fish' && bubbleParticles) {
             const attr = bubbleParticles.geometry.attributes.position as THREE.BufferAttribute;
             for(let i=0; i<attr.count; i++) {
@@ -475,11 +484,3 @@
 <div bind:this={container} class="fixed inset-0 w-full h-full z-0">
     <canvas bind:this={canvas} class="w-full h-full block"></canvas>
 </div>
-        if (cloudGroup && cloudGroup.visible) {
-            for (let i = 0; i < cloudSprites.length; i++) {
-                const sprite = cloudSprites[i];
-                sprite.position.x += cloudSpeeds[i];
-                if (sprite.position.x > 160) sprite.position.x = -160;
-                sprite.material.opacity = 0.45 + 0.2 * Math.sin(t * 0.2 + i);
-            }
-        }
