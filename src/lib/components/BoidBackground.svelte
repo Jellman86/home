@@ -35,6 +35,7 @@
 
     let lastTime = performance.now();
     let frameCount = 0;
+    let startupAt = performance.now();
 
     let positions: Float32Array;
     let velocities: Float32Array;
@@ -135,11 +136,11 @@
             vec2 uv = vUv;
             
             // 1. SKY CALCULATIONS
-            vec3 zenithColor = vec3(0.08, 0.22, 0.62); // Richer blue top
-            vec3 horizonColor = vec3(0.36, 0.58, 0.82); // Lighter blue bottom
+            vec3 zenithColor = vec3(0.07, 0.2, 0.58); // Richer blue top, slightly desaturated
+            vec3 horizonColor = vec3(0.34, 0.55, 0.8); // Lighter blue bottom
             vec3 skyResult = mix(horizonColor, zenithColor, pow(uv.y, 0.82));
-            float hazeBand = smoothstep(0.06, 0.2, uv.y) * (1.0 - smoothstep(0.2, 0.38, uv.y));
-            skyResult = mix(skyResult, vec3(0.38, 0.58, 0.82), hazeBand * 0.25);
+            float hazeBand = smoothstep(0.08, 0.22, uv.y) * (1.0 - smoothstep(0.22, 0.42, uv.y));
+            skyResult = mix(skyResult, vec3(0.36, 0.55, 0.78), hazeBand * 0.22);
 
             // Birds-only scene
             vec3 finalColor = skyResult;
@@ -199,7 +200,18 @@
         const baseColor = new THREE.Color(color);
         const tempColor = new THREE.Color();
         for (let i = 0; i < boidCount; i++) {
-            _position.set((Math.random()-0.5)*BOUNDARY_SIZE*2, (Math.random()-0.5)*BOUNDARY_SIZE*2, (Math.random()-0.5)*BOUNDARY_SIZE);
+            // Start in a cohesive blob
+            const radius = BOUNDARY_SIZE * 0.25;
+            const u = Math.random();
+            const v = Math.random();
+            const theta = u * Math.PI * 2;
+            const phi = Math.acos(2 * v - 1);
+            const r = radius * Math.cbrt(Math.random());
+            _position.set(
+                Math.sin(phi) * Math.cos(theta) * r,
+                Math.sin(phi) * Math.sin(theta) * r,
+                Math.cos(phi) * r
+            );
             _velocity.set((Math.random()-0.5), (Math.random()-0.5), (Math.random()-0.5)).normalize().multiplyScalar(SPEED_LIMIT);
             positions[i*3]=_position.x; positions[i*3+1]=_position.y; positions[i*3+2]=_position.z;
             velocities[i*3]=_velocity.x; velocities[i*3+1]=_velocity.y; velocities[i*3+2]=_velocity.z;
@@ -266,6 +278,7 @@
         if (now - lastTime >= 1000) { fps = frameCount; frameCount = 0; lastTime = now; }
 
         const t = now * 0.001;
+        const warmup = Math.min(1, (now - startupAt) / 2500);
         if (bgMesh) {
             const material = bgMesh.material as THREE.ShaderMaterial;
             material.uniforms.time.value = t;
@@ -399,7 +412,7 @@
             if (Math.abs(_position.z) > lim) _acceleration.z -= Math.sign(_position.z) * 0.05;
 
             _acceleration.clampLength(0, 0.04);
-            _velocity.add(_acceleration).clampLength(0.2, SPEED_LIMIT);
+            _velocity.add(_acceleration).clampLength(0.2, SPEED_LIMIT * (0.4 + warmup * 0.6));
             _position.add(_velocity);
 
             positions[idx] = _position.x; positions[idx+1] = _position.y; positions[idx+2] = _position.z;
