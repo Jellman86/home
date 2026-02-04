@@ -196,7 +196,7 @@
         bgMesh = new THREE.Mesh(bgGeo, new THREE.ShaderMaterial({
             uniforms: { 
                 time: { value: 0 },
-                dayPhase: { value: 0.2 }
+                dayPhase: { value: 0.25 }
             },
             vertexShader: bgVertexShader, 
             fragmentShader: bgFragmentShader, 
@@ -314,7 +314,7 @@
         if (bgMesh) {
             const material = bgMesh.material as THREE.ShaderMaterial;
             material.uniforms.time.value = t;
-            material.uniforms.dayPhase.value = (t * 0.01) % 1.0; // slow day/night cycle
+            material.uniforms.dayPhase.value = (t * 0.01 + 0.25) % 1.0; // start at midday
         }
 
         target.set((mouse.x * window.innerWidth) / 20, -(mouse.y * window.innerHeight) / 20, 0);
