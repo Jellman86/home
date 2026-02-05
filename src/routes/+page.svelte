@@ -40,11 +40,27 @@
     let boidCount = $derived(themes[currentTheme].count);
     let variant = $derived(themes[currentTheme].variant);
     
+    // Data
+    const portfolioData: PortfolioData = {
+        name: "Scott Powdrill (jellman86)",
+        avatarUrl: "https://avatars.githubusercontent.com/u/179294116?v=4",
+        bio: "Infrastructure engineer. I love science, nature, and technology. Fascinated by the boundary where digital systems meet the natural world.",
+        links: [
+            { label: "YA-WAMF", url: "https://github.com/Jellman86/YA-WAMF", icon: "🚀" },
+            { label: "GitHub", url: "https://github.com/jellman86", icon: "💻" },
+            { label: "LinkedIn", url: "https://www.linkedin.com/in/scott-powdrill-3b727b10b/", icon: "💼" } 
+        ]
+    };
+
     // Stats colors based on variant
     let statsColors = $derived(variant === 'dark' ? 
         'bg-slate-950/40 border-blue-500/20 text-blue-300/40' : 
         'bg-white/40 border-blue-600/20 text-blue-800/40'
     );
+
+    function toggleTheme() {
+        currentTheme = currentTheme === 'blueprint' ? 'blueprint_light' : 'blueprint';
+    }
 </script>
 
 <svelte:head>
