@@ -66,7 +66,7 @@
     const TARGET_SPEED = 0.83;
     const SPEED_FORCE = 0.025;
     const PREDATOR_RADIUS = 55;
-    const PREDATOR_SPEED = 1.04; // 15% faster than boids
+    const PREDATOR_SPEED = 1.1; // slightly faster than boids
     const PREDATOR_MAX_STEER = 0.015; // less maneuverable
     const PREDATOR_KILL_RADIUS = 4.5;
     const PREDATOR_PREDICT_T = 18;
@@ -159,26 +159,21 @@
 
             // Stars (night only) + Milky Way band
             float night = 1.0 - sun;
-            float starNoise = hash(uv * vec2(820.0, 460.0));
-            float stars = step(0.996, starNoise) * night;
-            skyResult += stars * vec3(1.0, 1.0, 1.2) * (0.6 + night);
-
-            // Milky Way: diagonal band with clustered stars (no texture)
             vec2 p = uv - vec2(0.5, 0.5);
-            float band = smoothstep(0.2, 0.0, abs(p.y + p.x * 0.6));
-            float dust = smoothstep(0.05, 0.0, abs(p.y + p.x * 0.6 + 0.02));
+            float band = smoothstep(0.22, 0.0, abs(p.y + p.x * 0.6));
+            float dust = smoothstep(0.06, 0.0, abs(p.y + p.x * 0.6 + 0.02));
             float mwBase = band * night * (1.0 - dust * 0.6);
 
-            vec2 g = floor(uv * vec2(280.0, 160.0));
-            float cell = hash(g);
-            float clump = step(0.985, cell) * mwBase;
+            // Base stars (uniform)
+            float starNoise = hash(uv * vec2(1200.0, 700.0));
+            float starThresh = mix(0.9975, 0.993, band); // more stars in band
+            float stars = step(starThresh, starNoise) * night;
+            skyResult += stars * vec3(1.0, 1.0, 1.2) * (0.5 + night);
 
-            vec2 g2 = floor(uv * vec2(120.0, 70.0));
-            float bigCell = hash(g2 + vec2(13.2, 7.7));
-            float bigClump = step(0.97, bigCell) * mwBase;
-
-            float mw = (clump * 0.7 + bigClump * 1.2);
-            skyResult += mw * vec3(0.6, 0.75, 1.0);
+            // Milky Way band: boosted density + subtle clumping
+            float clumpNoise = hash(uv * vec2(360.0, 210.0) + vec2(3.1, 7.7));
+            float clumps = step(0.985, clumpNoise) * mwBase;
+            skyResult += clumps * vec3(0.7, 0.85, 1.0);
 
             // Exposure curve
             float exposure = mix(0.15, 1.0, pow(sun, 1.4));
@@ -263,9 +258,8 @@
             const scale = 0.75 + Math.random() * 0.55;
             scales[i] = scale;
             const depthT = Math.max(0, Math.min(1, (_position.z + BOUNDARY_SIZE) / (BOUNDARY_SIZE * 2)));
-            const depthShade = 0.7 + depthT * 0.35;
-            const baseColor = new THREE.Color(color);
-            _tempColor.copy(baseColor).multiplyScalar(depthShade);
+            const depthShadeInit = 0.7 + depthT * 0.35;
+            _tempColor.copy(baseColor).multiplyScalar(depthShadeInit);
             mesh.setColorAt(i, _tempColor);
 
             _dummy.position.copy(_position);
