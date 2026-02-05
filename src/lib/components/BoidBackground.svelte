@@ -6,6 +6,8 @@
         boidCount?: number;
         color?: string;
         backgroundColor?: string;
+        useSkybox?: boolean;
+        wireframe?: boolean;
         // mode removed: birds-only scene
         fps?: number;
     }
@@ -15,6 +17,7 @@
         color = '#00ffff',
         backgroundColor = '#0f172a',
         useSkybox = true,
+        wireframe = false,
         fps = $bindable(0)
     }: Props = $props();
 
@@ -223,7 +226,13 @@
         birdGeo = new THREE.ConeGeometry(0.6, 2.5, 4);
         birdGeo.rotateX(Math.PI / 2);
 
-        const material = new THREE.MeshBasicMaterial({ color: new THREE.Color(0xffffff), transparent: true, opacity: 0.95, vertexColors: true });
+        const material = new THREE.MeshBasicMaterial({ 
+            color: new THREE.Color(0xffffff), 
+            transparent: true, 
+            opacity: 0.95, 
+            vertexColors: true,
+            wireframe: wireframe 
+        });
         mesh = new THREE.InstancedMesh(birdGeo, material, boidCount);
         mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
         mesh.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(boidCount * 3), 3);
@@ -310,6 +319,7 @@
             const material = mesh.material as THREE.MeshBasicMaterial;
             material.color.set(currentColor);
             material.opacity = 0.85;
+            material.wireframe = wireframe;
 
             const baseColor = new THREE.Color(currentColor);
             const tempColor = new THREE.Color();
@@ -502,28 +512,45 @@
             const tvy = velocities[tIdx + 1];
             const tvz = velocities[tIdx + 2];
 
+            // 1. Prediction (Pursuit)
             const predict = _lookAt.set(
                 tx + tvx * PREDATOR_PREDICT_T,
                 ty + tvy * PREDATOR_PREDICT_T,
                 tz + tvz * PREDATOR_PREDICT_T
             );
-            predAim.lerp(predict, 0.08);
-            _predDir.copy(_predVel).normalize();
-            _predDesiredDir.copy(predAim).sub(_predPos).normalize();
-            const angle = _predDir.angleTo(_predDesiredDir);
-            if (angle > PREDATOR_MAX_TURN) {
-                _predDesiredDir.lerp(_predDir, 1.0 - (PREDATOR_MAX_TURN / angle)).normalize();
-            }
-            const desired = _diff.copy(_predDesiredDir).setLength(PREDATOR_SPEED);
-            const steer = desired.sub(_predVel);
-            steer.clampLength(0, PREDATOR_MAX_STEER);
-            _predVel.add(steer).clampLength(PREDATOR_MIN_SPEED, PREDATOR_SPEED);
-            _predPos.add(_predVel);
+            
+            // Smoothly move the "aim point" to avoid snapping when switching targets
+            predAim.lerp(predict, 0.05); 
 
-            const lim = BOUNDARY_SIZE * 1.1;
-            if (Math.abs(_predPos.x) > lim) _predVel.x *= -1;
-            if (Math.abs(_predPos.y) > lim) _predVel.y *= -1;
-            if (Math.abs(_predPos.z) > lim) _predVel.z *= -1;
+            // 2. Reynolds Steering (Seek)
+            // Desired velocity is towards the aim point at max speed
+            const desired = _predDesiredDir.copy(predAim).sub(_predPos).setLength(PREDATOR_SPEED);
+            
+            // Steering = Desired - Velocity
+            const steer = _diff.copy(desired).sub(_predVel);
+            
+            // Limit steering force (this creates the smooth turning radius)
+            steer.clampLength(0, PREDATOR_MAX_STEER);
+
+            // 3. Soft Boundary Avoidance (Steer back instead of bounce)
+            const margin = BOUNDARY_SIZE * 0.8;
+            const turnStrength = 0.08;
+            
+            if (_predPos.x < -margin) steer.x += turnStrength;
+            if (_predPos.x > margin)  steer.x -= turnStrength;
+            if (_predPos.y < -margin) steer.y += turnStrength;
+            if (_predPos.y > margin)  steer.y -= turnStrength;
+            if (_predPos.z < -margin) steer.z += turnStrength;
+            if (_predPos.z > margin)  steer.z -= turnStrength;
+
+            // Apply steering to velocity
+            _predVel.add(steer);
+            
+            // Limit speed
+            _predVel.clampLength(PREDATOR_MIN_SPEED, PREDATOR_SPEED);
+            
+            // Move
+            _predPos.add(_predVel);
 
             if (_predPos.distanceTo(predict) < PREDATOR_KILL_RADIUS) {
                 predTargetIdx = Math.floor(Math.random() * boidCount);
