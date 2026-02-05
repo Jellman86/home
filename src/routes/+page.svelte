@@ -40,21 +40,11 @@
     let boidCount = $derived(themes[currentTheme].count);
     let variant = $derived(themes[currentTheme].variant);
     
-    // Data
-    const portfolioData: PortfolioData = {
-        name: "Scott Powdrill (jellman86)",
-        avatarUrl: "https://avatars.githubusercontent.com/u/179294116?v=4",
-        bio: "Infrastructure engineer in the day, intense autist at night. Building useful tools, working with AI, and making things that work well.",
-        links: [
-            { label: "YA-WAMF", url: "https://github.com/Jellman86/YA-WAMF", icon: "🚀" },
-            { label: "GitHub", url: "https://github.com/jellman86", icon: "💻" },
-            { label: "LinkedIn", url: "https://www.linkedin.com/in/scott-powdrill-3b727b10b/", icon: "💼" } 
-        ]
-    };
-
-    function toggleTheme() {
-        currentTheme = currentTheme === 'blueprint' ? 'blueprint_light' : 'blueprint';
-    }
+    // Stats colors based on variant
+    let statsColors = $derived(variant === 'dark' ? 
+        'bg-slate-950/40 border-blue-500/20 text-blue-300/40' : 
+        'bg-white/40 border-blue-600/20 text-blue-800/40'
+    );
 </script>
 
 <svelte:head>
@@ -75,7 +65,7 @@
         
         <!-- Light/Dark Toggle -->
         <button 
-            class="flex items-center justify-center w-10 h-10 rounded-full bg-black/20 backdrop-blur-md border border-white/10 shadow-lg text-white hover:bg-black/30 transition-all active:scale-95"
+            class="flex items-center justify-center w-10 h-10 rounded-full bg-black/10 backdrop-blur-md border border-white/10 shadow-lg {variant === 'dark' ? 'text-white hover:bg-white/10' : 'text-blue-900 hover:bg-black/5'} transition-all active:scale-95"
             onclick={toggleTheme}
             title={currentTheme === 'blueprint' ? 'Switch to Light Mode' : 'Switch to Dark Mode'}
             aria-label="Toggle Theme"
@@ -94,9 +84,11 @@
         </button>
 
         <!-- Stats -->
-        <div class="flex flex-col items-end gap-1 px-3 py-2 rounded-xl bg-black/10 backdrop-blur-sm border border-white/5 text-[10px] font-mono font-bold text-slate-500/50 hover:opacity-100 transition-opacity">
-            <p><span class="text-sky-400/80">{fps}</span> FPS</p>
-            <p>{gitHash}</p>
+        <div class="flex flex-col items-end gap-1 px-3 py-2 border {statsColors} backdrop-blur-md text-[9px] font-mono font-bold hover:opacity-100 transition-opacity group">
+            <p class="tracking-widest">
+                <span class="{variant === 'dark' ? 'text-blue-400' : 'text-blue-600'}">{fps}</span>_FPS
+            </p>
+            <p class="opacity-50 uppercase tracking-tighter">BUILD_{gitHash}</p>
         </div>
     </div>
 </div>
