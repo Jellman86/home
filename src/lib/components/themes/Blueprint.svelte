@@ -153,7 +153,7 @@
 
                 <div>
                     <h3 class="{colors.accent} mb-2 text-[10px] tracking-[0.3em] uppercase flex items-center gap-2 font-bold opacity-80">
-                        <span class="w-2 h-px {colors.highlight}"></span> Profile
+                        <span class="w-2 h-px {colors.highlight}"></span> Engineer_ID
                     </h3>
                     <h1 class="text-4xl md:text-5xl font-bold tracking-tight uppercase" style="text-shadow: 0 0 20px {variant === 'dark' ? 'rgba(59,130,246,0.3)' : 'rgba(37,99,235,0.1)'}">
                         {data.name}
@@ -165,7 +165,7 @@
 
                 <div>
                     <h3 class="{colors.accent} mb-4 text-[10px] tracking-[0.3em] uppercase flex items-center gap-2 font-bold opacity-80">
-                        <span class="w-2 h-px {colors.highlight}"></span> About
+                        <span class="w-2 h-px {colors.highlight}"></span> Bio_Log
                     </h3>
                     <p class="{colors.text} opacity-90 leading-relaxed text-sm border-l-2 {colors.border} pl-4 py-1 relative">
                         <span class="absolute -left-[3px] top-0 w-[4px] h-[4px] {colors.highlight}"></span>
@@ -176,7 +176,7 @@
 
                 <div>
                     <h3 class="{colors.accent} mb-4 text-[10px] tracking-[0.3em] uppercase flex items-center gap-2 font-bold opacity-80">
-                        <span class="w-2 h-px {colors.highlight}"></span> Links
+                        <span class="w-2 h-px {colors.highlight}"></span> Interface_Points
                     </h3>
                     <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
                         {#each data.links as link, i}
