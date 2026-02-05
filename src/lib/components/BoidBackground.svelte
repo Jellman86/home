@@ -66,7 +66,7 @@
     const TARGET_SPEED = 0.83;
     const SPEED_FORCE = 0.025;
     const PREDATOR_RADIUS = 55;
-    const PREDATOR_SPEED = 1.1; // slightly faster than boids
+    const PREDATOR_SPEED = 1.3; // faster than boids
     const PREDATOR_MAX_STEER = 0.015; // less maneuverable
     const PREDATOR_KILL_RADIUS = 4.5;
     const PREDATOR_PREDICT_T = 18;
@@ -160,15 +160,19 @@
             // Stars (night only) + Milky Way band
             float night = 1.0 - sun;
             vec2 p = uv - vec2(0.5, 0.5);
-            float band = smoothstep(0.22, 0.0, abs(p.y + p.x * 0.6));
+            float band = smoothstep(0.24, 0.0, abs(p.y + p.x * 0.6));
+            float core = smoothstep(0.08, 0.0, abs(p.y + p.x * 0.6));
             float dust = smoothstep(0.06, 0.0, abs(p.y + p.x * 0.6 + 0.02));
             float mwBase = band * night * (1.0 - dust * 0.6);
 
             // Base stars (uniform)
             float starNoise = hash(uv * vec2(1200.0, 700.0));
-            float starThresh = mix(0.9975, 0.993, band); // more stars in band
+            float starThresh = mix(0.9975, 0.992, band); // more stars in band
+            float coreThresh = mix(0.996, 0.988, core); // even more in core
             float stars = step(starThresh, starNoise) * night;
+            float coreStars = step(coreThresh, starNoise) * night * core;
             skyResult += stars * vec3(1.0, 1.0, 1.2) * (0.5 + night);
+            skyResult += coreStars * vec3(1.0, 1.0, 1.2) * (0.8 + night);
 
             // Milky Way band: boosted density + subtle clumping
             float clumpNoise = hash(uv * vec2(360.0, 210.0) + vec2(3.1, 7.7));
