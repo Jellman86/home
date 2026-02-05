@@ -40,7 +40,7 @@
 <div class="flex items-center justify-center min-h-screen p-4 font-mono text-gray-200 overflow-hidden" in:fade={{ duration: 200 }}>
     <!-- Modern Terminal Window (Ubuntu/Gnome style) -->
     <div 
-        class="relative w-full max-w-4xl bg-[#2e3436]/95 backdrop-blur-sm rounded-lg shadow-2xl overflow-hidden border border-black/50 pointer-events-auto"
+        class="relative w-full max-w-4xl bg-[#2e3436]/85 backdrop-blur-md rounded-lg shadow-2xl overflow-hidden border border-black/50 pointer-events-auto"
         style="transform: translate({position.x}px, {position.y}px); transition: transform {isDragging ? '0s' : '0.1s'}, height 0.3s;"
     >
         <!-- Title Bar -->

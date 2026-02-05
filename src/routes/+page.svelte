@@ -29,11 +29,11 @@
         terminal: {
             component: Terminal,
             name: 'Terminal',
-            bg: '#000000', // black
-            boids: '#22c55e', // green-500
-            predator: '#ef4444', // red-500
-            wireframe: true,
-            count: 200,
+            bg: '#300a24', // Ubuntu Aubergine
+            boids: '#E95420', // Ubuntu Orange
+            predator: '#ffffff', // White
+            wireframe: false,
+            count: 300,
             variant: 'dark'
         }
     };
