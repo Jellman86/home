@@ -66,7 +66,7 @@
     const TARGET_SPEED = 0.83;
     const SPEED_FORCE = 0.025;
     const PREDATOR_RADIUS = 55;
-    const PREDATOR_SPEED = 1.7; // faster than boids
+    const PREDATOR_SPEED = 8.5; // 500% faster than previous
     const PREDATOR_MAX_STEER = 0.015; // less maneuverable
     const PREDATOR_KILL_RADIUS = 4.5;
     const PREDATOR_PREDICT_T = 18;
