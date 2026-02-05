@@ -83,25 +83,40 @@
     <!-- Theme Switcher & Stats -->
     <div class="fixed bottom-6 right-6 z-50 flex flex-col items-end gap-4 pointer-events-auto">
         
-        <!-- Light/Dark Toggle -->
-        <button 
-            class="flex items-center justify-center w-10 h-10 rounded-full bg-black/10 backdrop-blur-md border border-white/10 shadow-lg {variant === 'dark' ? 'text-white hover:bg-white/10' : 'text-blue-900 hover:bg-black/5'} transition-all active:scale-95"
-            onclick={toggleTheme}
-            title={currentTheme === 'blueprint' ? 'Switch to Light Mode' : 'Switch to Dark Mode'}
-            aria-label="Toggle Theme"
-        >
-            {#if currentTheme === 'blueprint'}
-                <!-- Sun Icon -->
-                <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" />
+        <!-- Controls Row -->
+        <div class="flex gap-2">
+            <!-- Trails Toggle -->
+            <button 
+                class="flex items-center justify-center w-10 h-10 rounded-full bg-black/10 backdrop-blur-md border border-white/10 shadow-lg {variant === 'dark' ? 'text-white hover:bg-white/10' : 'text-blue-900 hover:bg-black/5'} transition-all active:scale-95"
+                onclick={() => showTrails = !showTrails}
+                title={showTrails ? 'Hide Trails' : 'Show Trails'}
+                aria-label="Toggle Trails"
+            >
+                <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
                 </svg>
-            {:else}
-                <!-- Moon Icon -->
-                <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
-                </svg>
-            {/if}
-        </button>
+            </button>
+
+            <!-- Light/Dark Toggle -->
+            <button 
+                class="flex items-center justify-center w-10 h-10 rounded-full bg-black/10 backdrop-blur-md border border-white/10 shadow-lg {variant === 'dark' ? 'text-white hover:bg-white/10' : 'text-blue-900 hover:bg-black/5'} transition-all active:scale-95"
+                onclick={toggleTheme}
+                title={currentTheme === 'blueprint' ? 'Switch to Light Mode' : 'Switch to Dark Mode'}
+                aria-label="Toggle Theme"
+            >
+                {#if currentTheme === 'blueprint'}
+                    <!-- Sun Icon -->
+                    <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" />
+                    </svg>
+                {:else}
+                    <!-- Moon Icon -->
+                    <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
+                    </svg>
+                {/if}
+            </button>
+        </div>
 
         <!-- Stats -->
         <div class="flex flex-col items-end gap-1 px-3 py-2 border {statsColors} backdrop-blur-md text-[9px] font-mono font-bold hover:opacity-100 transition-opacity group">
