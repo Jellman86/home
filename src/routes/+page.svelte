@@ -10,6 +10,7 @@
             name: 'Blueprint Dark', 
             bg: '#172554', // blue-950
             boids: '#60a5fa', // blue-400
+            predator: '#cfd8e3', // light grey
             wireframe: true, 
             count: 400,
             variant: 'dark'
@@ -19,6 +20,7 @@
             name: 'Blueprint Light', 
             bg: '#eff6ff', // blue-50
             boids: '#1e3a8a', // blue-900
+            predator: '#f87171', // red-400 (pastel red)
             wireframe: true, 
             count: 400,
             variant: 'light'
@@ -27,6 +29,7 @@
 
     type ThemeKey = keyof typeof themes;
     let currentTheme = $state<ThemeKey>('blueprint');
+    let showTrails = $state(false);
     
     let fps = $state(0);
     const gitHash = 'f4783c9'; 
@@ -35,6 +38,7 @@
     let ActiveComponent = $derived(themes[currentTheme].component);
     let backgroundColor = $derived(themes[currentTheme].bg);
     let boidColor = $derived(themes[currentTheme].boids);
+    let predatorColor = $derived(themes[currentTheme].predator);
     let useSkybox = $derived(false); 
     let isWireframe = $derived(themes[currentTheme].wireframe);
     let boidCount = $derived(themes[currentTheme].count);
@@ -69,11 +73,11 @@
 
 <div class="relative min-h-screen w-full overflow-hidden transition-colors duration-1000" style="background-color: {backgroundColor}">
     <!-- WebGL Background Layer -->
-    <BoidBackground {boidCount} color={boidColor} {backgroundColor} {useSkybox} wireframe={isWireframe} bind:fps />
+    <BoidBackground {boidCount} color={boidColor} {backgroundColor} {useSkybox} wireframe={isWireframe} {predatorColor} {showTrails} bind:fps />
 
     <!-- UI Overlay -->
     <div class="relative z-10">
-        <ActiveComponent data={portfolioData} {variant} />
+        <ActiveComponent data={portfolioData} {variant} bind:showTrails={showTrails} />
     </div>
 
     <!-- Theme Switcher & Stats -->

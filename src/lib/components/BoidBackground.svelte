@@ -8,7 +8,8 @@
         backgroundColor?: string;
         useSkybox?: boolean;
         wireframe?: boolean;
-        // mode removed: birds-only scene
+        predatorColor?: string;
+        showTrails?: boolean;
         fps?: number;
     }
 
@@ -18,6 +19,8 @@
         backgroundColor = '#0f172a',
         useSkybox = true,
         wireframe = false,
+        predatorColor = '#cfd8e3',
+        showTrails = false,
         fps = $bindable(0)
     }: Props = $props();
 
@@ -31,10 +34,15 @@
     let renderer: THREE.WebGLRenderer;
     let mesh: THREE.InstancedMesh;
     let predator: THREE.Mesh;
+    let trails: THREE.LineSegments;
     let frameId: number;
 
     let bgMesh: THREE.Mesh;
     let birdGeo: THREE.BufferGeometry;
+    let trailGeo: THREE.BufferGeometry;
+    let trailHistory: Float32Array;
+    const TRAIL_LENGTH = 15;
+
     // Volumetric clouds are now handled in the shader
 
     let lastTime = performance.now();
@@ -287,6 +295,45 @@
             // color already set above
         }
         if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
+
+        // --- Trail Initialization ---
+        trailHistory = new Float32Array(boidCount * TRAIL_LENGTH * 3);
+        trailGeo = new THREE.BufferGeometry();
+        
+        // Populate initial history with starting positions
+        for (let i = 0; i < boidCount; i++) {
+            const idx = i * 3;
+            const startX = positions[idx];
+            const startY = positions[idx + 1];
+            const startZ = positions[idx + 2];
+            for (let t = 0; t < TRAIL_LENGTH; t++) {
+                const offset = (i * TRAIL_LENGTH + t) * 3;
+                trailHistory[offset] = startX;
+                trailHistory[offset + 1] = startY;
+                trailHistory[offset + 2] = startZ;
+            }
+        }
+
+        const trailIndices = [];
+        for (let i = 0; i < boidCount; i++) {
+            const offset = i * TRAIL_LENGTH;
+            for (let t = 0; t < TRAIL_LENGTH - 1; t++) {
+                trailIndices.push(offset + t, offset + t + 1);
+            }
+        }
+        trailGeo.setIndex(trailIndices);
+        trailGeo.setAttribute('position', new THREE.BufferAttribute(trailHistory, 3));
+        
+        const trailMat = new THREE.LineBasicMaterial({ 
+            color: new THREE.Color(color), 
+            transparent: true, 
+            opacity: 0.25
+        });
+        trails = new THREE.LineSegments(trailGeo, trailMat);
+        trails.visible = showTrails;
+        trails.frustumCulled = false;
+        scene.add(trails);
+        // -----------------------------
     }
 
 
@@ -321,6 +368,17 @@
             material.color.set(currentColor);
             material.opacity = 0.85;
             material.wireframe = wireframe;
+
+            // Update Trail Color/Visibility
+            if (trails) {
+                (trails.material as THREE.LineBasicMaterial).color.set(currentColor);
+                trails.visible = showTrails;
+            }
+
+            // Update Predator Color
+            if (predator) {
+                (predator.material as THREE.MeshBasicMaterial).color.set(predatorColor);
+            }
 
             const baseColor = new THREE.Color(currentColor);
             const tempColor = new THREE.Color();
@@ -503,6 +561,26 @@
         }
         mesh.instanceMatrix.needsUpdate = true;
         if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
+
+        // Update Trails
+        if (showTrails && trails && trails.visible) {
+            const pa = trailGeo.attributes.position.array as Float32Array;
+            for (let i = 0; i < boidCount; i++) {
+                const idx = i * 3; // Current boid pos index
+                const offset = i * TRAIL_LENGTH * 3; // Trail start index for this boid
+                
+                // Shift history: move elements from [0..N-2] to [1..N-1]
+                // We copy the block of size (TRAIL_LENGTH - 1)*3 from `offset` to `offset + 3`
+                pa.copyWithin(offset + 3, offset, offset + (TRAIL_LENGTH - 1) * 3);
+                
+                // Update head
+                pa[offset] = positions[idx];
+                pa[offset + 1] = positions[idx + 1];
+                pa[offset + 2] = positions[idx + 2];
+            }
+            trailGeo.attributes.position.needsUpdate = true;
+        }
+
         // Predator pursuit update
         if (predTargetIdx >= 0) {
             const tIdx = predTargetIdx * 3;
