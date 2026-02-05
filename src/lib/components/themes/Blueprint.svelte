@@ -122,8 +122,6 @@
                 </div>
                 <div class="flex gap-2 text-[10px] tracking-[0.2em] {colors.textMuted} font-bold uppercase">
                     <span>About Me</span>
-                    <span class="{colors.accent}">//</span>
-                    <span>V.2.5</span>
                 </div>
             </div>
             
@@ -153,7 +151,7 @@
 
                 <div>
                     <h3 class="{colors.accent} mb-2 text-[10px] tracking-[0.3em] uppercase flex items-center gap-2 font-bold opacity-80">
-                        <span class="w-2 h-px {colors.highlight}"></span> Engineer_ID
+                        <span class="w-2 h-px {colors.highlight}"></span> Name
                     </h3>
                     <h1 class="text-4xl md:text-5xl font-bold tracking-tight uppercase" style="text-shadow: 0 0 20px {variant === 'dark' ? 'rgba(59,130,246,0.3)' : 'rgba(37,99,235,0.1)'}">
                         {data.name}
@@ -165,18 +163,17 @@
 
                 <div>
                     <h3 class="{colors.accent} mb-4 text-[10px] tracking-[0.3em] uppercase flex items-center gap-2 font-bold opacity-80">
-                        <span class="w-2 h-px {colors.highlight}"></span> Bio_Log
+                        <span class="w-2 h-px {colors.highlight}"></span> Bio
                     </h3>
                     <p class="{colors.text} opacity-90 leading-relaxed text-sm border-l-2 {colors.border} pl-4 py-1 relative">
                         <span class="absolute -left-[3px] top-0 w-[4px] h-[4px] {colors.highlight}"></span>
                         {data.bio}
-                        <span class="inline-block w-1.5 h-3 {colors.highlight} ml-1 animate-pulse align-middle opacity-50"></span>
                     </p>
                 </div>
 
                 <div>
                     <h3 class="{colors.accent} mb-4 text-[10px] tracking-[0.3em] uppercase flex items-center gap-2 font-bold opacity-80">
-                        <span class="w-2 h-px {colors.highlight}"></span> Interface_Points
+                        <span class="w-2 h-px {colors.highlight}"></span> Links
                     </h3>
                     <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
                         {#each data.links as link, i}
@@ -239,13 +236,6 @@
                         <!-- Digital Noise Overlay -->
                         <div class="absolute inset-0 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-30 mix-blend-overlay pointer-events-none"></div>
                     </div>
-                </div>
-
-                <!-- Diagnostics Text -->
-                <div class="mt-8 grid grid-cols-2 gap-x-8 gap-y-2 text-[9px] {colors.textMuted} uppercase tracking-widest font-mono opacity-80">
-                    <div>Status:</div><div class="{colors.accent}">Online</div>
-                    <div>Latency:</div><div class="{colors.accent}">12ms</div>
-                    <div>Region:</div><div class="{colors.accent}">UK</div>
                 </div>
             </div>
         </div>
