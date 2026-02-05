@@ -201,13 +201,13 @@
                         <div class="absolute top-0 right-0 w-full h-full bg-[radial-gradient(circle_at_80%_20%,_rgba(56,189,248,0.1)_0%,_transparent_40%)]"></div>
                         
                         <!-- Stars -->
-                        <div class="absolute top-[15%] left-[25%] w-[2px] h-[2px] bg-white rounded-full animate-pulse shadow-[0_0_2px_white]"></div>
-                        <div class="absolute top-[35%] right-[15%] w-[1.5px] h-[1.5px] bg-blue-200 rounded-full"></div>
-                        <div class="absolute bottom-[20%] left-[15%] w-[2px] h-[2px] bg-indigo-300 rounded-full animate-pulse shadow-[0_0_2px_indigo-300]" style="animation-delay: 1s"></div>
-                        <div class="absolute bottom-[40%] right-[30%] w-[1.5px] h-[1.5px] bg-white rounded-full"></div>
-                        <div class="absolute top-[10%] right-[40%] w-[1px] h-[1px] bg-violet-200 rounded-full"></div>
-                        <div class="absolute top-[50%] left-[5%] w-[1px] h-[1px] bg-white/80 rounded-full"></div>
-                        <div class="absolute bottom-[10%] right-[5%] w-[2px] h-[2px] bg-cyan-200 rounded-full animate-pulse" style="animation-delay: 0.5s"></div>
+                        <div class="absolute top-[15%] left-[25%] w-[2px] h-[2px] bg-white rounded-full animate-twinkle shadow-[0_0_2px_white]"></div>
+                        <div class="absolute top-[35%] right-[15%] w-[1.5px] h-[1.5px] bg-blue-200 rounded-full animate-twinkle" style="animation-delay: 0.7s"></div>
+                        <div class="absolute bottom-[20%] left-[15%] w-[2px] h-[2px] bg-indigo-300 rounded-full animate-twinkle shadow-[0_0_2px_indigo-300]" style="animation-delay: 1.5s"></div>
+                        <div class="absolute bottom-[40%] right-[30%] w-[1.5px] h-[1.5px] bg-white rounded-full animate-twinkle" style="animation-delay: 2.3s"></div>
+                        <div class="absolute top-[10%] right-[40%] w-[1px] h-[1px] bg-violet-200 rounded-full animate-twinkle" style="animation-delay: 0.2s"></div>
+                        <div class="absolute top-[50%] left-[5%] w-[1px] h-[1px] bg-white/80 rounded-full animate-twinkle" style="animation-delay: 3s"></div>
+                        <div class="absolute bottom-[10%] right-[5%] w-[2px] h-[2px] bg-cyan-200 rounded-full animate-twinkle" style="animation-delay: 1.1s"></div>
                     </div>
                 {/if}
 
@@ -250,5 +250,12 @@
     }
     .animate-scan {
         animation: scan 4s linear infinite;
+    }
+    @keyframes twinkle {
+        0%, 100% { opacity: 1; transform: scale(1); }
+        50% { opacity: 0.3; transform: scale(0.8); }
+    }
+    .animate-twinkle {
+        animation: twinkle 3s ease-in-out infinite;
     }
 </style>
