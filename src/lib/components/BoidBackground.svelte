@@ -254,20 +254,21 @@
         const baseColor = new THREE.Color(color);
         const tempColor = new THREE.Color();
         for (let i = 0; i < boidCount; i++) {
-            // Start far away in the distance
-            const spread = BOUNDARY_SIZE * 0.8;
+            // Start closer to the camera (Camera is at z=180)
+            // Spread X/Y widely so they encompass the view
+            const spread = BOUNDARY_SIZE * 1.5;
             _position.set(
-                (Math.random() - 0.5) * spread * 2,
-                (Math.random() - 0.5) * spread * 2,
-                -300 - Math.random() * 200 // Start deep in the background
+                (Math.random() - 0.5) * spread,
+                (Math.random() - 0.5) * spread,
+                20 + Math.random() * 100 // Start between z=20 and z=120
             );
             
-            // Initial velocity: Strong push towards camera (+Z) with some randomness
+            // Initial velocity: Push towards camera (+Z) to fly past it
             _velocity.set(
                 (Math.random() - 0.5) * 0.5,
                 (Math.random() - 0.5) * 0.5,
-                1.5 + Math.random() // High positive Z velocity
-            ).normalize().multiplyScalar(SPEED_LIMIT * 3); // Start fast
+                1.0 + Math.random() * 0.5 // Positive Z velocity
+            ).normalize().multiplyScalar(SPEED_LIMIT * 2);
 
             positions[i*3]=_position.x; positions[i*3+1]=_position.y; positions[i*3+2]=_position.z;
             velocities[i*3]=_velocity.x; velocities[i*3+1]=_velocity.y; velocities[i*3+2]=_velocity.z;
