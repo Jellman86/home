@@ -254,21 +254,21 @@
         const baseColor = new THREE.Color(color);
         const tempColor = new THREE.Color();
         for (let i = 0; i < boidCount; i++) {
-            // Start in a cohesive blob
-            const radius = BOUNDARY_SIZE * 0.25;
-            const u = Math.random();
-            const v = Math.random();
-            const theta = u * Math.PI * 2;
-            const phi = Math.acos(2 * v - 1);
-            const r = radius * Math.cbrt(Math.random());
+            // Start far away in the distance
+            const spread = BOUNDARY_SIZE * 0.8;
             _position.set(
-                Math.sin(phi) * Math.cos(theta) * r,
-                Math.sin(phi) * Math.sin(theta) * r,
-                Math.cos(phi) * r - 30
+                (Math.random() - 0.5) * spread * 2,
+                (Math.random() - 0.5) * spread * 2,
+                -300 - Math.random() * 200 // Start deep in the background
             );
-            _velocity.set((Math.random()-0.5), (Math.random()-0.5), (Math.random()-0.2)).normalize().multiplyScalar(SPEED_LIMIT);
-            _velocity.z += 0.6;
-            _velocity.normalize().multiplyScalar(SPEED_LIMIT);
+            
+            // Initial velocity: Strong push towards camera (+Z) with some randomness
+            _velocity.set(
+                (Math.random() - 0.5) * 0.5,
+                (Math.random() - 0.5) * 0.5,
+                1.5 + Math.random() // High positive Z velocity
+            ).normalize().multiplyScalar(SPEED_LIMIT * 3); // Start fast
+
             positions[i*3]=_position.x; positions[i*3+1]=_position.y; positions[i*3+2]=_position.z;
             velocities[i*3]=_velocity.x; velocities[i*3+1]=_velocity.y; velocities[i*3+2]=_velocity.z;
             const scale = 0.75 + Math.random() * 0.55;
