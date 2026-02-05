@@ -161,23 +161,17 @@
             float night = 1.0 - sun;
             vec2 p = uv - vec2(0.5, 0.5);
             float band = smoothstep(0.24, 0.0, abs(p.y + p.x * 0.6));
-            float core = smoothstep(0.08, 0.0, abs(p.y + p.x * 0.6));
             float dust = smoothstep(0.06, 0.0, abs(p.y + p.x * 0.6 + 0.02));
             float mwBase = band * night * (1.0 - dust * 0.6);
 
-            // Base stars (uniform)
-            float starNoise = hash(uv * vec2(1200.0, 700.0));
-            float starThresh = mix(0.9975, 0.992, band); // more stars in band
-            float coreThresh = mix(0.996, 0.988, core); // even more in core
-            float stars = step(starThresh, starNoise) * night;
-            float coreStars = step(coreThresh, starNoise) * night * core;
-            skyResult += stars * vec3(1.0, 1.0, 1.2) * (0.5 + night);
-            skyResult += coreStars * vec3(1.0, 1.0, 1.2) * (0.8 + night);
+            // Continuous star field with band-density gradient (no grid artifacts)
+            float starNoise = hash(uv * vec2(1800.0, 1000.0));
+            float bandBoost = mix(0.9975, 0.991, band);
+            float stars = step(bandBoost, starNoise) * night;
+            skyResult += stars * vec3(1.0, 1.0, 1.2) * (0.6 + night);
 
-            // Milky Way band: boosted density + subtle clumping
-            float clumpNoise = hash(uv * vec2(360.0, 210.0) + vec2(3.1, 7.7));
-            float clumps = step(0.985, clumpNoise) * mwBase;
-            skyResult += clumps * vec3(0.7, 0.85, 1.0);
+            // Soft band glow
+            skyResult += mwBase * vec3(0.45, 0.6, 0.9) * 0.35;
 
             // Exposure curve
             float exposure = mix(0.15, 1.0, pow(sun, 1.4));
@@ -417,10 +411,11 @@
             const flowZ = Math.sin((_position.x + _position.y) * 0.01 + t * 0.4) * 0.006;
             _acceleration.add(_diff.set(flowX, flowY, flowZ));
 
-            // Predator impulse (occasional)
-            const dPred = _position.distanceTo(_predPos);
+            // Predator avoidance (evade predicted predator position)
+            const predFuture = _lookAt.copy(_predPos).add(_predVel.clone().multiplyScalar(PREDATOR_PREDICT_T * 0.3));
+            const dPred = _position.distanceTo(predFuture);
             if (dPred < PREDATOR_RADIUS) {
-                _acceleration.add(_diff.copy(_position).sub(_predPos).normalize().multiplyScalar(0.18));
+                _acceleration.add(_diff.copy(_position).sub(predFuture).normalize().multiplyScalar(0.22));
             }
 
             // Preferred speed regulation
