@@ -50,6 +50,8 @@
     const _tempColor = new THREE.Color();
     const _predPos = new THREE.Vector3();
     const _predVel = new THREE.Vector3();
+    const _predDir = new THREE.Vector3();
+    const _predDesiredDir = new THREE.Vector3();
 
     let mouse = new THREE.Vector2(-9999, -9999);
     let target = new THREE.Vector3();
@@ -68,6 +70,7 @@
     const PREDATOR_MAX_STEER = 0.015; // less maneuverable
     const PREDATOR_KILL_RADIUS = 4.5;
     const PREDATOR_PREDICT_T = 18;
+    const PREDATOR_MAX_TURN = 0.035; // radians per frame
     
     let SEPARATION_WEIGHT = $derived(2.3); 
     let ALIGNMENT_WEIGHT = $derived(4.5); 
@@ -480,7 +483,13 @@
                 tz + tvz * PREDATOR_PREDICT_T
             );
             predAim.lerp(predict, 0.12);
-            const desired = _diff.copy(predAim).sub(_predPos).setLength(PREDATOR_SPEED);
+            _predDir.copy(_predVel).normalize();
+            _predDesiredDir.copy(predAim).sub(_predPos).normalize();
+            const angle = _predDir.angleTo(_predDesiredDir);
+            if (angle > PREDATOR_MAX_TURN) {
+                _predDesiredDir.lerp(_predDir, 1.0 - (PREDATOR_MAX_TURN / angle)).normalize();
+            }
+            const desired = _diff.copy(_predDesiredDir).setLength(PREDATOR_SPEED);
             const steer = desired.sub(_predVel);
             steer.clampLength(0, PREDATOR_MAX_STEER);
             _predVel.add(steer).clampLength(0.2, PREDATOR_SPEED);
