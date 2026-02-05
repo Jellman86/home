@@ -194,7 +194,24 @@
             </div>
 
             <!-- Right Column: Visual Diagnostics -->
-            <div class="relative p-8 md:p-10 flex flex-col items-center justify-center {variant === 'dark' ? 'bg-blue-950/20' : 'bg-blue-50/50'}">
+            <div class="relative p-8 md:p-10 flex flex-col items-center justify-center {variant === 'dark' ? 'bg-blue-950/20' : 'bg-blue-50/50'} overflow-hidden">
+                
+                <!-- Space Background (Dark Mode) -->
+                {#if variant === 'dark'}
+                    <div class="absolute inset-0 pointer-events-none">
+                        <!-- Nebula -->
+                        <div class="absolute inset-0 bg-[radial-gradient(circle_at_50%_50%,_rgba(79,70,229,0.1)_0%,_transparent_60%)]"></div>
+                        <div class="absolute top-0 right-0 w-full h-full bg-[radial-gradient(circle_at_80%_20%,_rgba(56,189,248,0.05)_0%,_transparent_40%)]"></div>
+                        
+                        <!-- Stars -->
+                        <div class="absolute top-[15%] left-[25%] w-[2px] h-[2px] bg-white/60 rounded-full animate-pulse"></div>
+                        <div class="absolute top-[35%] right-[15%] w-[1px] h-[1px] bg-blue-200/50 rounded-full"></div>
+                        <div class="absolute bottom-[20%] left-[15%] w-[2px] h-[2px] bg-indigo-300/40 rounded-full animate-pulse" style="animation-delay: 1s"></div>
+                        <div class="absolute bottom-[40%] right-[30%] w-[1px] h-[1px] bg-white/40 rounded-full"></div>
+                        <div class="absolute top-[10%] right-[40%] w-[1px] h-[1px] bg-violet-200/50 rounded-full"></div>
+                    </div>
+                {/if}
+
                 <!-- Radial Dial Background -->
                 <div class="absolute inset-0 flex items-center justify-center opacity-20 pointer-events-none">
                     <div class="w-64 h-64 rounded-full border {colors.border} border-dashed animate-[spin_60s_linear_infinite]"></div>
