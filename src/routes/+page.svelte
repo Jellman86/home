@@ -1,13 +1,28 @@
 <script lang="ts">
     import BoidBackground from '$lib/components/BoidBackground.svelte';
     import Blueprint from '$lib/components/themes/Blueprint.svelte';
-    import Cosmic from '$lib/components/themes/Cosmic.svelte';
     import type { PortfolioData } from '$lib/types';
     
     // --- Configuration ---
     const themes = {
-        blueprint: { component: Blueprint, name: 'Blueprint', bg: '#172554', boids: '#60a5fa', wireframe: true, count: 400 }, // Blue-950 bg, blue-400 boids
-        cosmic: { component: Cosmic, name: 'Cosmic', bg: '#09090b', boids: '#6366f1', wireframe: false, count: 600 } // Zinc-950 bg, Indigo-500 boids
+        blueprint: { 
+            component: Blueprint, 
+            name: 'Blueprint Dark', 
+            bg: '#172554', // blue-950
+            boids: '#60a5fa', // blue-400
+            wireframe: true, 
+            count: 400,
+            variant: 'dark'
+        }, 
+        blueprint_light: { 
+            component: Blueprint, 
+            name: 'Blueprint Light', 
+            bg: '#eff6ff', // blue-50
+            boids: '#1e3a8a', // blue-900
+            wireframe: true, 
+            count: 400,
+            variant: 'light'
+        }
     };
 
     type ThemeKey = keyof typeof themes;
@@ -20,15 +35,16 @@
     let ActiveComponent = $derived(themes[currentTheme].component);
     let backgroundColor = $derived(themes[currentTheme].bg);
     let boidColor = $derived(themes[currentTheme].boids);
-    let useSkybox = $derived(currentTheme === 'cosmic'); // Cosmic uses skybox
+    let useSkybox = $derived(false); 
     let isWireframe = $derived(themes[currentTheme].wireframe);
     let boidCount = $derived(themes[currentTheme].count);
+    let variant = $derived(themes[currentTheme].variant);
     
     // Data
     const portfolioData: PortfolioData = {
         name: "Scott Powdrill (jellman86)",
         avatarUrl: "https://avatars.githubusercontent.com/u/179294116?v=4",
-        bio: "Building intelligent systems and digital experiences. Focused on AI agents, visual computing, and modern web architecture.",
+        bio: "I'm a software engineer from the UK. I like building useful tools, working with AI, and making things that work well.",
         links: [
             { label: "YA-WAMF", url: "https://github.com/Jellman86/YA-WAMF", icon: "🚀" },
             { label: "GitHub", url: "https://github.com/jellman86", icon: "💻" },
@@ -36,8 +52,8 @@
         ]
     };
 
-    function switchTheme(theme: ThemeKey) {
-        currentTheme = theme;
+    function toggleTheme() {
+        currentTheme = currentTheme === 'blueprint' ? 'blueprint_light' : 'blueprint';
     }
 </script>
 
@@ -51,29 +67,31 @@
 
     <!-- UI Overlay -->
     <div class="relative z-10">
-        <ActiveComponent data={portfolioData} />
+        <ActiveComponent data={portfolioData} {variant} />
     </div>
 
     <!-- Theme Switcher & Stats -->
     <div class="fixed bottom-6 right-6 z-50 flex flex-col items-end gap-4 pointer-events-auto">
         
-        <!-- Theme Dock -->
-        <div class="flex flex-wrap justify-end gap-2 p-2 rounded-2xl bg-black/20 backdrop-blur-md border border-white/10 shadow-lg max-w-[200px] md:max-w-none">
-            {#each Object.entries(themes) as [key, theme]}
-                <button 
-                    class="w-8 h-8 rounded-full border border-white/20 transition-all duration-300 hover:scale-110 focus:outline-none focus:ring-2 focus:ring-white/50 overflow-hidden relative"
-                    style="background-color: {theme.bg};"
-                    class:ring-2={currentTheme === key}
-                    class:ring-white={currentTheme === key}
-                    onclick={() => switchTheme(key as ThemeKey)}
-                    title={theme.name}
-                    aria-label={`Switch to ${theme.name} theme`}
-                >
-                    {#if key === 'blueprint'}<span class="text-[8px] text-blue-400 font-bold flex items-center justify-center w-full h-full">BP</span>{/if}
-                    {#if key === 'cosmic'}<span class="text-[8px] text-indigo-400 font-bold flex items-center justify-center w-full h-full">COS</span>{/if}
-                </button>
-            {/each}
-        </div>
+        <!-- Light/Dark Toggle -->
+        <button 
+            class="flex items-center justify-center w-10 h-10 rounded-full bg-black/20 backdrop-blur-md border border-white/10 shadow-lg text-white hover:bg-black/30 transition-all active:scale-95"
+            onclick={toggleTheme}
+            title={currentTheme === 'blueprint' ? 'Switch to Light Mode' : 'Switch to Dark Mode'}
+            aria-label="Toggle Theme"
+        >
+            {#if currentTheme === 'blueprint'}
+                <!-- Sun Icon -->
+                <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" />
+                </svg>
+            {:else}
+                <!-- Moon Icon -->
+                <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
+                </svg>
+            {/if}
+        </button>
 
         <!-- Stats -->
         <div class="flex flex-col items-end gap-1 px-3 py-2 rounded-xl bg-black/10 backdrop-blur-sm border border-white/5 text-[10px] font-mono font-bold text-slate-500/50 hover:opacity-100 transition-opacity">
