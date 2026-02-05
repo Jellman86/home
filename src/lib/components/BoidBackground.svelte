@@ -163,17 +163,22 @@
             float stars = step(0.996, starNoise) * night;
             skyResult += stars * vec3(1.0, 1.0, 1.2) * (0.6 + night);
 
-            // Milky Way: diagonal band with clustered star clouds and dust lane
+            // Milky Way: diagonal band with clustered stars (no texture)
             vec2 p = uv - vec2(0.5, 0.5);
-            float band = smoothstep(0.18, 0.0, abs(p.y + p.x * 0.6));
-            float dust = smoothstep(0.04, 0.0, abs(p.y + p.x * 0.6 + 0.02));
-            float mwBase = band * night;
-            float mwNoise = noise(uv * 38.0 + vec2(0.0, time * 0.01));
-            float clouds = pow(mwNoise, 3.0) * mwBase;
-            float clumps = pow(noise(uv * 12.0 + vec2(2.0, 5.0)), 4.0) * mwBase;
-            float rift = dust * 0.4;
-            float mw = (clouds * 0.8 + clumps * 0.9) * (1.0 - rift);
-            skyResult += mw * vec3(0.55, 0.7, 1.0);
+            float band = smoothstep(0.2, 0.0, abs(p.y + p.x * 0.6));
+            float dust = smoothstep(0.05, 0.0, abs(p.y + p.x * 0.6 + 0.02));
+            float mwBase = band * night * (1.0 - dust * 0.6);
+
+            vec2 g = floor(uv * vec2(280.0, 160.0));
+            float cell = hash(g);
+            float clump = step(0.985, cell) * mwBase;
+
+            vec2 g2 = floor(uv * vec2(120.0, 70.0));
+            float bigCell = hash(g2 + vec2(13.2, 7.7));
+            float bigClump = step(0.97, bigCell) * mwBase;
+
+            float mw = (clump * 0.7 + bigClump * 1.2);
+            skyResult += mw * vec3(0.6, 0.75, 1.0);
 
             // Exposure curve
             float exposure = mix(0.15, 1.0, pow(sun, 1.4));
@@ -346,7 +351,7 @@
         if (predator) predator.visible = true;
         if (predTargetIdx < 0 || predTargetIdx >= boidCount || now > predTargetUntil) {
             predTargetIdx = Math.floor(Math.random() * boidCount);
-            predTargetUntil = now + 3000 + Math.random() * 2000;
+            predTargetUntil = now + 5000 + Math.random() * 4000;
         }
 
         for (let i = 0; i < boidCount; i++) {
@@ -487,7 +492,7 @@
                 ty + tvy * PREDATOR_PREDICT_T,
                 tz + tvz * PREDATOR_PREDICT_T
             );
-            predAim.lerp(predict, 0.12);
+            predAim.lerp(predict, 0.08);
             _predDir.copy(_predVel).normalize();
             _predDesiredDir.copy(predAim).sub(_predPos).normalize();
             const angle = _predDir.angleTo(_predDesiredDir);
@@ -498,6 +503,7 @@
             const steer = desired.sub(_predVel);
             steer.clampLength(0, PREDATOR_MAX_STEER);
             _predVel.add(steer).clampLength(0.2, PREDATOR_SPEED);
+            _predVel.lerp(desired, 0.06);
             _predPos.add(_predVel);
 
             const lim = BOUNDARY_SIZE * 1.1;
