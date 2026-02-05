@@ -163,12 +163,17 @@
             float stars = step(0.996, starNoise) * night;
             skyResult += stars * vec3(1.0, 1.0, 1.2) * (0.6 + night);
 
-            // Milky Way: diagonal band with clustered noise
+            // Milky Way: diagonal band with clustered star clouds and dust lane
             vec2 p = uv - vec2(0.5, 0.5);
-            float band = smoothstep(0.12, 0.0, abs(p.y + p.x * 0.6));
-            float mwNoise = noise(uv * 35.0 + vec2(0.0, time * 0.01));
-            float mw = band * pow(mwNoise, 2.0) * night;
-            skyResult += mw * vec3(0.5, 0.6, 0.9);
+            float band = smoothstep(0.18, 0.0, abs(p.y + p.x * 0.6));
+            float dust = smoothstep(0.04, 0.0, abs(p.y + p.x * 0.6 + 0.02));
+            float mwBase = band * night;
+            float mwNoise = noise(uv * 38.0 + vec2(0.0, time * 0.01));
+            float clouds = pow(mwNoise, 3.0) * mwBase;
+            float clumps = pow(noise(uv * 12.0 + vec2(2.0, 5.0)), 4.0) * mwBase;
+            float rift = dust * 0.4;
+            float mw = (clouds * 0.8 + clumps * 0.9) * (1.0 - rift);
+            skyResult += mw * vec3(0.55, 0.7, 1.0);
 
             // Exposure curve
             float exposure = mix(0.15, 1.0, pow(sun, 1.4));
@@ -219,7 +224,7 @@
 
         const predatorGeo = new THREE.ConeGeometry(2.2, 7.5, 6);
         predatorGeo.rotateX(Math.PI / 2);
-        const predatorMat = new THREE.MeshBasicMaterial({ color: new THREE.Color(0x7b2d2d), opacity: 0.95, transparent: true });
+        const predatorMat = new THREE.MeshBasicMaterial({ color: new THREE.Color(0xcfd8e3), opacity: 0.95, transparent: true });
         predator = new THREE.Mesh(predatorGeo, predatorMat);
         predator.visible = false;
         scene.add(predator);
