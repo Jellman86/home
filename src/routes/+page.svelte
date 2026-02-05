@@ -89,7 +89,9 @@
 
 <div class="relative min-h-screen w-full overflow-hidden transition-colors duration-1000" style="background-color: {backgroundColor}">
     <!-- WebGL Background Layer -->
-    <BoidBackground {boidCount} color={boidColor} {backgroundColor} {useSkybox} wireframe={isWireframe} {predatorColor} {showTrails} bind:fps />
+    {#key boidCount}
+        <BoidBackground {boidCount} color={boidColor} {backgroundColor} {useSkybox} wireframe={isWireframe} {predatorColor} {showTrails} bind:fps />
+    {/key}
 
     <!-- UI Overlay -->
     <div class="relative z-10">
