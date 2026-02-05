@@ -35,13 +35,17 @@
     let mesh: THREE.InstancedMesh;
     let predator: THREE.Mesh;
     let trails: THREE.LineSegments;
+    let predTrailLine: THREE.Line;
     let frameId: number;
 
     let bgMesh: THREE.Mesh;
     let birdGeo: THREE.BufferGeometry;
     let trailGeo: THREE.BufferGeometry;
     let trailHistory: Float32Array;
+    let predTrailGeo: THREE.BufferGeometry;
+    let predTrailPositions: Float32Array;
     const TRAIL_LENGTH = 15;
+    const PRED_TRAIL_LENGTH = 30; // Longer trail for predator
 
     // Volumetric clouds are now handled in the shader
 
@@ -253,6 +257,20 @@
         predator.visible = false;
         scene.add(predator);
 
+        // Predator Trail Setup
+        predTrailPositions = new Float32Array(PRED_TRAIL_LENGTH * 3);
+        predTrailGeo = new THREE.BufferGeometry();
+        predTrailGeo.setAttribute('position', new THREE.BufferAttribute(predTrailPositions, 3));
+        
+        const predTrailMat = new THREE.LineBasicMaterial({
+            color: new THREE.Color(predatorColor),
+            transparent: true,
+            opacity: 0.5
+        });
+        predTrailLine = new THREE.Line(predTrailGeo, predTrailMat);
+        predTrailLine.visible = showTrails;
+        scene.add(predTrailLine);
+
         _predPos.set(0, 0, 0);
         _predVel.set(0.6, 0.1, -0.4).setLength(PREDATOR_SPEED);
         positions = new Float32Array(boidCount * 3);
@@ -378,6 +396,10 @@
             // Update Predator Color
             if (predator) {
                 (predator.material as THREE.MeshBasicMaterial).color.set(predatorColor);
+            }
+            if (predTrailLine) {
+                (predTrailLine.material as THREE.LineBasicMaterial).color.set(predatorColor);
+                predTrailLine.visible = showTrails;
             }
 
             const baseColor = new THREE.Color(currentColor);
@@ -639,6 +661,22 @@
         if (predator && predator.visible) {
             predator.position.copy(_predPos);
             predator.lookAt(_lookAt.copy(_predPos).add(_predVel));
+
+            // Update Predator Trail
+            if (showTrails && predTrailLine && predTrailLine.visible) {
+                const positions = predTrailGeo.attributes.position.array as Float32Array;
+                
+                // Shift positions back
+                // Move [0..N-2] to [1..N-1]? No, usually head is 0. 
+                // Let's shift [0..N-2] to [1..N-1] and put new pos at 0.
+                positions.copyWithin(3, 0, (PRED_TRAIL_LENGTH - 1) * 3);
+                
+                positions[0] = _predPos.x;
+                positions[1] = _predPos.y;
+                positions[2] = _predPos.z;
+                
+                predTrailGeo.attributes.position.needsUpdate = true;
+            }
         }
         renderer.render(scene, camera);
     }
