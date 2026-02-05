@@ -45,25 +45,33 @@
     >
         <!-- Title Bar -->
         <div 
-            class="bg-[#3e3e3e] px-4 py-2 flex justify-between items-center cursor-grab active:cursor-grabbing select-none border-b border-black/20"
+            class="bg-[#3e3e3e] px-4 py-2 flex justify-between items-center cursor-grab active:cursor-grabbing select-none border-b border-black/20 h-10"
             onmousedown={handleMouseDown}
             role="button"
             tabindex="0"
         >
-            <div class="flex gap-2">
-                <!-- Close (Fake) -->
-                <div class="w-3 h-3 rounded-full bg-[#ff5f56] border border-[#e0443e] hover:brightness-110"></div>
+            <div class="w-16"></div> <!-- Spacer for center alignment -->
+            <div class="text-sm text-gray-400 font-bold tracking-wide">scott@pownet: ~</div>
+            <div class="flex gap-3 w-16 justify-end">
                 <!-- Minimize (Functional) -->
                 <button 
                     onclick={toggleMinimize}
-                    class="w-3 h-3 rounded-full bg-[#ffbd2e] border border-[#dea123] hover:brightness-110 focus:outline-none"
+                    class="w-6 h-6 flex items-center justify-center text-gray-500 hover:text-white hover:bg-white/10 rounded-full transition-colors focus:outline-none"
                     title={isMinimized ? "Restore" : "Minimize"}
-                ></button>
+                >
+                    <div class="w-2.5 h-0.5 bg-current rounded-full"></div>
+                </button>
                 <!-- Maximize (Fake) -->
-                <div class="w-3 h-3 rounded-full bg-[#27c93f] border border-[#1aab29] hover:brightness-110"></div>
+                <div class="w-6 h-6 flex items-center justify-center text-gray-500 hover:text-white hover:bg-white/10 rounded-full transition-colors cursor-default">
+                    <div class="w-2.5 h-2.5 border border-current rounded-[1px]"></div>
+                </div>
+                <!-- Close (Fake) -->
+                <div class="w-6 h-6 flex items-center justify-center text-gray-500 hover:bg-[#e81123] hover:text-white rounded-full transition-colors cursor-default">
+                    <svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                </div>
             </div>
-            <div class="text-sm text-gray-400 font-medium">scott@pownet: ~</div>
-            <div class="w-10"></div> <!-- Spacer for center alignment -->
         </div>
 
         {#if !isMinimized}
