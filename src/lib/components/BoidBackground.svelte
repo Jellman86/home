@@ -66,8 +66,8 @@
     const TARGET_SPEED = 0.83;
     const SPEED_FORCE = 0.025;
     const PREDATOR_RADIUS = 55;
-    const PREDATOR_SPEED = 8.5; // 500% faster than previous
-    const PREDATOR_MIN_SPEED = 6.8;
+    const PREDATOR_SPEED = 1.08; // 30% faster than prey
+    const PREDATOR_MIN_SPEED = 0.9;
     const PREDATOR_MAX_STEER = 0.04;
     const PREDATOR_KILL_RADIUS = 4.5;
     const PREDATOR_PREDICT_T = 18;
