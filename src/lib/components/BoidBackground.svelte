@@ -320,7 +320,7 @@
         if (bgMesh) {
             const material = bgMesh.material as THREE.ShaderMaterial;
             material.uniforms.time.value = t;
-            material.uniforms.dayPhase.value = (t * 0.01 + 0.25) % 1.0; // start at midday
+            material.uniforms.dayPhase.value = (t * 0.004 + 0.25) % 1.0; // start at midday
         }
 
         target.set((mouse.x * window.innerWidth) / 20, -(mouse.y * window.innerHeight) / 20, 0);

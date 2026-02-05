@@ -23,22 +23,13 @@
     <!-- UI Overlay removed for simulation review -->
 
     <!-- Controls Overlay -->
-    <div class="fixed bottom-6 right-6 z-50 pointer-events-auto flex flex-col gap-3 p-3 rounded-2xl bg-slate-900/50 backdrop-blur-lg border border-white/10 shadow-lg min-w-[150px]">
-        <div class="flex items-center justify-between gap-4">
-            <div class="flex bg-slate-800/80 rounded-lg p-1">
-                <div class="px-3 py-1.5 rounded-md text-xs font-bold bg-sky-500 text-white shadow-md">
-                    Birds
-                </div>
-            </div>
-            <div class="px-2 border-l border-white/10 flex flex-col items-end gap-0.5">
-                <p class="text-[10px] font-mono font-bold text-slate-400">
-                    <span class="text-sky-400 text-sm">{fps}</span> FPS
-                </p>
-                <p class="text-[9px] font-mono text-slate-500">
-                    {gitHash}
-                </p>
-            </div>
-        </div>
+    <div class="fixed bottom-6 right-6 z-50 pointer-events-auto flex flex-col gap-2 px-3 py-2 rounded-2xl bg-slate-900/50 backdrop-blur-lg border border-white/10 shadow-lg min-w-[110px]">
+        <p class="text-[10px] font-mono font-bold text-slate-400">
+            <span class="text-sky-400 text-sm">{fps}</span> FPS
+        </p>
+        <p class="text-[9px] font-mono text-slate-500">
+            {gitHash}
+        </p>
     </div>
 </div>
 
