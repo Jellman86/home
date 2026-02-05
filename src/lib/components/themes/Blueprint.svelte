@@ -200,15 +200,17 @@
                 {#if variant === 'dark'}
                     <div class="absolute inset-0 pointer-events-none">
                         <!-- Nebula -->
-                        <div class="absolute inset-0 bg-[radial-gradient(circle_at_50%_50%,_rgba(79,70,229,0.1)_0%,_transparent_60%)]"></div>
-                        <div class="absolute top-0 right-0 w-full h-full bg-[radial-gradient(circle_at_80%_20%,_rgba(56,189,248,0.05)_0%,_transparent_40%)]"></div>
+                        <div class="absolute inset-0 bg-[radial-gradient(circle_at_50%_50%,_rgba(79,70,229,0.2)_0%,_transparent_60%)]"></div>
+                        <div class="absolute top-0 right-0 w-full h-full bg-[radial-gradient(circle_at_80%_20%,_rgba(56,189,248,0.1)_0%,_transparent_40%)]"></div>
                         
                         <!-- Stars -->
-                        <div class="absolute top-[15%] left-[25%] w-[2px] h-[2px] bg-white/60 rounded-full animate-pulse"></div>
-                        <div class="absolute top-[35%] right-[15%] w-[1px] h-[1px] bg-blue-200/50 rounded-full"></div>
-                        <div class="absolute bottom-[20%] left-[15%] w-[2px] h-[2px] bg-indigo-300/40 rounded-full animate-pulse" style="animation-delay: 1s"></div>
-                        <div class="absolute bottom-[40%] right-[30%] w-[1px] h-[1px] bg-white/40 rounded-full"></div>
-                        <div class="absolute top-[10%] right-[40%] w-[1px] h-[1px] bg-violet-200/50 rounded-full"></div>
+                        <div class="absolute top-[15%] left-[25%] w-[2px] h-[2px] bg-white rounded-full animate-pulse shadow-[0_0_2px_white]"></div>
+                        <div class="absolute top-[35%] right-[15%] w-[1.5px] h-[1.5px] bg-blue-200 rounded-full"></div>
+                        <div class="absolute bottom-[20%] left-[15%] w-[2px] h-[2px] bg-indigo-300 rounded-full animate-pulse shadow-[0_0_2px_indigo-300]" style="animation-delay: 1s"></div>
+                        <div class="absolute bottom-[40%] right-[30%] w-[1.5px] h-[1.5px] bg-white rounded-full"></div>
+                        <div class="absolute top-[10%] right-[40%] w-[1px] h-[1px] bg-violet-200 rounded-full"></div>
+                        <div class="absolute top-[50%] left-[5%] w-[1px] h-[1px] bg-white/80 rounded-full"></div>
+                        <div class="absolute bottom-[10%] right-[5%] w-[2px] h-[2px] bg-cyan-200 rounded-full animate-pulse" style="animation-delay: 0.5s"></div>
                     </div>
                 {/if}
 
@@ -218,8 +220,13 @@
                     <div class="absolute w-56 h-56 rounded-full border {colors.border} animate-[spin_40s_linear_infinite_reverse]"></div>
                 </div>
 
-                <div class="relative w-48 h-48 group cursor-crosshair">
-                    <!-- Animated Rings -->
+                <div class="relative w-48 h-48 group cursor-help">
+                    <!-- Planetary Rings (Jupiter Belt) -->
+                    <div class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[140%] h-[40%] border-2 {colors.border} rounded-[100%] rotate-12 pointer-events-none opacity-60 group-hover:opacity-100 transition-opacity"></div>
+                    <div class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[160%] h-[30%] border {colors.border} rounded-[100%] -rotate-6 pointer-events-none opacity-40 group-hover:opacity-80 transition-opacity"></div>
+                    <div class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[130%] h-[50%] border border-dashed {colors.border} rounded-[100%] rotate-[20deg] pointer-events-none opacity-30 animate-[spin_20s_linear_infinite]"></div>
+
+                    <!-- Animated Rings (Scanning) -->
                     <div class="absolute -inset-4 border {colors.border} rounded-full opacity-0 group-hover:opacity-100 transition-opacity duration-500 scale-90 group-hover:scale-100"></div>
                     <div class="absolute -inset-1 border-t border-b {colors.border} rounded-full animate-[spin_4s_linear_infinite]"></div>
                     
@@ -232,10 +239,6 @@
                         <!-- Digital Noise Overlay -->
                         <div class="absolute inset-0 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-30 mix-blend-overlay pointer-events-none"></div>
                     </div>
-
-                    <!-- Target Reticle -->
-                    <div class="absolute top-0 bottom-0 left-1/2 w-px {colors.highlight} opacity-30 group-hover:opacity-80 transition-opacity"></div>
-                    <div class="absolute left-0 right-0 top-1/2 h-px {colors.highlight} opacity-30 group-hover:opacity-80 transition-opacity"></div>
                 </div>
 
                 <!-- Diagnostics Text -->
