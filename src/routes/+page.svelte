@@ -44,7 +44,7 @@
     const portfolioData: PortfolioData = {
         name: "Scott Powdrill (jellman86)",
         avatarUrl: "https://avatars.githubusercontent.com/u/179294116?v=4",
-        bio: "I'm an infrastructure engineer from the UK. I like building useful tools, working with AI, and making things that work well.",
+        bio: "Infrastructure engineer in the day, intense autist at night. Building useful tools, working with AI, and making things that work well.",
         links: [
             { label: "YA-WAMF", url: "https://github.com/Jellman86/YA-WAMF", icon: "🚀" },
             { label: "GitHub", url: "https://github.com/jellman86", icon: "💻" },
