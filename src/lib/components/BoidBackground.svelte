@@ -14,6 +14,7 @@
         boidCount = 800, 
         color = '#00ffff',
         backgroundColor = '#0f172a',
+        useSkybox = true,
         fps = $bindable(0)
     }: Props = $props();
 
@@ -36,6 +37,7 @@
     let lastTime = performance.now();
     let frameCount = 0;
     let startupAt = performance.now();
+
 
     let positions: Float32Array;
     let velocities: Float32Array;
@@ -190,11 +192,14 @@
 
     function init() {
         scene = new THREE.Scene();
-        scene.fog = new THREE.FogExp2(0x7aa6d6, 0.0020);
+        if (useSkybox) {
+            scene.fog = new THREE.FogExp2(0x7aa6d6, 0.0020);
+        }
+        
         camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 2000);
         camera.position.z = 180;
 
-        renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+        renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: !useSkybox });
         renderer.setSize(window.innerWidth, window.innerHeight);
         renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 
@@ -210,7 +215,10 @@
             depthWrite: false
         }));
         bgMesh.renderOrder = -1;
-        scene.add(bgMesh);
+        
+        if (useSkybox) {
+            scene.add(bgMesh);
+        }
 
         birdGeo = new THREE.ConeGeometry(0.6, 2.5, 4);
         birdGeo.rotateX(Math.PI / 2);
@@ -276,10 +284,23 @@
         const currentColor = color;
 
         if (mesh && bgMesh && birdGeo) {
+            // Update Skybox Visibility
+            if (useSkybox) {
+                 if (!scene.children.includes(bgMesh)) scene.add(bgMesh);
+                 // Re-add fog if missing?
+                 if (!scene.fog) scene.fog = new THREE.FogExp2(0x7aa6d6, 0.0020);
+            } else {
+                 if (scene.children.includes(bgMesh)) scene.remove(bgMesh);
+                 scene.fog = null; // Remove fog for clean look
+                 // Force clear to transparent if renderer supports it, but renderer alpha is set at init
+                 // We might need to handle this by setting clear color to transparent
+                 renderer.setClearColor(0x000000, 0); 
+            }
+
             // Update Boid Shape
             mesh.geometry = birdGeo;
 
-            // Update Fog to match scene
+            // Update Fog to match scene - only if active
             if (scene && scene.fog) {
                 (scene.fog as THREE.FogExp2).color.set(0x7aa6d6);
                 (scene.fog as THREE.FogExp2).density = 0.0020;
