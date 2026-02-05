@@ -67,10 +67,11 @@
     const SPEED_FORCE = 0.025;
     const PREDATOR_RADIUS = 55;
     const PREDATOR_SPEED = 8.5; // 500% faster than previous
-    const PREDATOR_MAX_STEER = 0.015; // less maneuverable
+    const PREDATOR_MIN_SPEED = 6.8;
+    const PREDATOR_MAX_STEER = 0.04;
     const PREDATOR_KILL_RADIUS = 4.5;
     const PREDATOR_PREDICT_T = 18;
-    const PREDATOR_MAX_TURN = 0.035; // radians per frame
+    const PREDATOR_MAX_TURN = 0.06; // radians per frame
     
     let SEPARATION_WEIGHT = $derived(2.3); 
     let ALIGNMENT_WEIGHT = $derived(4.5); 
@@ -495,8 +496,7 @@
             const desired = _diff.copy(_predDesiredDir).setLength(PREDATOR_SPEED);
             const steer = desired.sub(_predVel);
             steer.clampLength(0, PREDATOR_MAX_STEER);
-            _predVel.add(steer).clampLength(0.2, PREDATOR_SPEED);
-            _predVel.lerp(desired, 0.06);
+            _predVel.add(steer).clampLength(PREDATOR_MIN_SPEED, PREDATOR_SPEED);
             _predPos.add(_predVel);
 
             const lim = BOUNDARY_SIZE * 1.1;
