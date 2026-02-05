@@ -159,7 +159,7 @@
                         {data.name}
                     </h1>
                     <div class="flex items-center gap-2 mt-2">
-                        <span class="px-2 py-0.5 {colors.bg} border {colors.border} text-[10px] {colors.textMuted} uppercase tracking-widest font-bold">Software Engineer</span>
+                        <span class="px-2 py-0.5 {colors.bg} border {colors.border} text-[10px] {colors.textMuted} uppercase tracking-widest font-bold">Infrastructure Engineer</span>
                     </div>
                 </div>
 
