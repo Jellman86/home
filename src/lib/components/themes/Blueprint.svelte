@@ -121,7 +121,7 @@
                     <div class="w-1 h-4 {colors.highlight} opacity-30"></div>
                 </div>
                 <div class="flex gap-2 text-[10px] tracking-[0.2em] {colors.textMuted} font-bold uppercase">
-                    <span>Portfolio</span>
+                    <span>About Me</span>
                     <span class="{colors.accent}">//</span>
                     <span>V.2.5</span>
                 </div>
