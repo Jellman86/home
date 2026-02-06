@@ -16,6 +16,8 @@ It is a high-performance, interactive experience built with modern web technolog
     *   **Visual Diagnostics**: Animated radar dials, scanning lines, and data streams.
     *   **Parallax Background**: Dynamic grid and starfield that responds to mouse movement.
 *   **"Terminal" Theme**: A retro-style CLI interface with interactive commands.
+    *   **Command History**: Navigate previous commands using Up/Down arrow keys.
+    *   **Secure Handshake**: AES-256-GCM encrypted payload decryption via file upload.
 
 ## ⌨️ Terminal Easter Eggs
 
@@ -24,12 +26,13 @@ Explore the Terminal OS by typing these commands:
 *   `ls` / `ll`: List portfolio projects in a technical data format.
 *   `cat bio.txt`: Read the system bio.
 *   `whoami`: Display current session user.
-*   `neofetch`: Show system specifications and Pownet OS info.
+*   `neofetch`: Show system specifications with a custom ASCII avatar.
 *   `pownet`: Display the UK Infrastructure Engine branding.
 *   `cowsay [message]`: Make a cow say something.
-*   `sl`: Run the (stationary) steam locomotive.
+*   `sl`: Run the steam locomotive.
 *   `date`: Get current system time.
 *   `./upload-file.sh`: Initiate the secure decryption handshake for the CV payload.
+*   `./send-message.sh [msg]`: Send an encrypted message to the administrator (requires authentication).
 
 ## 🛠️ Tech Stack
 
@@ -37,6 +40,7 @@ Explore the Terminal OS by typing these commands:
 *   **Language**: TypeScript
 *   **Styling**: TailwindCSS 4
 *   **Graphics**: [Three.js](https://threejs.org/) (WebGL)
+*   **Security**: Web Crypto API (AES-256-GCM)
 *   **Deployment**: GitHub Actions -> GitHub Pages (Custom Domain)
 
 ## 🤖 AI Agents & Skills
