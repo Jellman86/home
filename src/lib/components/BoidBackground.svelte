@@ -345,7 +345,7 @@
         const trailMat = new THREE.LineBasicMaterial({ 
             color: new THREE.Color(color), 
             transparent: true, 
-            opacity: 0.25
+            opacity: 0.4
         });
         trails = new THREE.LineSegments(trailGeo, trailMat);
         trails.visible = showTrails;

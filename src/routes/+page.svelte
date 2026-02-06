@@ -74,8 +74,8 @@
     let statsColors = $derived(currentTheme === 'terminal' ?
         'bg-black/80 border-green-500/50 text-green-500' :
         variant === 'dark' ? 
-        'bg-slate-950/40 border-blue-500/20 text-blue-300/40' : 
-        'bg-white/40 border-blue-600/20 text-blue-800/40'
+        'bg-slate-950/60 border-blue-500/30 text-blue-400' : 
+        'bg-white/60 border-blue-600/30 text-blue-700'
     );
 
     // Toggles between Light/Dark for Blueprint only
