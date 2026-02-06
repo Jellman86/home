@@ -131,6 +131,8 @@
                     <div class="w-1 h-4 {colors.highlight} opacity-30"></div>
                 </div>
                 <div class="flex gap-2 text-[10px] tracking-[0.2em] {colors.textMuted} font-bold uppercase">
+                    <span class="{colors.accent}">POWNET</span>
+                    <span class="opacity-30">//</span>
                     <span>About Me</span>
                 </div>
             </div>
