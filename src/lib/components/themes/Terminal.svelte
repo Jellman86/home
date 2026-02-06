@@ -25,11 +25,13 @@
     let decryptionStatus = $state<'idle' | 'analyzing' | 'decrypting' | 'success' | 'fail'>('idle');
     let decryptedLink = $state("");
     let logBuffer = $state<string[]>([]);
+    let sessionKey: CryptoKey | null = null;
 
     // Encrypted CV Data (AES-256-GCM)
     // Generated offline. Contains URL to OneDrive.
     const ENC_IV = "f1b639dfa5614a52973f8bdf";
     const ENC_DATA = "debdb8a12d355a9dbece5d6b2bef4ad7426c2f284793309b063ad60eac30d6d82256721b8e992a318a1f21afd34ea47c9fd75865d8f64021546b43d0056de0f83a4464aad070b248ce1556be95551338f462ed7148834f7e6bebd7031dab9a263bf23b89";
+    const WEBHOOK_ENC = "debdb8a12d355a9debc35c7e6af05d994533626449987ccb4536cb1aac30d8d67c0b395590e34849f74a48cf952dfa1b99b72935b1883b5e55565cd41165d8d33e0056f9bf758c5fe86e439fb34a6038f811e76328e6164b9ad61e15b61ef7a4b8f464d80b230f21b7055b83a2742e049fb670c73e6b711a85e62defac5150115f5595e5351e274e1f722cfb";
 
     function hexToBytes(hex: string) {
         const bytes = new Uint8Array(hex.length / 2);
@@ -74,6 +76,7 @@
             const key = await window.crypto.subtle.importKey(
                 "raw", keyBytes, { name: "AES-GCM" }, false, ["decrypt"]
             );
+            sessionKey = key;
 
             const decrypted = await window.crypto.subtle.decrypt(
                 { name: "AES-GCM", iv: ivBytes },
@@ -206,7 +209,7 @@
 
             switch (mainCmd) {
                 case 'help':
-                    output = "Available commands:\n  help     Show this help message\n  clear    Clear terminal history\n  ls       List links/files\n  cat      Read file content\n  whoami   Display current user\n  date     Show current system time\n  sudo     Execute a command as another user\n  ./upload-file.sh Upload decryption key (.pem, .key)\n  exit     Close the terminal session\n  neofetch System info\n  pownet   Display branding";
+                    output = "Available commands:\n  help     Show this help message\n  clear    Clear terminal history\n  ls       List links/files\n  cat      Read file content\n  whoami   Display current user\n  date     Show current system time\n  sudo     Execute a command as another user\n  ./upload-file.sh Upload decryption key (.pem, .key)\n  ./send-message.sh \"Your Message\" Send message to Scott\n  exit     Close the terminal session\n  neofetch System info\n  pownet   Display branding";
                     break;
                 case 'clear':
                     history = [];
@@ -232,6 +235,46 @@
                 case 'upload-file.sh':
                     fileInputRef.click();
                     output = "Opening secure file picker...";
+                    break;
+                case './send-message.sh':
+                case '.\\send-message.sh':
+                case 'send-message.sh':
+                    if (!sessionKey) {
+                        output = "ERROR: Access Denied. No session key found. Please run ./upload-file.sh first.";
+                    } else {
+                        const message = args.slice(1).join(' ').replace(/^["']|["']$/g, '');
+                        if (!message) {
+                            output = "Usage: ./send-message.sh \"Your message here\"";
+                        } else {
+                            try {
+                                const ivBytes = hexToBytes(ENC_IV);
+                                const webhookBytes = hexToBytes(WEBHOOK_ENC);
+                                const decrypted = await window.crypto.subtle.decrypt(
+                                    { name: "AES-GCM", iv: ivBytes },
+                                    sessionKey,
+                                    webhookBytes
+                                );
+                                const webhookUrl = new TextDecoder().decode(decrypted);
+
+                                const res = await fetch(webhookUrl, {
+                                    method: 'POST',
+                                    headers: { 'Content-Type': 'application/json' },
+                                    body: JSON.stringify({
+                                        content: `📩 **New message from pownet.uk terminal:**\n> ${message}`
+                                    })
+                                });
+
+                                if (res.ok) {
+                                    output = "Message sent successfully. Handshake complete.";
+                                } else {
+                                    output = `Failed to send message: ${res.statusText}`;
+                                }
+                            } catch (err) {
+                                output = "CRITICAL ERROR: Failed to decrypt secure webhook or send message.";
+                                console.error(err);
+                            }
+                        }
+                    }
                     break;
                 case 'sudo':
                     output = `[sudo] password for scott: \nSorry, user scott is not allowed to execute '${args.slice(1).join(' ') || ''}' as root on pownet.`;
