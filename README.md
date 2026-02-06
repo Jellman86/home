@@ -15,7 +15,21 @@ It is a high-performance, interactive experience built with modern web technolog
     *   **Draggable Interface**: The main "About Me" window is fully interactive and draggable.
     *   **Visual Diagnostics**: Animated radar dials, scanning lines, and data streams.
     *   **Parallax Background**: Dynamic grid and starfield that responds to mouse movement.
-*   **Infrastructure Engineering Focus**: Content tailored to highlight skills in systems, AI, and tooling.
+*   **"Terminal" Theme**: A retro-style CLI interface with interactive commands.
+
+## ⌨️ Terminal Easter Eggs
+
+Explore the Terminal OS by typing these commands:
+*   `help`: View available system commands.
+*   `ls` / `ll`: List portfolio projects in a technical data format.
+*   `cat bio.txt`: Read the system bio.
+*   `whoami`: Display current session user.
+*   `neofetch`: Show system specifications and Pownet OS info.
+*   `pownet`: Display the UK Infrastructure Engine branding.
+*   `cowsay [message]`: Make a cow say something.
+*   `sl`: Run the (stationary) steam locomotive.
+*   `date`: Get current system time.
+*   `./upload-file.sh`: Initiate the secure decryption handshake for the CV payload.
 
 ## 🛠️ Tech Stack
 
@@ -24,27 +38,6 @@ It is a high-performance, interactive experience built with modern web technolog
 *   **Styling**: TailwindCSS 4
 *   **Graphics**: [Three.js](https://threejs.org/) (WebGL)
 *   **Deployment**: GitHub Actions -> GitHub Pages (Custom Domain)
-
-## 🚀 Development
-
-### Prerequisites
-*   Node.js 20+
-*   npm
-
-### Setup
-```bash
-# Install dependencies
-npm install
-
-# Start development server
-npm run dev
-```
-
-### Building
-```bash
-# Build for production (Static Adapter)
-npm run build
-```
 
 ## 🤖 AI Agents & Skills
 This project was co-authored with the assistance of AI agents using specialized skills:

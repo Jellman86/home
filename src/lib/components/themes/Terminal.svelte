@@ -15,6 +15,11 @@
     let inputRef: HTMLInputElement;
     let terminalContentRef: HTMLDivElement;
     
+    // Command History
+    let cmdHistory = $state<string[]>([]);
+    let historyIndex = $state(-1);
+    let tempInput = "";
+
     // Decryption Logic
     let isDragOver = $state(false);
     let decryptionStatus = $state<'idle' | 'analyzing' | 'decrypting' | 'success' | 'fail'>('idle');
@@ -158,13 +163,40 @@
     }
 
     async function handleKeydown(e: KeyboardEvent) {
-        if (e.key === 'Enter') {
+        if (e.key === 'ArrowUp') {
+            e.preventDefault();
+            if (cmdHistory.length > 0) {
+                if (historyIndex === -1) {
+                    tempInput = commandInput;
+                    historyIndex = cmdHistory.length - 1;
+                } else if (historyIndex > 0) {
+                    historyIndex--;
+                }
+                commandInput = cmdHistory[historyIndex];
+            }
+        } else if (e.key === 'ArrowDown') {
+            e.preventDefault();
+            if (historyIndex !== -1) {
+                if (historyIndex < cmdHistory.length - 1) {
+                    historyIndex++;
+                    commandInput = cmdHistory[historyIndex];
+                } else {
+                    historyIndex = -1;
+                    commandInput = tempInput;
+                }
+            }
+        } else if (e.key === 'Enter') {
             const cmd = commandInput.trim();
             if (!cmd) {
                 history = [...history, { cmd: "", output: "", type: 'text' }];
                 commandInput = "";
                 return;
             }
+
+            // Add to history
+            cmdHistory = [...cmdHistory, commandInput];
+            historyIndex = -1;
+            tempInput = "";
 
             const args = cmd.split(' ');
             const mainCmd = args[0].toLowerCase();
