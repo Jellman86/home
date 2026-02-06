@@ -23,8 +23,8 @@
 
     // Encrypted CV Data (AES-256-GCM)
     // Generated offline. Contains URL to OneDrive.
-    const ENC_IV = "611faceac0e84eea6e4a8401";
-    const ENC_DATA = "78fdf3c447c9f8889aa9feaac826bbeaae403dbbabef3dca69716f4ef001db0d27e4f83b0f0eb1e7438ecd0a16aac334c00e6dd1c1157eef2367bdede7acefae68b4d0679a46c7561dab7c9f1eb506ea525f6243e9b4fada498a6a76e22a4c92583271f52eb65577de929e4f8";
+    const ENC_IV = "f1b639dfa5614a52973f8bdf";
+    const ENC_DATA = "debdb8a12d355a9dbece5d6b2bef4ad7426c2f284793309b063ad60eac30d6d82256721b8e992a318a1f21afd34ea47c9fd75865d8f64021546b43d0056de0f83a4464aad070b248ce1556be95551338f462ed7148834f7e6bebd7031dab9a263bf23b89";
 
     function hexToBytes(hex: string) {
         const bytes = new Uint8Array(hex.length / 2);
