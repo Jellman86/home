@@ -64,8 +64,12 @@
         avatarUrl: "https://avatars.githubusercontent.com/u/179294116?v=4",
         bio: "I love science, nature, and technology. Fascinated by the boundary where digital systems meet the natural world.",
         links: [
-            { label: "YA-WAMF", url: "https://github.com/Jellman86/YetAnother-WhosAtMyFeeder", icon: "🚀" },
-            { label: "Demo", url: "https://yetanotherwhosatmyfeeder.pownet.uk", icon: "▶️" },
+            { 
+                label: "YA-WAMF", 
+                url: "https://github.com/Jellman86/YetAnother-WhosAtMyFeeder", 
+                icon: "🚀",
+                demoUrl: "https://yetanotherwhosatmyfeeder.pownet.uk"
+            },
             { label: "GitHub", url: "https://github.com/jellman86", icon: "💻" },
             { label: "LinkedIn", url: "https://www.linkedin.com/in/scott-powdrill-3b727b10b/", icon: "💼" } 
         ]

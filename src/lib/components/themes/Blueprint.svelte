@@ -210,14 +210,34 @@
                     </h3>
                     <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
                         {#each data.links as link, i}
-                            <a href={link.url} target="_blank" class="group relative flex items-center gap-3 p-3 border {colors.border} hover:border-blue-400/60 {variant === 'dark' ? 'bg-blue-950/30 hover:bg-blue-900/40' : 'bg-blue-50/50 hover:bg-blue-100/80'} transition-all overflow-hidden">
-                                <div class="absolute inset-0 {colors.highlight} opacity-5 translate-x-[-100%] group-hover:translate-x-0 transition-transform duration-300"></div>
-                                <span class="{colors.accent} font-bold text-xs">0{i+1}</span>
-                                <span class="flex-1 uppercase tracking-wider text-xs relative z-10 font-bold">{link.label}</span>
-                                <svg class="w-3 h-3 {colors.accent} transform -translate-x-2 opacity-0 group-hover:opacity-100 group-hover:translate-x-0 transition-all" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3" />
-                                </svg>
-                            </a>
+                            <div class="relative group flex border {colors.border} {variant === 'dark' ? 'bg-blue-950/30 hover:bg-blue-900/40' : 'bg-blue-50/50 hover:bg-blue-100/80'} transition-all overflow-hidden">
+                                <!-- Main Link Area -->
+                                <a href={link.url} target="_blank" class="flex-1 flex items-center gap-3 p-3 z-10 outline-none focus:bg-blue-500/10 transition-colors">
+                                    <div class="absolute inset-0 {colors.highlight} opacity-0 group-hover:opacity-5 translate-x-[-100%] group-hover:translate-x-0 transition-transform duration-300 pointer-events-none"></div>
+                                    <span class="{colors.accent} font-bold text-xs">0{i+1}</span>
+                                    <span class="flex-1 uppercase tracking-wider text-xs font-bold {colors.text}">{link.label}</span>
+                                    <!-- Arrow Icon -->
+                                    <svg class="w-3 h-3 {colors.accent} transform -translate-x-2 opacity-0 group-hover:opacity-100 group-hover:translate-x-0 transition-all" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3" />
+                                    </svg>
+                                </a>
+
+                                <!-- Demo Button (if exists) -->
+                                {#if link.demoUrl}
+                                    <a 
+                                        href={link.demoUrl} 
+                                        target="_blank" 
+                                        class="flex items-center justify-center px-3 border-l {colors.border} hover:{colors.highlight} hover:text-white transition-colors z-20"
+                                        title="View Live Demo"
+                                    >
+                                        <span class="text-[10px] font-bold uppercase tracking-widest mr-1">DEMO</span>
+                                        <svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                        </svg>
+                                    </a>
+                                {/if}
+                            </div>
                         {/each}
                     </div>
                 </div>

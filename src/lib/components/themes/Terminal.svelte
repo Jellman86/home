@@ -196,9 +196,16 @@
                             {#if item.type === 'component'}
                                 <div class="flex flex-col gap-1">
                                     {#each item.output as link}
-                                        <a href={link.url} target="_blank" class="text-[#729fcf] hover:underline w-fit flex items-center gap-2">
-                                            {link.label} <span class="text-gray-500 text-xs">-> {link.url}</span>
-                                        </a>
+                                        <div class="flex flex-col">
+                                            <a href={link.url} target="_blank" class="text-[#729fcf] hover:underline w-fit flex items-center gap-2">
+                                                {link.label} <span class="text-gray-500 text-xs">-> {link.url}</span>
+                                            </a>
+                                            {#if link.demoUrl}
+                                                <a href={link.demoUrl} target="_blank" class="text-[#8ae234] hover:underline w-fit flex items-center gap-2 ml-4">
+                                                    ↳ {link.label}_Demo <span class="text-gray-500 text-xs">-> {link.demoUrl}</span>
+                                                </a>
+                                            {/if}
+                                        </div>
                                     {/each}
                                 </div>
                             {:else}
