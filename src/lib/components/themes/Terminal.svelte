@@ -394,6 +394,14 @@
                         spellcheck="false"
                         autofocus
                     />
+                    <!-- Hidden File Input for ./upload-file.sh -->
+                    <input 
+                        bind:this={fileInputRef}
+                        type="file" 
+                        class="hidden" 
+                        onchange={handleFileSelect}
+                        accept=".pem,.txt,.key"
+                    />
                 </div>
             </div>
         </div>
