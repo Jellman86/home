@@ -15,7 +15,108 @@
     let inputRef: HTMLInputElement;
     let terminalContentRef: HTMLDivElement;
     
-    // Start with empty history or just a welcome message
+    // Decryption Logic
+    let isDragOver = $state(false);
+    let decryptionStatus = $state<'idle' | 'analyzing' | 'decrypting' | 'success' | 'fail'>('idle');
+    let decryptedLink = $state("");
+    let logBuffer = $state<string[]>([]);
+
+    // Encrypted CV Data (AES-256-GCM)
+    // Generated offline. Contains URL to OneDrive.
+    const ENC_IV = "611faceac0e84eea6e4a8401";
+    const ENC_DATA = "78fdf3c447c9f8889aa9feaac826bbeaae403dbbabef3dca69716f4ef001db0d27e4f83b0f0eb1e7438ecd0a16aac334c00e6dd1c1157eef2367bdede7acefae68b4d0679a46c7561dab7c9f1eb506ea525f6243e9b4fada498a6a76e22a4c92583271f52eb65577de929e4f8";
+
+    function hexToBytes(hex: string) {
+        const bytes = new Uint8Array(hex.length / 2);
+        for (let i = 0; i < hex.length; i += 2) {
+            bytes[i / 2] = parseInt(hex.substring(i, i + 2), 16);
+        }
+        return bytes;
+    }
+
+    async function processFile(file: File) {
+        decryptionStatus = 'analyzing';
+        logBuffer = ["Mounting file system...", "Reading sector 0...", " Analyzing file structure..."];
+        
+        await new Promise(r => setTimeout(r, 800));
+        
+        const text = await file.text();
+        const keyHex = text.trim();
+
+        if (keyHex.length !== 64) {
+            logBuffer = [...logBuffer, "ERROR: Invalid key length.", "Integrity check failed."];
+            decryptionStatus = 'fail';
+            setTimeout(() => decryptionStatus = 'idle', 3000);
+            return;
+        }
+
+        logBuffer = [...logBuffer, "Key format detected: AES-256-GCM", "Initiating decryption sequence..."];
+        decryptionStatus = 'decrypting';
+
+        // Fake "Fuss" Animation
+        for (let i = 0; i < 15; i++) {
+            await new Promise(r => setTimeout(r, 100));
+            logBuffer = [...logBuffer, `Decrypting block ${i}... [${Math.random().toString(16).slice(2, 10)}] OK`];
+            // keep buffer small
+            if (logBuffer.length > 8) logBuffer.shift();
+        }
+
+        try {
+            const keyBytes = hexToBytes(keyHex);
+            const ivBytes = hexToBytes(ENC_IV);
+            const dataBytes = hexToBytes(ENC_DATA);
+
+            const key = await window.crypto.subtle.importKey(
+                "raw", keyBytes, { name: "AES-GCM" }, false, ["decrypt"]
+            );
+
+            const decrypted = await window.crypto.subtle.decrypt(
+                { name: "AES-GCM", iv: ivBytes },
+                key,
+                dataBytes
+            );
+
+            const decoder = new TextDecoder();
+            decryptedLink = decoder.decode(decrypted);
+            
+            logBuffer = [...logBuffer, "Decryption successful.", "Payload extracted."];
+            decryptionStatus = 'success';
+            
+            // Add to history
+            history = [...history, { 
+                cmd: './access_token.pem', 
+                output: 'Access Granted: Encrypted payload decrypted successfully.', 
+                type: 'text' 
+            }];
+
+        } catch (e) {
+            console.error(e);
+            logBuffer = [...logBuffer, "CRITICAL ERROR: Decryption failed.", "Invalid key or corrupted data."];
+            decryptionStatus = 'fail';
+            setTimeout(() => decryptionStatus = 'idle', 3000);
+        }
+    }
+
+    function handleDragOver(e: DragEvent) {
+        e.preventDefault();
+        isDragOver = true;
+    }
+
+    function handleDragLeave(e: DragEvent) {
+        e.preventDefault();
+        isDragOver = false;
+    }
+
+    function handleDrop(e: DragEvent) {
+        e.preventDefault();
+        isDragOver = false;
+        
+        if (e.dataTransfer && e.dataTransfer.files.length > 0) {
+            processFile(e.dataTransfer.files[0]);
+        }
+    }
+
+    // Initial history mimics the static view
     let history = $state<{cmd: string, output: string | any, type?: 'text'|'component'}[]>([
         { cmd: '', output: 'Welcome to Pownet OS. Type "help" for a list of commands.', type: 'text' }
     ]);
@@ -152,7 +253,70 @@
     <div 
         class="relative w-full max-w-4xl bg-black/90 backdrop-blur-md rounded-lg shadow-2xl overflow-hidden border border-white/10 pointer-events-auto flex flex-col"
         style="transform: translate({position.x}px, {position.y}px); transition: transform {isDragging ? '0s' : '0.1s'}, height 0.3s; height: {isMinimized ? 'auto' : '600px'}; box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.8);"
+        ondragover={handleDragOver}
+        ondragleave={handleDragLeave}
+        ondrop={handleDrop}
+        role="application"
+        tabindex="-1"
     >
+        <!-- Drag & Drop Overlay -->
+        {#if isDragOver}
+            <div class="absolute inset-0 z-50 bg-black/80 flex flex-col items-center justify-center border-4 border-green-500/50 border-dashed m-2 rounded" transition:fade={{ duration: 100 }}>
+                <svg class="w-16 h-16 text-green-500 mb-4 animate-bounce" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 13l-3 3m0 0l-3-3m3 3V8m0 13a9 9 0 110-18 9 9 0 010 18z" />
+                </svg>
+                <div class="text-2xl font-bold text-green-500 tracking-widest">DROP ACCESS TOKEN</div>
+                <div class="text-green-500/70 mt-2 font-mono text-sm">Initiate Secure Handshake</div>
+            </div>
+        {/if}
+
+        <!-- Decryption "Fuss" Overlay -->
+        {#if decryptionStatus !== 'idle'}
+            <div class="absolute inset-0 z-50 bg-black/95 flex flex-col items-center justify-center font-mono p-8" transition:fade={{ duration: 200 }}>
+                {#if decryptionStatus === 'success'}
+                    <div class="text-center space-y-6">
+                        <div class="w-20 h-20 border-4 border-green-500 rounded-full flex items-center justify-center mx-auto animate-pulse">
+                            <svg class="w-10 h-10 text-green-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7" />
+                            </svg>
+                        </div>
+                        <h2 class="text-3xl font-bold text-green-500 tracking-widest">ACCESS GRANTED</h2>
+                        <div class="p-4 border border-green-500/30 bg-green-500/10 rounded">
+                            <p class="text-xs text-green-400 mb-2 uppercase">Secure Payload:</p>
+                            <a href={decryptedLink} target="_blank" class="text-xl font-bold text-white underline decoration-green-500 underline-offset-4 hover:text-green-400 transition-colors">
+                                View Curriculum Vitae
+                            </a>
+                        </div>
+                        <button onclick={() => decryptionStatus = 'idle'} class="text-xs text-gray-500 hover:text-white underline">Close</button>
+                    </div>
+                {:else if decryptionStatus === 'fail'}
+                    <div class="text-center space-y-4">
+                        <div class="text-4xl text-red-500 font-bold mb-4">ACCESS DENIED</div>
+                        <div class="text-red-400 font-mono">
+                            Error: Invalid Token<br>
+                            Incident Reported to Sysadmin
+                        </div>
+                    </div>
+                {:else}
+                    <!-- Analyzing / Decrypting -->
+                    <div class="w-full max-w-md space-y-4">
+                        <div class="text-green-500 font-bold text-lg border-b border-green-500/30 pb-2 mb-4 flex justify-between">
+                            <span>SECURE DECRYPTION MODULE</span>
+                            <span class="animate-pulse">RUNNING...</span>
+                        </div>
+                        <div class="h-48 bg-black border border-green-900/50 p-2 overflow-hidden text-xs text-green-400/80 font-mono flex flex-col justify-end">
+                            {#each logBuffer as log}
+                                <div>> {log}</div>
+                            {/each}
+                        </div>
+                        <div class="w-full bg-green-900/20 h-1 mt-4 rounded-full overflow-hidden">
+                            <div class="h-full bg-green-500 animate-[progress_2s_ease-in-out_infinite] w-1/3"></div>
+                        </div>
+                    </div>
+                {/if}
+            </div>
+        {/if}
+
         <!-- Title Bar -->
         <div 
             class="bg-[#222] px-4 py-2 flex justify-between items-center cursor-grab active:cursor-grabbing select-none border-b border-white/5 h-10"
@@ -241,4 +405,11 @@
     .scrollbar-thin::-webkit-scrollbar { width: 8px; }
     .scrollbar-thin::-webkit-scrollbar-track { background: transparent; }
     .scrollbar-thin::-webkit-scrollbar-thumb { background-color: #444; border-radius: 4px; border: 2px solid #000; }
+    .animate-twinkle {
+        animation: twinkle 3s ease-in-out infinite;
+    }
+    @keyframes progress {
+        0% { transform: translateX(-100%); }
+        100% { transform: translateX(400%); }
+    }
 </style>
