@@ -3,7 +3,17 @@
     import { spring } from 'svelte/motion';
     import type { PortfolioData } from '$lib/types';
 
-    let { data, variant = 'dark', showTrails = $bindable(false) }: { data: PortfolioData, variant?: 'light' | 'dark', showTrails?: boolean } = $props();
+    let { 
+        data, 
+        variant = 'dark', 
+        showTrails = $bindable(false),
+        toggleTheme 
+    }: { 
+        data: PortfolioData, 
+        variant?: 'light' | 'dark', 
+        showTrails?: boolean,
+        toggleTheme?: () => void 
+    } = $props();
 
     let position = $state({ x: 0, y: 0 });
     let isDragging = $state(false);
