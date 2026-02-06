@@ -161,17 +161,6 @@
                 </button>
                 {/if}
 
-                <!-- Trails Toggle -->
-                <button 
-                    onclick={() => showTrails = !showTrails}
-                    class="w-6 h-6 flex items-center justify-center border {colors.border} rounded hover:{colors.highlight} hover:text-white transition-colors focus:outline-none"
-                    title={showTrails ? "Hide Trails" : "Show Trails"}
-                >
-                    <svg class="w-3 h-3 pointer-events-none" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
-                    </svg>
-                </button>
-
                 <!-- Minimize Button -->
                 <button 
                     onclick={toggleMinimize}
