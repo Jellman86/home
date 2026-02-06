@@ -174,7 +174,7 @@
 
             switch (mainCmd) {
                 case 'help':
-                    output = "Available commands:\n  help     Show this help message\n  clear    Clear terminal history\n  ls       List links/files\n  cat      Read file content\n  whoami   Display current user\n  date     Show current system time\n  sudo     Execute a command as another user\n  exit     Close the terminal session\n  neofetch System info\n  pownet   Display branding";
+                    output = "Available commands:\n  help     Show this help message\n  clear    Clear terminal history\n  ls       List links/files\n  cat      Read file content\n  whoami   Display current user\n  date     Show current system time\n  sudo     Execute a command as another user\n  ./upload-file.sh Upload decryption key (.pem, .key)\n  exit     Close the terminal session\n  neofetch System info\n  pownet   Display branding";
                     break;
                 case 'clear':
                     history = [];
@@ -194,6 +194,12 @@
                     } else {
                         output = `cat: ${args[1] || ''}: No such file or directory`;
                     }
+                    break;
+                case './upload-file.sh':
+                case '.\\upload-file.sh':
+                case 'upload-file.sh':
+                    fileInputRef.click();
+                    output = "Opening secure file picker...";
                     break;
                 case 'sudo':
                     output = `[sudo] password for scott: \nSorry, user scott is not allowed to execute '${args.slice(1).join(' ') || ''}' as root on pownet.`;
