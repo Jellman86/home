@@ -255,14 +255,24 @@
 `;
                     break;
                 case 'neofetch':
-                    output = `       .---.
-      /     \      OS: Pownet OS x86_64
-      |  o  |      Kernel: 5.15.0-boids
-      \     /      Uptime: Forever
-       '-_-'       Shell: zsh 5.8
-                   Theme: Terminal Dark
-                   CPU: Neural Engine
-                   Memory: 128TB
+                    output = `    ;,.;++;+?***+**???**?*??*?****    OS: Pownet OS x86_64
+    ;:;;+??+++*???*?**+*??*?%%???*    Kernel: 5.15.0-boids
+    +;;:;*?*??*+*??*+++?%%%%%SSSSS    Uptime: Forever
+    ;+**+*?*+*++?%%%?++??*?SSSSSS%    Shell: zsh 5.8
+    +*%%;;??**+*?????*+*??%SSSSSS%    Theme: Terminal Dark
+    ???%;:*%++++*??*+;;**+?%SSSSS?    CPU: Neural Engine
+    ??%%+;*?*++****++++*;::;;*SSS?    Memory: 128TB
+    ????S%S%SS+*??*????*+++;::*%%;
+    ;+*?SSSS#S?*??*??%?++++;:;*?*:
+    +?%SSSSS##S%??%SS%+*++*;;*??**
+    ?%S#SSSS####S%S##%+++++;;***??
+    %%??****?%SS####S#%****?%#@#@@
+    %*;:;;;++++;;?SSSSSSS##S%%#@@@
+    %*++++++++****###SS%????%%%S@@
+    ?%S%?***+++**?#@@#*;,;;:+%S%S@
+    ##S#@#%*??SSSSS##?*;:+;:,;S%?#
+    #%?S####S@@#####?**++;;:;+S@%S
+    **%%S######@##S##S%?*?%%S@@@##
 `;
                     break;
                 case 'cowsay':
