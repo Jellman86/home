@@ -39,8 +39,10 @@
     };
 
     type ThemeKey = keyof typeof themes;
-    const themeOrder: ThemeKey[] = ['blueprint', 'blueprint_light', 'terminal'];
+    // Removed themeOrder constant as we are using direct switching logic now
+    
     let currentTheme = $state<ThemeKey>('blueprint');
+    let lastBlueprintTheme = $state<ThemeKey>('blueprint'); // Remembers if we were in light or dark mode
     let showTrails = $state(false);
     
     let fps = $state(0);
@@ -56,7 +58,7 @@
     let boidCount = $derived(themes[currentTheme].count);
     let variant = $derived(themes[currentTheme].variant);
     
-    // Data
+    // Data (portfolioData constant remains here...)
     const portfolioData: PortfolioData = {
         name: "Scott Powdrill (jellman86)",
         avatarUrl: "https://avatars.githubusercontent.com/u/179294116?v=4",
@@ -76,10 +78,28 @@
         'bg-white/40 border-blue-600/20 text-blue-800/40'
     );
 
-    function toggleTheme() {
-        const currentIndex = themeOrder.indexOf(currentTheme);
-        const nextIndex = (currentIndex + 1) % themeOrder.length;
-        currentTheme = themeOrder[nextIndex];
+    // Toggles between Light/Dark for Blueprint only
+    function toggleLightDark() {
+        if (currentTheme === 'blueprint') {
+            currentTheme = 'blueprint_light';
+            lastBlueprintTheme = 'blueprint_light';
+        } else if (currentTheme === 'blueprint_light') {
+            currentTheme = 'blueprint';
+            lastBlueprintTheme = 'blueprint';
+        }
+    }
+
+    // Switches between OS styles (Blueprint <-> Terminal)
+    function switchOS() {
+        if (currentTheme === 'terminal') {
+            currentTheme = lastBlueprintTheme;
+        } else {
+            // Save current state if we are currently in a blueprint mode (though state tracks it anyway)
+            if (currentTheme === 'blueprint' || currentTheme === 'blueprint_light') {
+                lastBlueprintTheme = currentTheme;
+            }
+            currentTheme = 'terminal';
+        }
     }
 </script>
 
@@ -95,36 +115,31 @@
 
     <!-- UI Overlay -->
     <div class="relative z-10">
-        <ActiveComponent data={portfolioData} {variant} bind:showTrails={showTrails} />
+        <ActiveComponent data={portfolioData} {variant} bind:showTrails={showTrails} toggleTheme={toggleLightDark} />
     </div>
 
     <!-- Theme Switcher & Stats -->
     <div class="fixed bottom-6 right-6 z-50 flex flex-col items-end gap-3 pointer-events-auto">
         
-        <!-- Theme Toggle -->
+        <!-- OS Switcher (Blueprint <-> Terminal) -->
         <button 
             class="flex items-center justify-center w-10 h-10 rounded-full backdrop-blur-md border shadow-lg transition-all active:scale-95 
             {currentTheme === 'terminal' ? 'bg-green-900/20 border-green-500 text-green-500 hover:bg-green-900/40' : 
                 variant === 'dark' ? 'bg-black/10 border-white/10 text-white hover:bg-white/10' : 
                 'bg-black/10 border-white/10 text-blue-900 hover:bg-black/5'}"
-            onclick={toggleTheme}
-            title="Cycle Theme"
-            aria-label="Cycle Theme"
+            onclick={switchOS}
+            title={currentTheme === 'terminal' ? 'Switch to Blueprint OS' : 'Switch to Terminal OS'}
+            aria-label="Switch OS"
         >
-            {#if currentTheme === 'blueprint'}
-                <!-- Sun Icon (Next: Light) -->
+            {#if currentTheme === 'terminal'}
+                <!-- Blueprint Icon (Go back to UI) -->
                 <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5 pointer-events-none" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" />
-                </svg>
-            {:else if currentTheme === 'blueprint_light'}
-                <!-- Terminal Icon (Next: Terminal) -->
-                <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5 pointer-events-none" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 9l3 3-3 3m5 0h3M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                 </svg>
             {:else}
-                <!-- Moon Icon (Next: Dark) -->
+                <!-- Terminal Icon (Go to Terminal) -->
                 <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5 pointer-events-none" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 9l3 3-3 3m5 0h3M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
                 </svg>
             {/if}
         </button>
