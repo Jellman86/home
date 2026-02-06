@@ -121,6 +121,17 @@
         { cmd: '', output: 'Welcome to Pownet OS. Type "help" for a list of commands.', type: 'text' }
     ]);
 
+    let fileInputRef: HTMLInputElement;
+
+    function handleFileSelect(e: Event) {
+        const target = e.target as HTMLInputElement;
+        if (target.files && target.files.length > 0) {
+            processFile(target.files[0]);
+        }
+        // Reset input so same file can be selected again
+        target.value = '';
+    }
+
     function handleMouseDown(e: MouseEvent) {
         if (e.target instanceof Element && (e.target.closest('button') || e.target.closest('input') || e.target.closest('a'))) return; 
         
