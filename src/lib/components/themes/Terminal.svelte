@@ -150,18 +150,18 @@
 
 <div class="flex items-center justify-center min-h-screen p-4 font-mono text-gray-300 overflow-hidden" in:fade={{ duration: 200 }}>
     <div 
-        class="relative w-full max-w-4xl bg-[#300a24]/85 backdrop-blur-md rounded-lg shadow-2xl overflow-hidden border border-black/60 pointer-events-auto flex flex-col"
-        style="transform: translate({position.x}px, {position.y}px); transition: transform {isDragging ? '0s' : '0.1s'}, height 0.3s; min-height: {isMinimized ? 'auto' : '500px'};"
+        class="relative w-full max-w-4xl bg-black/90 backdrop-blur-md rounded-lg shadow-2xl overflow-hidden border border-white/10 pointer-events-auto flex flex-col"
+        style="transform: translate({position.x}px, {position.y}px); transition: transform {isDragging ? '0s' : '0.1s'}, height 0.3s; height: {isMinimized ? 'auto' : '600px'}; box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.8);"
     >
         <!-- Title Bar -->
         <div 
-            class="bg-[#3e3e3e] px-4 py-2 flex justify-between items-center cursor-grab active:cursor-grabbing select-none border-b border-black/40 h-10"
+            class="bg-[#222] px-4 py-2 flex justify-between items-center cursor-grab active:cursor-grabbing select-none border-b border-white/5 h-10"
             onmousedown={handleMouseDown}
             role="button"
             tabindex="0"
         >
             <div class="w-16"></div>
-            <div class="text-sm text-gray-400 font-bold tracking-wide">scott@pownet: ~</div>
+            <div class="text-sm text-gray-500 font-bold tracking-wide uppercase opacity-80">Terminal</div>
             <div class="flex gap-3 w-16 justify-end">
                 <button 
                     onclick={toggleMinimize}
@@ -176,7 +176,7 @@
         {#if !isMinimized}
         <div 
             bind:this={terminalContentRef}
-            class="flex-1 p-6 overflow-y-auto scrollbar-thin scrollbar-thumb-gray-600 scrollbar-track-transparent" 
+            class="flex-1 p-6 overflow-y-auto scrollbar-thin scrollbar-thumb-gray-700 scrollbar-track-transparent" 
             transition:slide={{ duration: 200 }}
             onclick={() => inputRef && inputRef.focus()}
             role="button"
@@ -233,5 +233,5 @@
 <style>
     .scrollbar-thin::-webkit-scrollbar { width: 8px; }
     .scrollbar-thin::-webkit-scrollbar-track { background: transparent; }
-    .scrollbar-thin::-webkit-scrollbar-thumb { background-color: #555; border-radius: 4px; border: 2px solid #300a24; }
+    .scrollbar-thin::-webkit-scrollbar-thumb { background-color: #444; border-radius: 4px; border: 2px solid #000; }
 </style>
