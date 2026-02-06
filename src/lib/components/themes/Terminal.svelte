@@ -61,16 +61,6 @@
                 >
                     <div class="w-2.5 h-0.5 bg-current rounded-full"></div>
                 </button>
-                <!-- Maximize (Fake) -->
-                <div class="w-6 h-6 flex items-center justify-center text-gray-500 hover:text-white hover:bg-white/10 rounded-full transition-colors cursor-default">
-                    <div class="w-2.5 h-2.5 border border-current rounded-[1px]"></div>
-                </div>
-                <!-- Close (Fake) -->
-                <div class="w-6 h-6 flex items-center justify-center text-gray-500 hover:bg-[#e81123] hover:text-white rounded-full transition-colors cursor-default">
-                    <svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
-                        <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
-                    </svg>
-                </div>
             </div>
         </div>
 
