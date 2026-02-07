@@ -246,15 +246,15 @@
     
     let SPEED_LIMIT = $derived(0.8);
     let VISUAL_RANGE = $derived(45); 
-    let PROTECTED_RANGE = $derived(8);
-    let SEPARATION_WEIGHT = $derived(2.8); 
-    let ALIGNMENT_WEIGHT = $derived(3.2); 
-    let COHESION_WEIGHT = $derived(1.4); 
-    const MOUSE_REPULSION_WEIGHT = 12.0;
+    let PROTECTED_RANGE = $derived(10);
+    let SEPARATION_WEIGHT = $derived(3.5); 
+    let ALIGNMENT_WEIGHT = $derived(2.0); 
+    let COHESION_WEIGHT = $derived(2.0); 
+    const MOUSE_REPULSION_WEIGHT = 15.0;
 
     const VISUAL_RANGE_SQ = 45 * 45;
-    const PROTECTED_RANGE_SQ = 8 * 8;
-    const MOUSE_REPULSION_SQ = 4500;
+    const PROTECTED_RANGE_SQ = 10 * 10;
+    const MOUSE_REPULSION_SQ = 5000;
 
     const bgVertexShader = `
         varying vec2 vUv;
@@ -523,20 +523,22 @@
 
             if (isObserver && uiRect) {
                 const angle = (i * 137.5) * (Math.PI / 180); 
-                const ring = (i % 4); const margin = 180 + ring * 80; 
+                // EXTREME margin to prevent clipping behind terminal background
+                const ring = (i % 4); const margin = 300 + ring * 100; 
                 
+                // Individual organic hover
                 const timeOff = t * (0.8 + (i % 5) * 0.2) + i;
-                const jitterX = Math.sin(timeOff) * 25;
-                const jitterY = Math.cos(timeOff * 0.7) * 25;
+                const jitterX = Math.sin(timeOff) * 35;
+                const jitterY = Math.cos(timeOff * 0.7) * 35;
 
                 let tsx = (uiRect.left + uiRect.right) * 0.5 + Math.cos(angle) * (uiRect.width * 0.5 + margin) + jitterX;
                 let tsy = (uiRect.top + uiRect.bottom) * 0.5 + Math.sin(angle) * (uiRect.height * 0.5 + margin) + jitterY;
                 
-                _diff.set((tsx / window.innerWidth) * 2 - 1, -(tsy / window.innerHeight) * 2 + 1, 0.3).unproject(camera);
+                _diff.set((tsx / window.innerWidth) * 2 - 1, -(tsy / window.innerHeight) * 2 + 1, 0.2).unproject(camera);
                 
-                const individualLerp = 0.02 + (i % 7) * 0.005;
+                const individualLerp = 0.02 + (i % 10) * 0.005;
                 _position.lerp(_diff, individualLerp); 
-                _velocity.set(Math.sin(timeOff)*0.01, Math.cos(timeOff)*0.01, 0); 
+                _velocity.set(Math.sin(timeOff)*0.02, Math.cos(timeOff)*0.02, 0); 
                 
                 _lookAt.set(((uiRect.left + uiRect.right)*0.5/window.innerWidth)*2-1, -((uiRect.top + uiRect.bottom)*0.5/window.innerHeight)*2+1, 0.5).unproject(camera);
                 _dummy.position.copy(_position); _dummy.lookAt(_lookAt);
@@ -557,63 +559,40 @@
                 let sepX = 0, sepY = 0, sepZ = 0;
                 let aC = 0, cC = 0, sC = 0;
 
-                const gx = Math.floor((px + gridOffset) / GRID_SIZE);
-                const gy = Math.floor((py + gridOffset) / GRID_SIZE);
-                const gz = Math.floor((pz + gridOffset) / GRID_SIZE);
-
-                for (let ox = -1; ox <= 1; ox++) {
-                    const nx = gx + ox; if (nx < 0 || nx >= gridCellsCount) continue;
-                    for (let oy = -1; oy <= 1; oy++) {
-                        const ny = gy + oy; if (ny < 0 || ny >= gridCellsCount) continue;
-                        for (let oz = -1; oz <= 1; oz++) {
-                            const nz = gz + oz; if (nz < 0 || nz >= gridCellsCount) continue;
-                            
-                            const cellKey = nx + ny * gridCellsCount + nz * gridCellsCount * gridCellsCount;
-                            let boidIdx = gridHeaders[cellKey];
-                            
-                            while (boidIdx !== -1) {
-                                if (boidIdx !== i) {
-                                    const oIdx = boidIdx * 3;
-                                    const opx = positions[oIdx], opy = positions[oIdx+1], opz = positions[oIdx+2];
-                                    const dx = px - opx, dy = py - opy, dz = pz - opz;
-                                    const dSq = dx*dx+dy*dy+dz*dz;
-                                    
-                                    if (dSq < PROTECTED_RANGE_SQ && dSq > 0.01) {
-                                        sepX += dx; sepY += dy; sepZ += dz;
-                                        sC++;
-                                    } else if (dSq < VISUAL_RANGE_SQ) {
-                                        cohX += opx; cohY += opy; cohZ += opz;
-                                        aliX += velocities[oIdx]; aliY += velocities[oIdx+1]; aliZ += velocities[oIdx+2];
-                                        aC++;
-                                        cC++;
-                                    }
-                                }
-                                // Topological limit: only consider nearest 7 neighbors
-                                if (aC + sC >= NEIGHBOR_COUNT) break;
-                                boidIdx = boidNext[boidIdx];
-                            }
-                            if (aC + sC >= NEIGHBOR_COUNT) break;
-                        }
-                        if (aC + sC >= NEIGHBOR_COUNT) break;
+                // Restore O(N^2) for superior behavior quality
+                for (let j = 0; j < boidCount; j++) {
+                    if (i === j) continue;
+                    const oIdx = j * 3;
+                    const opx = positions[oIdx], opy = positions[oIdx+1], opz = positions[oIdx+2];
+                    const dx = px - opx, dy = py - opy, dz = pz - opz;
+                    const dSq = dx*dx+dy*dy+dz*dz;
+                    
+                    if (dSq < PROTECTED_RANGE_SQ && dSq > 0.01) {
+                        sepX += dx; sepY += dy; sepZ += dz;
+                        sC++;
+                    } else if (dSq < VISUAL_RANGE_SQ) {
+                        cohX += opx; cohY += opy; cohZ += opz;
+                        aliX += velocities[oIdx]; aliY += velocities[oIdx+1]; aliZ += velocities[oIdx+2];
+                        aC++;
+                        cC++;
                     }
-                    if (aC + sC >= NEIGHBOR_COUNT) break;
                 }
 
                 if (sC > 0) {
-                    _scratchV1.set(sepX, sepY, sepZ).normalize().multiplyScalar(SEPARATION_WEIGHT * 0.12);
+                    _scratchV1.set(sepX, sepY, sepZ).normalize().multiplyScalar(SEPARATION_WEIGHT * 0.15);
                     _acceleration.add(_scratchV1);
                 }
                 if (cC > 0) {
-                    _scratchV1.set(cohX/cC - px, cohY/cC - py, cohZ/cC - pz).normalize().multiplyScalar(COHESION_WEIGHT * 0.01);
+                    _scratchV1.set(cohX/cC - px, cohY/cC - py, cohZ/cC - pz).normalize().multiplyScalar(COHESION_WEIGHT * 0.015);
                     _acceleration.add(_scratchV1);
                 }
                 if (aC > 0) {
-                    _scratchV1.set(aliX/aC - vx, aliY/aC - vy, aliZ/aC - vz).normalize().multiplyScalar(ALIGNMENT_WEIGHT * 0.06);
+                    _scratchV1.set(aliX/aC - vx, aliY/aC - vy, aliZ/aC - vz).normalize().multiplyScalar(ALIGNMENT_WEIGHT * 0.05);
                     _acceleration.add(_scratchV1);
                 }
 
                 // Stay within boundaries
-                const turn = 0.05;
+                const turn = 0.06;
                 if (px < -BOUNDARY_SIZE) _acceleration.x += turn;
                 if (px > BOUNDARY_SIZE) _acceleration.x -= turn;
                 if (py < -BOUNDARY_SIZE) _acceleration.y += turn;
@@ -624,13 +603,18 @@
                 const dxT = px - target.x, dyT = py - target.y, dzT = pz - target.z;
                 const dSqToTarget = dxT*dxT + dyT*dyT + dzT*dzT;
                 if (dSqToTarget < MOUSE_REPULSION_SQ) {
-                    _scratchV1.set(dxT, dyT, dzT).normalize().multiplyScalar(MOUSE_REPULSION_WEIGHT * 0.045);
+                    _scratchV1.set(dxT, dyT, dzT).normalize().multiplyScalar(MOUSE_REPULSION_WEIGHT * 0.05);
                     _acceleration.add(_scratchV1);
                 }
                 
-                _scratchV1.set(Math.sin(py*0.015+t*0.6+i*0.1)*0.012, Math.cos(px*0.012+t*0.5+i*0.2)*0.012, Math.sin((px+py)*0.01+t*0.4+i*0.3)*0.01);
+                // Stronger unique wander force
+                _scratchV1.set(
+                    Math.sin(py*0.015 + t*0.6 + i*0.1) * 0.015, 
+                    Math.cos(px*0.012 + t*0.5 + i*0.2) * 0.015, 
+                    Math.sin((px+py)*0.01 + t*0.4 + i*0.3) * 0.015
+                );
                 _acceleration.add(_scratchV1);
-                _acceleration.clampLength(0, 0.06);
+                _acceleration.clampLength(0, 0.08);
                 
                 const myMaxSpeed = maxSpeeds[i];
                 _velocity.add(_acceleration).clampLength(0.05, myMaxSpeed);
