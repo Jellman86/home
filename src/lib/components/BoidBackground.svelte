@@ -238,25 +238,26 @@
     // BOID PARAMETERS
     const BOUNDARY_SIZE = 120;
     const NEIGHBOR_COUNT = 7; 
-    const TARGET_SPEED = 0.83;
-    const SPEED_FORCE = 0.025;
+    const TARGET_SPEED = 1.2;
+    const SPEED_FORCE = 0.035;
     const PREDATOR_RADIUS = 55;
-    const PREDATOR_SPEED = 1.6; 
-    const PREDATOR_MIN_SPEED = 1.1;
-    const PREDATOR_MAX_STEER = 0.18;
-    const PREDATOR_PREDICT_T = 5;
+    const PREDATOR_SPEED = 2.2; 
+    const PREDATOR_MIN_SPEED = 1.2;
+    const PREDATOR_MAX_STEER = 0.22;
+    const PREDATOR_PREDICT_T = 4;
+    const EAT_RADIUS_SQ = 36; // ~6 world units
     
-    let SPEED_LIMIT = $derived(0.8);
+    let SPEED_LIMIT = $derived(1.4);
     let VISUAL_RANGE = $derived(45); 
-    let PROTECTED_RANGE = $derived(12);
-    let SEPARATION_WEIGHT = $derived(4.5); 
-    let ALIGNMENT_WEIGHT = $derived(1.5); 
-    let COHESION_WEIGHT = $derived(2.5); 
-    const MOUSE_REPULSION_WEIGHT = 12.0;
+    let PROTECTED_RANGE = $derived(15);
+    let SEPARATION_WEIGHT = $derived(5.0); 
+    let ALIGNMENT_WEIGHT = $derived(2.0); 
+    let COHESION_WEIGHT = $derived(3.0); 
+    const MOUSE_REPULSION_WEIGHT = 15.0;
 
     const VISUAL_RANGE_SQ = 45 * 45;
-    const PROTECTED_RANGE_SQ = 12 * 12;
-    const MOUSE_REPULSION_SQ = 5000;
+    const PROTECTED_RANGE_SQ = 15 * 15;
+    const MOUSE_REPULSION_SQ = 6000;
 
     const bgVertexShader = `
         varying vec2 vUv;
@@ -501,19 +502,24 @@
 
             if (isObserver && uiRect) {
                 const angle = (i * 137.5) * (Math.PI / 180); 
-                const margin = 250 + (i % 4) * 80; 
+                // Increased margin and better depth to stay clear of terminal
+                const margin = 350 + (i % 4) * 100; 
                 
-                const timeOff = t * (0.8 + (i % 5) * 0.2) + i;
-                let tsx = (uiRect.left + uiRect.right) * 0.5 + Math.cos(angle) * (uiRect.width * 0.5 + margin) + Math.sin(timeOff) * 20;
-                let tsy = (uiRect.top + uiRect.bottom) * 0.5 + Math.sin(angle) * (uiRect.height * 0.5 + margin) + Math.cos(timeOff) * 20;
+                const timeOff = t * (0.5 + (i % 5) * 0.1) + i;
+                let tsx = (uiRect.left + uiRect.right) * 0.5 + Math.cos(angle) * (uiRect.width * 0.5 + margin) + Math.sin(timeOff) * 15;
+                let tsy = (uiRect.top + uiRect.bottom) * 0.5 + Math.sin(angle) * (uiRect.height * 0.5 + margin) + Math.cos(timeOff) * 15;
                 
-                // Strict Avoidance
-                if (tsx > uiRect.left - 40 && tsx < uiRect.right + 40 && tsy > uiRect.top - 40 && tsy < uiRect.bottom + 40) {
-                    if (tsx < (uiRect.left + uiRect.right) * 0.5) tsx = uiRect.left - 100; else tsx = uiRect.right + 100;
+                // Stricter Avoidance
+                if (tsx > uiRect.left - 60 && tsx < uiRect.right + 60 && tsy > uiRect.top - 60 && tsy < uiRect.bottom + 60) {
+                    const dx = tsx - (uiRect.left + uiRect.right) * 0.5;
+                    const dy = tsy - (uiRect.top + uiRect.bottom) * 0.5;
+                    if (Math.abs(dx) > Math.abs(dy)) tsx = dx > 0 ? uiRect.right + 80 : uiRect.left - 80;
+                    else tsy = dy > 0 ? uiRect.bottom + 80 : uiRect.top - 80;
                 }
 
-                _diff.set((tsx / window.innerWidth) * 2 - 1, -(tsy / window.innerHeight) * 2 + 1, 0.25).unproject(camera);
-                _position.lerp(_diff, 0.04); _velocity.set(0, 0, 0); 
+                // depth 0.05 is VERY close to camera, ensuring visibility
+                _diff.set((tsx / window.innerWidth) * 2 - 1, -(tsy / window.innerHeight) * 2 + 1, 0.05).unproject(camera);
+                _position.lerp(_diff, 0.06); _velocity.set(0, 0, 0); 
                 
                 _lookAt.set(((uiRect.left + uiRect.right)*0.5/window.innerWidth)*2-1, -((uiRect.top + uiRect.bottom)*0.5/window.innerHeight)*2+1, 0.5).unproject(camera);
                 _dummy.position.copy(_position); _dummy.lookAt(_lookAt);
@@ -530,14 +536,13 @@
 
                 for (let j = 0; j < boidCount; j++) {
                     if (i === j) continue;
-                    const oIdx = j * 3;
-                    const dx = _position.x - positions[oIdx], dy = _position.y - positions[oIdx+1], dz = _position.z - positions[oIdx+2];
+                    const dx = _position.x - positions[j*3], dy = _position.y - positions[j*3+1], dz = _position.z - positions[j*3+2];
                     const dSq = dx*dx+dy*dy+dz*dz;
                     
                     if (dSq < PROTECTED_RANGE_SQ && dSq > 0.01) { _sepF.x += dx; _sepF.y += dy; _sepF.z += dz; sC++; }
                     if (dSq < VISUAL_RANGE_SQ && dSq > 0.01) {
-                        _cohF.x += positions[oIdx]; _cohF.y += positions[oIdx+1]; _cohF.z += positions[oIdx+2]; cC++;
-                        _alignF.x += velocities[oIdx]; _alignF.y += velocities[oIdx+1]; _alignF.z += velocities[oIdx+2]; aC++;
+                        _cohF.x += positions[j*3]; _cohF.y += positions[j*3+1]; _cohF.z += positions[j*3+2]; cC++;
+                        _alignF.x += velocities[j*3]; _alignF.y += velocities[j*3+1]; _alignF.z += velocities[j*3+2]; aC++;
                     }
                 }
 
@@ -545,8 +550,20 @@
                 if (cC > 0) _acceleration.add(_cohF.divideScalar(cC).sub(_position).normalize().multiplyScalar(COHESION_WEIGHT * 0.015));
                 if (aC > 0) _acceleration.add(_alignF.divideScalar(aC).normalize().sub(_velocity).multiplyScalar(ALIGNMENT_WEIGHT * 0.05));
 
+                // Predator avoidance (Run away!)
+                const dxP = _position.x - _predPos.x, dyP = _position.y - _predPos.y, dzP = _position.z - _predPos.z;
+                const dSqP = dxP*dxP + dyP*dyP + dzP*dzP;
+                if (dSqP < 2500) { 
+                    _acceleration.add(_scratchV1.set(dxP, dyP, dzP).normalize().multiplyScalar(0.2));
+                    // EATEN logic
+                    if (dSqP < EAT_RADIUS_SQ) {
+                        _position.set((Math.random()-0.5)*300, (Math.random()-0.5)*300, 20+Math.random()*100);
+                        _velocity.set((Math.random()-0.5), (Math.random()-0.5), 1).normalize().multiplyScalar(SPEED_LIMIT);
+                    }
+                }
+
                 // Stay within boundaries
-                const turn = 0.06;
+                const turn = 0.08;
                 if (_position.x < -BOUNDARY_SIZE) _acceleration.x += turn;
                 if (_position.x > BOUNDARY_SIZE) _acceleration.x -= turn;
                 if (_position.y < -BOUNDARY_SIZE) _acceleration.y += turn;
@@ -561,16 +578,16 @@
                     _acceleration.add(_scratchV1);
                 }
                 
-                // Personality: individual decision noise
+                // Smoother Personality: slower wander
                 _scratchV1.set(
-                    Math.sin(_position.y*0.015 + t*0.6 + i*0.1) * 0.012, 
-                    Math.cos(_position.x*0.012 + t*0.5 + i*0.2) * 0.012, 
-                    Math.sin((_position.x+_position.y)*0.01 + t*0.4 + i*0.3) * 0.01
+                    Math.sin(_position.y*0.01 + t*0.3 + i*0.1) * 0.008, 
+                    Math.cos(_position.x*0.01 + t*0.2 + i*0.2) * 0.008, 
+                    Math.sin((_position.x+_position.y)*0.005 + t*0.1 + i*0.3) * 0.006
                 );
                 _acceleration.add(_scratchV1);
-                _acceleration.clampLength(0, 0.08);
+                _acceleration.clampLength(0, 0.1);
                 
-                _velocity.add(_acceleration).clampLength(0.05, maxSpeeds[i]);
+                _velocity.add(_acceleration).clampLength(0.1, maxSpeeds[i]);
                 _position.add(_velocity);
                 _dummy.position.copy(_position);
                 if (_velocity.lengthSq() > 0.0001) _dummy.lookAt(_lookAt.copy(_position).add(_velocity));
@@ -592,6 +609,7 @@
             for (let i = 0; i < boidCount; i++) {
                 const bIdx = i * 3;
                 const tOff = i * TRAIL_LENGTH * 3;
+                // PERFORMANCE: Use fast copyWithin instead of manual shifting
                 h.copyWithin(tOff + 3, tOff, tOff + (TRAIL_LENGTH - 1) * 3);
                 h[tOff] = positions[bIdx]; h[tOff+1] = positions[bIdx+1]; h[tOff+2] = positions[bIdx+2];
             }
