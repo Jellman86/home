@@ -520,14 +520,21 @@
 
             if (isObserver && uiRect) {
                 const angle = (i * 137.5) * (Math.PI / 180); 
-                // Increased margin significantly to stay "a centimeter outside"
-                const ring = (i % 5); const margin = 120 + ring * 60; 
-                let tsx = (uiRect.left + uiRect.right) * 0.5 + Math.cos(angle) * (uiRect.width * 0.5 + margin);
-                let tsy = (uiRect.top + uiRect.bottom) * 0.5 + Math.sin(angle) * (uiRect.height * 0.5 + margin);
+                const ring = (i % 4); const margin = 180 + ring * 80; 
                 
-                _diff.set((tsx / window.innerWidth) * 2 - 1, -(tsy / window.innerHeight) * 2 + 1, 0.2).unproject(camera);
+                const timeOff = t * (0.8 + (i % 5) * 0.2) + i;
+                const jitterX = Math.sin(timeOff) * 25;
+                const jitterY = Math.cos(timeOff * 0.7) * 25;
+
+                let tsx = (uiRect.left + uiRect.right) * 0.5 + Math.cos(angle) * (uiRect.width * 0.5 + margin) + jitterX;
+                let tsy = (uiRect.top + uiRect.bottom) * 0.5 + Math.sin(angle) * (uiRect.height * 0.5 + margin) + jitterY;
                 
-                _position.lerp(_diff, 0.05); _velocity.set(0, 0, 0); 
+                _diff.set((tsx / window.innerWidth) * 2 - 1, -(tsy / window.innerHeight) * 2 + 1, 0.3).unproject(camera);
+                
+                const individualLerp = 0.02 + (i % 7) * 0.005;
+                _position.lerp(_diff, individualLerp); 
+                _velocity.set(Math.sin(timeOff)*0.01, Math.cos(timeOff)*0.01, 0); 
+                
                 _lookAt.set(((uiRect.left + uiRect.right)*0.5/window.innerWidth)*2-1, -((uiRect.top + uiRect.bottom)*0.5/window.innerHeight)*2+1, 0.5).unproject(camera);
                 _dummy.position.copy(_position); _dummy.lookAt(_lookAt);
                 
