@@ -238,25 +238,25 @@
     // BOID PARAMETERS
     const BOUNDARY_SIZE = 120;
     const NEIGHBOR_COUNT = 7; 
-    const TARGET_SPEED = 1.2;
-    const SPEED_FORCE = 0.035;
+    const TARGET_SPEED = 1.5;
+    const SPEED_FORCE = 0.05;
     const PREDATOR_RADIUS = 55;
-    const PREDATOR_SPEED = 2.2; 
+    const PREDATOR_SPEED = 2.5; 
     const PREDATOR_MIN_SPEED = 1.2;
-    const PREDATOR_MAX_STEER = 0.22;
+    const PREDATOR_MAX_STEER = 0.25;
     const PREDATOR_PREDICT_T = 4;
-    const EAT_RADIUS_SQ = 36; // ~6 world units
+    const EAT_RADIUS_SQ = 49; // ~7 world units
     
-    let SPEED_LIMIT = $derived(1.4);
+    let SPEED_LIMIT = $derived(1.8);
     let VISUAL_RANGE = $derived(45); 
-    let PROTECTED_RANGE = $derived(15);
-    let SEPARATION_WEIGHT = $derived(5.0); 
-    let ALIGNMENT_WEIGHT = $derived(2.0); 
-    let COHESION_WEIGHT = $derived(3.0); 
+    let PROTECTED_RANGE = $derived(12);
+    let SEPARATION_WEIGHT = $derived(5.5); 
+    let ALIGNMENT_WEIGHT = $derived(2.5); 
+    let COHESION_WEIGHT = $derived(3.5); 
     const MOUSE_REPULSION_WEIGHT = 15.0;
 
     const VISUAL_RANGE_SQ = 45 * 45;
-    const PROTECTED_RANGE_SQ = 15 * 15;
+    const PROTECTED_RANGE_SQ = 12 * 12;
     const MOUSE_REPULSION_SQ = 6000;
 
     const bgVertexShader = `
@@ -368,7 +368,7 @@
             positions[i*3]=_position.x; positions[i*3+1]=_position.y; positions[i*3+2]=_position.z;
             velocities[i*3]=_velocity.x; velocities[i*3+1]=_velocity.y; velocities[i*3+2]=_velocity.z;
             scales[i] = 0.75 + Math.random() * 0.55;
-            maxSpeeds[i] = SPEED_LIMIT * (0.85 + Math.random() * 0.3);
+            maxSpeeds[i] = SPEED_LIMIT * (0.85 + Math.random() * 0.4);
             _tempColor.copy(baseColor).multiplyScalar(0.8);
             mesh.setColorAt(i, _tempColor);
             _dummy.position.copy(_position);
@@ -502,23 +502,21 @@
 
             if (isObserver && uiRect) {
                 const angle = (i * 137.5) * (Math.PI / 180); 
-                // Increased margin and better depth to stay clear of terminal
-                const margin = 350 + (i % 4) * 100; 
+                const margin = 120 + (i % 4) * 60; 
                 
                 const timeOff = t * (0.5 + (i % 5) * 0.1) + i;
                 let tsx = (uiRect.left + uiRect.right) * 0.5 + Math.cos(angle) * (uiRect.width * 0.5 + margin) + Math.sin(timeOff) * 15;
                 let tsy = (uiRect.top + uiRect.bottom) * 0.5 + Math.sin(angle) * (uiRect.height * 0.5 + margin) + Math.cos(timeOff) * 15;
                 
-                // Stricter Avoidance
-                if (tsx > uiRect.left - 60 && tsx < uiRect.right + 60 && tsy > uiRect.top - 60 && tsy < uiRect.bottom + 60) {
+                // Force outside terminal area
+                if (tsx > uiRect.left - 40 && tsx < uiRect.right + 40 && tsy > uiRect.top - 40 && tsy < uiRect.bottom + 40) {
                     const dx = tsx - (uiRect.left + uiRect.right) * 0.5;
                     const dy = tsy - (uiRect.top + uiRect.bottom) * 0.5;
                     if (Math.abs(dx) > Math.abs(dy)) tsx = dx > 0 ? uiRect.right + 80 : uiRect.left - 80;
                     else tsy = dy > 0 ? uiRect.bottom + 80 : uiRect.top - 80;
                 }
 
-                // depth 0.05 is VERY close to camera, ensuring visibility
-                _diff.set((tsx / window.innerWidth) * 2 - 1, -(tsy / window.innerHeight) * 2 + 1, 0.05).unproject(camera);
+                _diff.set((tsx / window.innerWidth) * 2 - 1, -(tsy / window.innerHeight) * 2 + 1, 0.1).unproject(camera);
                 _position.lerp(_diff, 0.06); _velocity.set(0, 0, 0); 
                 
                 _lookAt.set(((uiRect.left + uiRect.right)*0.5/window.innerWidth)*2-1, -((uiRect.top + uiRect.bottom)*0.5/window.innerHeight)*2+1, 0.5).unproject(camera);
@@ -550,15 +548,24 @@
                 if (cC > 0) _acceleration.add(_cohF.divideScalar(cC).sub(_position).normalize().multiplyScalar(COHESION_WEIGHT * 0.015));
                 if (aC > 0) _acceleration.add(_alignF.divideScalar(aC).normalize().sub(_velocity).multiplyScalar(ALIGNMENT_WEIGHT * 0.05));
 
-                // Predator avoidance (Run away!)
+                // PREDATOR AVOIDANCE & KILL LOGIC
                 const dxP = _position.x - _predPos.x, dyP = _position.y - _predPos.y, dzP = _position.z - _predPos.z;
                 const dSqP = dxP*dxP + dyP*dyP + dzP*dzP;
-                if (dSqP < 2500) { 
-                    _acceleration.add(_scratchV1.set(dxP, dyP, dzP).normalize().multiplyScalar(0.2));
-                    // EATEN logic
+                if (dSqP < 3000) { 
+                    _acceleration.add(_scratchV1.set(dxP, dyP, dzP).normalize().multiplyScalar(0.3));
                     if (dSqP < EAT_RADIUS_SQ) {
                         _position.set((Math.random()-0.5)*300, (Math.random()-0.5)*300, 20+Math.random()*100);
                         _velocity.set((Math.random()-0.5), (Math.random()-0.5), 1).normalize().multiplyScalar(SPEED_LIMIT);
+                    }
+                }
+
+                // SCREEN BOUNDS AVOIDANCE (Clipping Fix)
+                if (uiRect) {
+                    const ts = _position.clone().project(camera);
+                    const tx = (ts.x + 1) * window.innerWidth * 0.5;
+                    const ty = (-ts.y + 1) * window.innerHeight * 0.5;
+                    if (tx > uiRect.left - 50 && tx < uiRect.right + 50 && ty > uiRect.top - 50 && ty < uiRect.bottom + 50) {
+                        _acceleration.add(_scratchV1.set(_position.x, _position.y, 0).normalize().multiplyScalar(-0.25));
                     }
                 }
 
@@ -578,12 +585,9 @@
                     _acceleration.add(_scratchV1);
                 }
                 
-                // Smoother Personality: slower wander
-                _scratchV1.set(
-                    Math.sin(_position.y*0.01 + t*0.3 + i*0.1) * 0.008, 
-                    Math.cos(_position.x*0.01 + t*0.2 + i*0.2) * 0.008, 
-                    Math.sin((_position.x+_position.y)*0.005 + t*0.1 + i*0.3) * 0.006
-                );
+                // SMOOTH personality wander
+                const wOff = t * 0.4 + i * 0.1;
+                _scratchV1.set(Math.sin(wOff) * 0.008, Math.cos(wOff * 0.7) * 0.008, Math.sin(wOff * 0.3) * 0.005);
                 _acceleration.add(_scratchV1);
                 _acceleration.clampLength(0, 0.1);
                 
@@ -609,7 +613,6 @@
             for (let i = 0; i < boidCount; i++) {
                 const bIdx = i * 3;
                 const tOff = i * TRAIL_LENGTH * 3;
-                // PERFORMANCE: Use fast copyWithin instead of manual shifting
                 h.copyWithin(tOff + 3, tOff, tOff + (TRAIL_LENGTH - 1) * 3);
                 h[tOff] = positions[bIdx]; h[tOff+1] = positions[bIdx+1]; h[tOff+2] = positions[bIdx+2];
             }
@@ -627,14 +630,12 @@
         const tIdx = predTargetIdx * 3;
         const predict = _lookAt.set(positions[tIdx] + velocities[tIdx] * PREDATOR_PREDICT_T, positions[tIdx+1] + velocities[tIdx+1] * PREDATOR_PREDICT_T, positions[tIdx+2] + velocities[tIdx+2] * PREDATOR_PREDICT_T);
         
-        // Safety check for predator steer
         _diff.copy(predict).sub(_predPos);
         if (_diff.lengthSq() > 0.001) {
             const steer = _scratchV1.copy(_diff).setLength(PREDATOR_SPEED).sub(_predVel).clampLength(0, PREDATOR_MAX_STEER);
             _predVel.add(steer).clampLength(PREDATOR_MIN_SPEED, PREDATOR_SPEED);
         }
 
-        // Predator boundaries
         const pTurn = 0.08;
         if (_predPos.x < -BOUNDARY_SIZE) _predVel.x += pTurn;
         if (_predPos.x > BOUNDARY_SIZE) _predVel.x -= pTurn;
