@@ -473,8 +473,8 @@
         else { recruitmentLevel = Math.max(0, recruitmentLevel - 0.008); }
 
         // Update UI Rect dynamically for drag tracking
-        if (isTerminal && recruitmentLevel > 0) {
-            uiRect = mainElement?.getBoundingClientRect() || null;
+        if (recruitmentLevel > 0) {
+            uiRect = document.getElementById('boid-target')?.getBoundingClientRect() || null;
         }
 
         // PERFORMANCE: Build Spatial Grid (Allocation-Free)
@@ -509,14 +509,16 @@
 
             if (isObserver && uiRect) {
                 const angle = (i * 137.5) * (Math.PI / 180); 
-                // Adjusted margin to be exactly a "centimeter" outside
-                const ring = (i % 5); const margin = 50 + ring * 40; 
+                // Increased margin significantly to stay "a centimeter outside"
+                // Terminal width is ~900px, margin ensures they are clear of the edges
+                const ring = (i % 5); const margin = 120 + ring * 60; 
                 let tsx = (uiRect.left + uiRect.right) * 0.5 + Math.cos(angle) * (uiRect.width * 0.5 + margin);
                 let tsy = (uiRect.top + uiRect.bottom) * 0.5 + Math.sin(angle) * (uiRect.height * 0.5 + margin);
                 
+                // Positioned closer to camera to emphasize the "scrutiny" but outside the UI rect
                 _diff.set((tsx / window.innerWidth) * 2 - 1, -(tsy / window.innerHeight) * 2 + 1, 0.2).unproject(camera);
                 
-                _position.lerp(_diff, 0.03); _velocity.set(0, 0, 0); 
+                _position.lerp(_diff, 0.05); _velocity.set(0, 0, 0); 
                 _lookAt.set(((uiRect.left + uiRect.right)*0.5/window.innerWidth)*2-1, -((uiRect.top + uiRect.bottom)*0.5/window.innerHeight)*2+1, 0.5).unproject(camera);
                 _dummy.position.copy(_position); _dummy.lookAt(_lookAt);
                 

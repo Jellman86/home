@@ -95,6 +95,7 @@
 
     <!-- Draggable Container -->
     <div 
+        id="boid-target"
         class="relative w-full max-w-5xl border {colors.border} {colors.bg} backdrop-blur-md pointer-events-auto transition-all duration-300"
         style="
             transform: translate({position.x}px, {position.y}px); 
