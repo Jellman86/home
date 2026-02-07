@@ -239,22 +239,22 @@
     const TARGET_SPEED = 0.83;
     const SPEED_FORCE = 0.025;
     const PREDATOR_RADIUS = 55;
-    const PREDATOR_SPEED = 1.08; 
-    const PREDATOR_MIN_SPEED = 0.9;
-    const PREDATOR_MAX_STEER = 0.04;
-    const PREDATOR_PREDICT_T = 18;
+    const PREDATOR_SPEED = 1.35; 
+    const PREDATOR_MIN_SPEED = 1.0;
+    const PREDATOR_MAX_STEER = 0.12;
+    const PREDATOR_PREDICT_T = 8;
     
     let SPEED_LIMIT = $derived(0.8);
-    let VISUAL_RANGE = $derived(45); 
-    let PROTECTED_RANGE = $derived(10);
-    let SEPARATION_WEIGHT = $derived(3.5); 
-    let ALIGNMENT_WEIGHT = $derived(2.0); 
-    let COHESION_WEIGHT = $derived(2.0); 
-    const MOUSE_REPULSION_WEIGHT = 15.0;
+    let VISUAL_RANGE = $derived(36); 
+    let PROTECTED_RANGE = $derived(9);
+    let SEPARATION_WEIGHT = $derived(2.3); 
+    let ALIGNMENT_WEIGHT = $derived(4.5); 
+    let COHESION_WEIGHT = $derived(0.9); 
+    const MOUSE_REPULSION_WEIGHT = 10.0;
 
-    const VISUAL_RANGE_SQ = 45 * 45;
-    const PROTECTED_RANGE_SQ = 10 * 10;
-    const MOUSE_REPULSION_SQ = 5000;
+    const VISUAL_RANGE_SQ = 36 * 36;
+    const PROTECTED_RANGE_SQ = 9 * 9;
+    const MOUSE_REPULSION_SQ = 4000;
 
     const bgVertexShader = `
         varying vec2 vUv;
@@ -503,20 +503,10 @@
             }
         }
 
-        const maxObs = boidCount * 0.20;
-        const intFactor = recruitmentLevel * (interactionActive ? Math.pow(Math.max(0, 1 - (timeSinceInteraction / 60000)), 0.5) : 0);
-        _baseCol.set(color);
-
-        const mArray = mesh.instanceMatrix.array;
-        const cArray = mesh.instanceColor!.array;
-
         for (let i = 0; i < boidCount; i++) {
             const idx = i * 3;
-            const px = positions[idx], py = positions[idx + 1], pz = positions[idx + 2];
-            const vx = velocities[idx], vy = velocities[idx + 1], vz = velocities[idx + 2];
-            
-            _position.set(px, py, pz);
-            _velocity.set(vx, vy, vz);
+            _position.set(positions[idx], positions[idx + 1], positions[idx + 2]);
+            _velocity.set(velocities[idx], velocities[idx + 1], velocities[idx + 2]);
             _acceleration.set(0, 0, 0);
 
             const isObserver = intFactor > 0.02 && (i < maxObs * intFactor);
@@ -547,91 +537,62 @@
                 _tempColor.copy(_baseCol);
                 if (recruitmentLevel > 0.2) _tempColor.lerp(_whiteCol, Math.min((recruitmentLevel-0.2)*1.5, 0.95));
                 _tempColor.multiplyScalar(pulse);
-                
-                const cIdx = i * 3;
-                cArray[cIdx] = _tempColor.r; cArray[cIdx+1] = _tempColor.g; cArray[cIdx+2] = _tempColor.b;
+                mesh.setColorAt(i, _tempColor);
                 
                 const sVar = 0.3 + (Math.sin(i * 0.7) * 0.15); 
                 _dummy.scale.set(sVar, sVar, sVar);
             } else {
-                let aliX = 0, aliY = 0, aliZ = 0;
-                let cohX = 0, cohY = 0, cohZ = 0;
-                let sepX = 0, sepY = 0, sepZ = 0;
+                _alignF.set(0, 0, 0); _cohF.set(0, 0, 0); _sepF.set(0, 0, 0);
                 let aC = 0, cC = 0, sC = 0;
 
-                // Restore O(N^2) for superior behavior quality
                 for (let j = 0; j < boidCount; j++) {
                     if (i === j) continue;
                     const oIdx = j * 3;
                     const opx = positions[oIdx], opy = positions[oIdx+1], opz = positions[oIdx+2];
-                    const dx = px - opx, dy = py - opy, dz = pz - opz;
+                    const dx = _position.x - opx, dy = _position.y - opy, dz = _position.z - opz;
                     const dSq = dx*dx+dy*dy+dz*dz;
                     
-                    if (dSq < PROTECTED_RANGE_SQ && dSq > 0.01) {
-                        sepX += dx; sepY += dy; sepZ += dz;
-                        sC++;
-                    } else if (dSq < VISUAL_RANGE_SQ) {
-                        cohX += opx; cohY += opy; cohZ += opz;
-                        aliX += velocities[oIdx]; aliY += velocities[oIdx+1]; aliZ += velocities[oIdx+2];
-                        aC++;
-                        cC++;
+                    if (dSq < PROTECTED_RANGE_SQ && dSq > 0.01) { _sepF.x += dx; _sepF.y += dy; _sepF.z += dz; sC++; }
+                    if (dSq < VISUAL_RANGE_SQ && dSq > 0.01) {
+                        _cohF.x += opx; _cohF.y += opy; _cohF.z += opz; cC++;
+                        _alignF.x += velocities[oIdx]; _alignF.y += velocities[oIdx+1]; _alignF.z += velocities[oIdx+2]; aC++;
                     }
                 }
 
-                if (sC > 0) {
-                    _scratchV1.set(sepX, sepY, sepZ).normalize().multiplyScalar(SEPARATION_WEIGHT * 0.15);
-                    _acceleration.add(_scratchV1);
-                }
-                if (cC > 0) {
-                    _scratchV1.set(cohX/cC - px, cohY/cC - py, cohZ/cC - pz).normalize().multiplyScalar(COHESION_WEIGHT * 0.015);
-                    _acceleration.add(_scratchV1);
-                }
-                if (aC > 0) {
-                    _scratchV1.set(aliX/aC - vx, aliY/aC - vy, aliZ/aC - vz).normalize().multiplyScalar(ALIGNMENT_WEIGHT * 0.05);
-                    _acceleration.add(_scratchV1);
-                }
+                if (sC > 0) _acceleration.add(_sepF.normalize().multiplyScalar(SEPARATION_WEIGHT * 0.12));
+                if (cC > 0) _acceleration.add(_cohF.divideScalar(cC).sub(_position).normalize().multiplyScalar(COHESION_WEIGHT * 0.01));
+                if (aC > 0) _acceleration.add(_alignF.divideScalar(aC).normalize().sub(_velocity).multiplyScalar(ALIGNMENT_WEIGHT * 0.06));
 
                 // Stay within boundaries
-                const turn = 0.06;
-                if (px < -BOUNDARY_SIZE) _acceleration.x += turn;
-                if (px > BOUNDARY_SIZE) _acceleration.x -= turn;
-                if (py < -BOUNDARY_SIZE) _acceleration.y += turn;
-                if (py > BOUNDARY_SIZE) _acceleration.y -= turn;
-                if (pz < 20) _acceleration.z += turn;
-                if (pz > BOUNDARY_SIZE + 20) _acceleration.z -= turn;
+                const turn = 0.05;
+                if (_position.x < -BOUNDARY_SIZE) _acceleration.x += turn;
+                if (_position.x > BOUNDARY_SIZE) _acceleration.x -= turn;
+                if (_position.y < -BOUNDARY_SIZE) _acceleration.y += turn;
+                if (_position.y > BOUNDARY_SIZE) _acceleration.y -= turn;
+                if (_position.z < 20) _acceleration.z += turn;
+                if (_position.z > BOUNDARY_SIZE + 20) _acceleration.z -= turn;
 
-                const dxT = px - target.x, dyT = py - target.y, dzT = pz - target.z;
+                const dxT = _position.x - target.x, dyT = _position.y - target.y, dzT = _position.z - target.z;
                 const dSqToTarget = dxT*dxT + dyT*dyT + dzT*dzT;
                 if (dSqToTarget < MOUSE_REPULSION_SQ) {
-                    _scratchV1.set(dxT, dyT, dzT).normalize().multiplyScalar(MOUSE_REPULSION_WEIGHT * 0.05);
+                    _scratchV1.set(dxT, dyT, dzT).normalize().multiplyScalar(MOUSE_REPULSION_WEIGHT * 0.035);
                     _acceleration.add(_scratchV1);
                 }
                 
-                // Stronger unique wander force
-                _scratchV1.set(
-                    Math.sin(py*0.015 + t*0.6 + i*0.1) * 0.015, 
-                    Math.cos(px*0.012 + t*0.5 + i*0.2) * 0.015, 
-                    Math.sin((px+py)*0.01 + t*0.4 + i*0.3) * 0.015
-                );
+                _scratchV1.set(Math.sin(_position.y*0.015+t*0.6)*0.008, Math.cos(_position.x*0.012+t*0.5)*0.008, Math.sin((_position.x+_position.y)*0.01+t*0.4)*0.006);
                 _acceleration.add(_scratchV1);
-                _acceleration.clampLength(0, 0.08);
-                
-                const myMaxSpeed = maxSpeeds[i];
-                _velocity.add(_acceleration).clampLength(0.05, myMaxSpeed);
+                _acceleration.clampLength(0, 0.05);
+                _velocity.add(_acceleration).clampLength(0.05, SPEED_LIMIT * 0.8);
                 _position.add(_velocity);
                 _dummy.position.copy(_position);
                 if (_velocity.lengthSq() > 0.0001) _dummy.lookAt(_lookAt.copy(_position).add(_velocity));
                 _dummy.scale.set(scales[i], scales[i], scales[i]);
-                
-                const cIdx = i * 3;
                 _tempColor.copy(_baseCol).multiplyScalar(0.7 + (scales[i]-0.7)*0.5);
-                cArray[cIdx] = _tempColor.r; cArray[cIdx+1] = _tempColor.g; cArray[cIdx+2] = _tempColor.b;
+                mesh.setColorAt(i, _tempColor);
             }
             positions[idx] = _position.x; positions[idx+1] = _position.y; positions[idx+2] = _position.z;
             velocities[idx] = _velocity.x; velocities[idx+1] = _velocity.y; velocities[idx+2] = _velocity.z;
-            _dummy.updateMatrix();
-            const mIdx = i * 16;
-            for (let m = 0; m < 16; m++) mArray[mIdx + m] = _dummy.matrix.elements[m];
+            _dummy.updateMatrix(); mesh.setMatrixAt(i, _dummy.matrix);
         }
         mesh.instanceColor!.needsUpdate = true;
         mesh.instanceMatrix.needsUpdate = true;
