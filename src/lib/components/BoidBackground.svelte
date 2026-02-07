@@ -176,27 +176,27 @@
     const _cohF = new THREE.Vector3();
     const _sepF = new THREE.Vector3();
 
-    // BOID PARAMETERS - FINAL REFINEMENT
+    // BOID PARAMETERS - FINAL MASTER REFINEMENT
     const BOUNDARY_SIZE = 120;
-    const TARGET_SPEED = 2.0;
-    const SPEED_FORCE = 0.08;
-    const PREDATOR_SPEED = 3.2; 
-    const PREDATOR_MIN_SPEED = 1.8;
-    const PREDATOR_MAX_STEER = 0.4;
-    const PREDATOR_PREDICT_T = 3;
-    const EAT_RADIUS_SQ = 100; 
+    const TARGET_SPEED = 2.2;
+    const SPEED_FORCE = 0.1;
+    const PREDATOR_SPEED = 3.5; 
+    const PREDATOR_MIN_SPEED = 2.0;
+    const PREDATOR_MAX_STEER = 0.5;
+    const PREDATOR_PREDICT_T = 2;
+    const EAT_RADIUS_SQ = 144; // Large kill zone
     
-    let SPEED_LIMIT = $derived(2.8);
+    let SPEED_LIMIT = $derived(3.0);
     let VISUAL_RANGE = $derived(50); 
-    let PROTECTED_RANGE = $derived(18);
-    let SEPARATION_WEIGHT = $derived(7.0); 
+    let PROTECTED_RANGE = $derived(20);
+    let SEPARATION_WEIGHT = $derived(8.0); 
     let ALIGNMENT_WEIGHT = $derived(2.0); 
-    let COHESION_WEIGHT = $derived(4.5); 
-    const MOUSE_REPULSION_WEIGHT = 18.0;
+    let COHESION_WEIGHT = $derived(5.0); 
+    const MOUSE_REPULSION_WEIGHT = 20.0;
 
     const VISUAL_RANGE_SQ = 50 * 50;
-    const PROTECTED_RANGE_SQ = 18 * 18;
-    const MOUSE_REPULSION_SQ = 7000;
+    const PROTECTED_RANGE_SQ = 20 * 20;
+    const MOUSE_REPULSION_SQ = 8000;
 
     const bgVertexShader = `
         varying vec2 vUv;
@@ -258,7 +258,7 @@
         bgMesh.renderOrder = -1;
         if (useSkybox) scene.add(bgMesh);
 
-        const birdGeo = new THREE.ConeGeometry(0.8, 3.5, 4);
+        const birdGeo = new THREE.ConeGeometry(1.0, 4.0, 4); // Robust size
         birdGeo.rotateX(Math.PI / 2);
         birdGeo.computeVertexNormals();
         
@@ -272,7 +272,7 @@
         mesh.geometry.setAttribute('instanceColor', mesh.instanceColor); 
         scene.add(mesh);
 
-        const predatorGeo = new THREE.ConeGeometry(4.5, 15.0, 6);
+        const predatorGeo = new THREE.ConeGeometry(5.0, 18.0, 6);
         predatorGeo.rotateX(Math.PI / 2);
         predatorGeo.computeVertexNormals();
         const predatorMat = new THREE.MeshLambertMaterial({ color: 0xffffff, emissive: 0xffffff, emissiveIntensity: 1.0 });
@@ -291,8 +291,8 @@
             _velocity.set((Math.random()-0.5), (Math.random()-0.5), 1).normalize().multiplyScalar(SPEED_LIMIT);
             positions[i*3]=_position.x; positions[i*3+1]=_position.y; positions[i*3+2]=_position.z;
             velocities[i*3]=_velocity.x; velocities[i*3+1]=_velocity.y; velocities[i*3+2]=_velocity.z;
-            scales[i] = 0.8 + Math.random() * 0.6;
-            maxSpeeds[i] = SPEED_LIMIT * (0.8 + Math.random() * 0.4);
+            scales[i] = 0.8 + Math.random() * 0.8;
+            maxSpeeds[i] = SPEED_LIMIT * (0.8 + Math.random() * 0.5);
             mesh.setColorAt(i, new THREE.Color(color).multiplyScalar(0.8));
             _dummy.position.copy(_position);
             _dummy.scale.set(scales[i], scales[i], scales[i]);
@@ -437,28 +437,38 @@
             const isObserver = intFactor > 0.02 && (i < maxObs * intFactor);
 
             if (isObserver && uiRect) {
+                // RECTANGULAR PERIMETER DISTRIBUTION (SOLID PLAN)
                 const perimeter = 2 * (uiRect.width + uiRect.height);
-                const step = perimeter / Math.min(boidCount * 0.2, 50);
+                const step = perimeter / Math.min(boidCount * 0.2, 60);
                 let dist = (i * step) % perimeter;
-                const gap = 150 + (i % 3) * 50; 
+                
+                // Gap is fixed and large to ensure no clipping
+                const gap = 180 + (i % 3) * 60; 
 
                 let tx = 0, ty = 0;
-                if (dist < uiRect.width) { tx = uiRect.left + dist; ty = uiRect.top - gap; }
-                else {
+                if (dist < uiRect.width) { // TOP
+                    tx = uiRect.left + dist; ty = uiRect.top - gap; 
+                } else {
                     dist -= uiRect.width;
-                    if (dist < uiRect.height) { tx = uiRect.right + gap; ty = uiRect.top + dist; }
-                    else {
+                    if (dist < uiRect.height) { // RIGHT
+                        tx = uiRect.right + gap; ty = uiRect.top + dist; 
+                    } else {
                         dist -= uiRect.height;
-                        if (dist < uiRect.width) { tx = uiRect.right - dist; ty = uiRect.bottom + gap; }
-                        else { dist -= uiRect.width; tx = uiRect.left - gap; ty = uiRect.bottom - dist; }
+                        if (dist < uiRect.width) { // BOTTOM
+                            tx = uiRect.right - dist; ty = uiRect.bottom + gap; 
+                        } else { // LEFT
+                            dist -= uiRect.width; tx = uiRect.left - gap; ty = uiRect.bottom - dist; 
+                        }
                     }
                 }
 
-                const floatTime = t * 0.4 + i * 0.2;
-                tx += Math.sin(floatTime) * 15; ty += Math.cos(floatTime * 0.8) * 15;
+                // Smooth drift
+                const floatTime = t * 0.3 + i * 0.1;
+                tx += Math.sin(floatTime) * 12; ty += Math.cos(floatTime * 0.7) * 12;
 
-                _diff.set((tx / window.innerWidth) * 2 - 1, -(ty / window.innerHeight) * 2 + 1, 0.1).unproject(camera);
-                _position.lerp(_diff, 0.04); _velocity.set(0, 0, 0); 
+                // Safe depth 0.25 (clear of camera near plane 0.1)
+                _diff.set((tx / window.innerWidth) * 2 - 1, -(ty / window.innerHeight) * 2 + 1, 0.25).unproject(camera);
+                _position.lerp(_diff, 0.05); _velocity.set(0, 0, 0); 
                 
                 _lookAt.set(((uiRect.left + uiRect.right)*0.5/window.innerWidth)*2-1, -((uiRect.top + uiRect.bottom)*0.5/window.innerHeight)*2+1, 0.5).unproject(camera);
                 _dummy.position.copy(_position); _dummy.lookAt(_lookAt);
@@ -491,13 +501,15 @@
                 const dxP = _position.x - _predPos.x, dyP = _position.y - _predPos.y, dzP = _position.z - _predPos.z;
                 const dSqP = dxP*dxP + dyP*dyP + dzP*dzP;
                 if (dSqP < 3000) { 
-                    _newAccel.add(_scratchV1.set(dxP, dyP, dzP).normalize().multiplyScalar(0.6));
+                    _newAccel.add(_scratchV1.set(dxP, dyP, dzP).normalize().multiplyScalar(0.8));
                     if (dSqP < EAT_RADIUS_SQ) deathTimers[i] = 1.0; 
                 }
 
                 const wOff = t * 0.05 + i * 0.1;
                 _newAccel.add(_scratchV1.set(Math.sin(wOff) * 0.01, Math.cos(wOff * 0.8) * 0.01, Math.sin(wOff * 0.4) * 0.008));
-                _newAccel.clampLength(0, 0.2);
+                _newAccel.clampLength(0, 0.25);
+                
+                // Acceleration smoothing
                 _acceleration.lerp(_newAccel, 0.1);
                 
                 _velocity.add(_acceleration).clampLength(0.1, maxSpeeds[i]);
@@ -505,7 +517,7 @@
                 _dummy.position.copy(_position);
                 if (_velocity.lengthSq() > 0.0001) _dummy.lookAt(_lookAt.copy(_position).add(_velocity));
                 _dummy.scale.set(scales[i], scales[i], scales[i]);
-                _tempColor.copy(_baseCol).multiplyScalar(0.7 + (scales[i]-0.7)*0.5);
+                _tempColor.copy(_baseCol).multiplyScalar(0.7 + (scales[i]-0.8)*0.5);
                 mesh.setColorAt(i, _tempColor);
             }
             positions[idx] = _position.x; positions[idx+1] = _position.y; positions[idx+2] = _position.z;
