@@ -472,15 +472,16 @@
         const timeSinceInteraction = now - lastInteractionTime;
         const interactionActive = isTerminal && timeSinceInteraction < 60000;
         
-        // Recruitment Level: 100% slower (Halved rates)
+        // Recruitment Level: 100% slower
         if (isTerminal && timeSinceInteraction < 2000) {
-            recruitmentLevel = Math.min(1, recruitmentLevel + 0.00075); 
+            recruitmentLevel = Math.min(1, recruitmentLevel + 0.0006); 
         } else {
-            recruitmentLevel = Math.max(0, recruitmentLevel - 0.0003); 
+            recruitmentLevel = Math.max(0, recruitmentLevel - 0.00025); 
         }
 
-        // Final observer count factor
         const interactionFactor = recruitmentLevel * (interactionActive ? Math.pow(Math.max(0, 1 - (timeSinceInteraction / 60000)), 0.5) : 0);
+        
+        // Reactively update base color for the loop
         _baseCol.set(color);
 
         for (let i = 0; i < boidCount; i++) {
@@ -489,28 +490,37 @@
             _velocity.set(velocities[idx], velocities[idx + 1], velocities[idx + 2]);
             _acceleration.set(0, 0, 0);
 
-            // Determine if this boid is an observer
             const jitter = (Math.sin(i * 0.1) * 0.05);
             const isObserver = interactionFactor > 0.02 && (i / boidCount) < (interactionFactor + jitter);
 
             if (isObserver && uiRect) {
-                // --- STATIONARY 3D SURROUND LOGIC ---
+                // --- STATIONARY 3D SURROUND LOGIC (FOREGROUND) ---
                 const angle = (i * 137.5) * (Math.PI / 180); 
                 
-                // More spacing between birds
-                const ringDepth = (i % 5); // More layers for spacing
-                const margin = 80 + ringDepth * 55; 
+                // Significantly more spacing and closer to terminal
+                const ringDepth = (i % 8); 
+                const margin = 60 + ringDepth * 45; 
                 
                 let targetSX = (uiRect.left + uiRect.right) * 0.5 + Math.cos(angle) * (uiRect.width * 0.5 + margin);
                 let targetSY = (uiRect.top + uiRect.bottom) * 0.5 + Math.sin(angle) * (uiRect.height * 0.5 + margin);
 
-                // Avatar Avoidance: Right 45%
-                const isOverAvatar = targetSX > (uiRect.right - uiRect.width * 0.45);
-                let ndcZ = 0.92 + (Math.sin(i * 0.5) * 0.04);
+                // Precise Avatar Avoidance (Right side of terminal)
+                const avatarCenterX = uiRect.right - (uiRect.width * 0.22);
+                const avatarCenterY = uiRect.top + (uiRect.height * 0.4);
+                const distToAvatarCenter = Math.hypot(targetSX - avatarCenterX, targetSY - avatarCenterY);
                 
-                if (isOverAvatar) {
-                    ndcZ = 0.975; 
-                    targetSX += 60; 
+                // Move them significantly closer to the camera (ndcZ 0.1 to 0.4)
+                // This puts them in the foreground, between user and terminal
+                let ndcZ = 0.2 + (Math.sin(i * 0.3) * 0.15); 
+                
+                if (distToAvatarCenter < 180) {
+                    // Push boids away from avatar area in 3D
+                    ndcZ = 0.6; // Push deeper
+                    const pushDirX = (targetSX - avatarCenterX);
+                    const pushDirY = (targetSY - avatarCenterY);
+                    const pushLen = Math.hypot(pushDirX, pushDirY) || 1;
+                    targetSX += (pushDirX / pushLen) * 100;
+                    targetSY += (pushDirY / pushLen) * 100;
                 }
 
                 _diff.set(
@@ -519,10 +529,9 @@
                     ndcZ
                 ).unproject(camera);
 
-                _position.lerp(_diff, 0.04); // Slower, smoother stationing
+                _position.lerp(_diff, 0.03); 
                 _velocity.set(0, 0, 0); 
 
-                // Look specifically at the terminal area
                 const lookX = typingPoint ? typingPoint.x : (uiRect.left + uiRect.right) * 0.5;
                 const lookY = typingPoint ? typingPoint.y : (uiRect.top + uiRect.bottom) * 0.5;
                 _lookAt.set((lookX / window.innerWidth) * 2 - 1, -(lookY / window.innerHeight) * 2 + 1, 0.5).unproject(camera);
@@ -530,19 +539,20 @@
                 _dummy.position.copy(_position);
                 _dummy.lookAt(_lookAt);
                 
-                // --- Sentience Communication: Chromatic Charge ---
-                const observationPulse = 0.85 + Math.sin(t * (3.0 + recruitmentLevel * 4.0) + i * 0.2) * (0.05 + recruitmentLevel * 0.2);
+                // --- Sentience Communication: Intense Chromatic Charge ---
+                const observationPulse = 0.9 + Math.sin(t * (4.0 + recruitmentLevel * 5.0) + i * 0.5) * (0.1 + recruitmentLevel * 0.3);
                 
                 _tempColor.copy(_baseCol);
-                if (recruitmentLevel > 0.4) {
-                    const chargeFactor = (recruitmentLevel - 0.4) * 1.5;
-                    _tempColor.lerp(_whiteCol, Math.min(chargeFactor, 0.85));
+                if (recruitmentLevel > 0.2) {
+                    const chargeFactor = (recruitmentLevel - 0.2) * 1.8;
+                    // Dramatic shift to white to ensure it's visible
+                    _tempColor.lerp(_whiteCol, Math.min(chargeFactor, 0.95));
                 }
                 
                 _tempColor.multiplyScalar(observationPulse);
                 mesh.setColorAt(i, _tempColor);
                 
-                const speciesVar = 0.3 + (Math.sin(i * 0.7) * 0.15); 
+                const speciesVar = 0.25 + (Math.sin(i * 0.7) * 0.15); 
                 const scale = (scales ? scales[i] : 1) * speciesVar;
                 _dummy.scale.set(scale, scale, scale);
             } else {
