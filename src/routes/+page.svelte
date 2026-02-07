@@ -137,6 +137,7 @@
             {isTerminal}
             {lastInteractionTime}
             {typingPoint}
+            {gitHash}
         />
     {/key}
 

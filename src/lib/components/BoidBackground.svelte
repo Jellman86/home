@@ -14,6 +14,7 @@
         isTerminal?: boolean;
         lastInteractionTime?: number;
         typingPoint?: {x: number, y: number} | null;
+        gitHash?: string;
     }
 
     let { 
@@ -27,7 +28,8 @@
         fps = $bindable(0),
         isTerminal = false,
         lastInteractionTime = 0,
-        typingPoint = null
+        typingPoint = null,
+        gitHash = 'unknown'
     }: Props = $props();
 
     let debugMode = $state(false);
@@ -35,7 +37,7 @@
     export function getDiagnosticsData(): string {
         const data: any = {
             timestamp: new Date().toISOString(),
-            buildHash: typeof __GIT_HASH__ !== 'undefined' ? __GIT_HASH__ : 'unknown',
+            buildHash: gitHash,
             userAgent: navigator.userAgent,
             performance: {
                 fps,
@@ -239,22 +241,22 @@
     const TARGET_SPEED = 0.83;
     const SPEED_FORCE = 0.025;
     const PREDATOR_RADIUS = 55;
-    const PREDATOR_SPEED = 1.5; 
-    const PREDATOR_MIN_SPEED = 1.0;
-    const PREDATOR_MAX_STEER = 0.15;
-    const PREDATOR_PREDICT_T = 6;
+    const PREDATOR_SPEED = 1.6; 
+    const PREDATOR_MIN_SPEED = 1.1;
+    const PREDATOR_MAX_STEER = 0.18;
+    const PREDATOR_PREDICT_T = 5;
     
     let SPEED_LIMIT = $derived(0.8);
-    let VISUAL_RANGE = $derived(36); 
-    let PROTECTED_RANGE = $derived(10);
-    let SEPARATION_WEIGHT = $derived(3.0); 
-    let ALIGNMENT_WEIGHT = $derived(3.5); 
-    let COHESION_WEIGHT = $derived(1.2); 
-    const MOUSE_REPULSION_WEIGHT = 10.0;
+    let VISUAL_RANGE = $derived(45); 
+    let PROTECTED_RANGE = $derived(12);
+    let SEPARATION_WEIGHT = $derived(4.5); // High priority: maintain personal space
+    let ALIGNMENT_WEIGHT = $derived(1.5); // Low priority: don't move in lockstep
+    let COHESION_WEIGHT = $derived(2.5); // Moderate priority: stay together in groups
+    const MOUSE_REPULSION_WEIGHT = 12.0;
 
-    const VISUAL_RANGE_SQ = 36 * 36;
-    const PROTECTED_RANGE_SQ = 10 * 10;
-    const MOUSE_REPULSION_SQ = 4500;
+    const VISUAL_RANGE_SQ = 45 * 45;
+    const PROTECTED_RANGE_SQ = 12 * 12;
+    const MOUSE_REPULSION_SQ = 5000;
 
     const bgVertexShader = `
         varying vec2 vUv;
