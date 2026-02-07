@@ -236,21 +236,28 @@
         // BOIDS
         const birdGeo = new THREE.ConeGeometry(0.6, 2.5, 4);
         birdGeo.rotateX(Math.PI / 2);
-        birdGeo.computeVertexNormals();
+        birdGeo.computeVertexNormals(); // Ensure normals are ready for lighting
+        
         const material = new THREE.MeshPhongMaterial({ 
-            color: 0xffffff, transparent: true, opacity: 0.95, vertexColors: true, shininess: 50
+            color: 0xffffff, 
+            transparent: true, 
+            opacity: 0.95, 
+            vertexColors: true, 
+            shininess: 50,
+            emissive: 0x000000
         });
         mesh = new THREE.InstancedMesh(birdGeo, material, boidCount);
         mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
         mesh.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(boidCount * 3), 3);
         mesh.instanceColor.setUsage(THREE.DynamicDrawUsage);
-        mesh.geometry.setAttribute('instanceColor', mesh.instanceColor);
+        mesh.geometry.setAttribute('instanceColor', mesh.instanceColor); // Critical bind
         scene.add(mesh);
 
         // PREDATOR
         const predatorGeo = new THREE.ConeGeometry(2.2, 7.5, 6);
         predatorGeo.rotateX(Math.PI / 2);
-        const predatorMat = new THREE.MeshPhongMaterial({ color: 0xffffff, shininess: 80 });
+        predatorGeo.computeVertexNormals();
+        const predatorMat = new THREE.MeshPhongMaterial({ color: 0x000000, shininess: 80, emissive: 0xffffff });
         predator = new THREE.Mesh(predatorGeo, predatorMat);
         predator.visible = false;
         scene.add(predator);
@@ -259,15 +266,18 @@
         positions = new Float32Array(boidCount * 3);
         velocities = new Float32Array(boidCount * 3);
         scales = new Float32Array(boidCount);
-        const baseColor = new THREE.Color(color).convertSRGBToLinear();
+        const baseColor = new THREE.Color(color);
         for (let i = 0; i < boidCount; i++) {
             _position.set((Math.random()-0.5)*200, (Math.random()-0.5)*200, 20+Math.random()*100);
             _velocity.set((Math.random()-0.5), (Math.random()-0.5), 1).normalize().multiplyScalar(SPEED_LIMIT*2);
             positions[i*3]=_position.x; positions[i*3+1]=_position.y; positions[i*3+2]=_position.z;
             velocities[i*3]=_velocity.x; velocities[i*3+1]=_velocity.y; velocities[i*3+2]=_velocity.z;
             scales[i] = 0.75 + Math.random() * 0.55;
+            
+            // Initial boids use slightly dimmed theme color
             _tempColor.copy(baseColor).multiplyScalar(0.8);
             mesh.setColorAt(i, _tempColor);
+            
             _dummy.position.copy(_position);
             _dummy.scale.set(scales[i], scales[i], scales[i]);
             _dummy.updateMatrix();
@@ -306,11 +316,11 @@
     $effect(() => {
         if (!mesh) return;
         const mat = mesh.material as THREE.MeshPhongMaterial;
-        mat.color.set(0xffffff);
+        mat.color.set(0x000000); // Base black so emissive/vertex dominates
         mat.wireframe = wireframe;
         mat.shininess = isTerminal ? 100 : 30;
-        mat.emissive.set(color).convertSRGBToLinear();
-        mat.emissiveIntensity = isTerminal ? 0.28 : 0.18;
+        mat.emissive.set(color); // sRGB is fine here as it's converted by mat
+        mat.emissiveIntensity = isTerminal ? 0.4 : 0.2;
         
         if (ambientLight) ambientLight.intensity = isTerminal ? 0.6 : 0.8;
         if (pointLight) pointLight.intensity = isTerminal ? 4.0 : 1.5;
@@ -320,7 +330,13 @@
         else { if (bgMesh && scene.children.includes(bgMesh)) scene.remove(bgMesh); }
 
         if (trails) { (trails.material as THREE.LineBasicMaterial).color.set(color); trails.visible = showTrails; }
-        if (predator) { (predator.material as THREE.MeshPhongMaterial).color.set(predatorColor); predator.visible = true; }
+        if (predator) { 
+            const pMat = predator.material as THREE.MeshPhongMaterial;
+            pMat.color.set(0x000000);
+            pMat.emissive.set(predatorColor);
+            pMat.emissiveIntensity = 1.0;
+            predator.visible = true; 
+        }
         if (predTrailLine) { (predTrailLine.material as THREE.LineBasicMaterial).color.set(predatorColor); predTrailLine.visible = showTrails; }
     });
 
@@ -345,7 +361,7 @@
 
         if (pointLight) {
             if (isTerminal && typingPoint) {
-                _diff.set((typingPoint.x/window.innerWidth)*2-1, -(typingPoint.y/window.innerHeight)*2+1, 0.9).unproject(camera);
+                _diff.set((typingPoint.x/window.innerWidth)*2-1, -(typingPoint.y/window.innerHeight)*2+1, 0.5).unproject(camera);
                 pointLight.position.lerp(_diff, 0.1);
             } else { pointLight.position.set(mouse.x*100, mouse.y*100, 120); }
         }
@@ -361,7 +377,7 @@
 
         const maxObs = boidCount * 0.20;
         const intFactor = recruitmentLevel * (interactionActive ? Math.pow(Math.max(0, 1 - (timeSinceInteraction / 60000)), 0.5) : 0);
-        _baseCol.set(color).convertSRGBToLinear();
+        _baseCol.set(color);
 
         for (let i = 0; i < boidCount; i++) {
             const idx = i * 3;
@@ -376,8 +392,11 @@
                 const ring = (i % 6); const margin = 120 + ring * 70; 
                 let tsx = (uiRect.left + uiRect.right) * 0.5 + Math.cos(angle) * (uiRect.width * 0.5 + margin);
                 let tsy = (uiRect.top + uiRect.bottom) * 0.5 + Math.sin(angle) * (uiRect.height * 0.5 + margin);
-                let ndcZ = 0.88 + (ring * 0.015); 
-                if (tsx > (uiRect.right - uiRect.width * 0.45)) { ndcZ = 0.96; tsx += 100; }
+                
+                // Bring closer to camera (ndcZ 0.5)
+                let ndcZ = 0.5 + (ring * 0.015); 
+                if (tsx > (uiRect.right - uiRect.width * 0.45)) { ndcZ = 0.6; tsx += 100; }
+                
                 _diff.set((tsx / window.innerWidth) * 2 - 1, -(tsy / window.innerHeight) * 2 + 1, ndcZ).unproject(camera);
                 _position.lerp(_diff, 0.03); _velocity.set(0, 0, 0); 
                 _lookAt.set(((uiRect.left + uiRect.right)*0.5/window.innerWidth)*2-1, -((uiRect.top + uiRect.bottom)*0.5/window.innerHeight)*2+1, 0.5).unproject(camera);
@@ -388,7 +407,7 @@
                 _tempColor.multiplyScalar(pulse);
                 mesh.setColorAt(i, _tempColor);
                 const sVar = 0.3 + (Math.sin(i * 0.7) * 0.15); 
-                const dScale = 1.0 - (ndcZ - 0.88) * 4.0; 
+                const dScale = 1.0 - (ndcZ - 0.5) * 2.0; 
                 _dummy.scale.set(sVar * dScale, sVar * dScale, sVar * dScale);
             } else {
                 let alignF = new THREE.Vector3(), cohF = new THREE.Vector3(), sepF = new THREE.Vector3();
