@@ -18,9 +18,10 @@ The site is built as a **SvelteKit** single-page application (SPA) optimized for
 ### 1. The Background Layer (`BoidBackground.svelte`)
 This is the heavy lifter. It manages:
 - **WebGL Lifecycle**: Initializing the Scene, Camera, and Renderer.
+- **Lighting System**: Uses a global `AmbientLight` for base visibility and a dynamic `PointLight` that acts as a "sentience flashlight," tracking the typing cursor or mouse.
 - **Simulation Loop**: Running the Boid flocking and Predator pursuit algorithms.
 - **Interactivity**: Responding to mouse movement and "Interaction Points" from the foreground.
-- **Optimization**: Uses `InstancedMesh` to render 400-800 boids in a single draw call.
+- **Optimization**: Uses `InstancedMesh` with `MeshPhongMaterial` to render 300-800 boids with 3D shading and specular highlights in a single draw call.
 
 ### 2. The Theme System
 Located in `src/lib/components/themes/`, these components define the "personality" of the site:
@@ -67,6 +68,7 @@ When the user types, boids transition from the "Flock" state to the "Observer" s
     - Finally, they are `unprojected` using the camera to find their absolute 3D position in the WebGL scene.
 - **3D Depth Layering**: Observers are assigned to 6 distinct depth planes (`ndcZ`), creating a voluminous surrounding effect rather than a flat ring.
 - **Gaze Focus**: Once stationary, boids use `Object3D.lookAt` to point their "heads" (the tip of the cone geometry) at the precise 3D point corresponding to the user's typing cursor.
+- **Sentience Flashlight**: A `PointLight` is dynamically positioned at the `typingPoint`. This ensures that as boids loom around the terminal, they are physically illuminated by the "energy" of the user's input, enhancing the sense of scrutiny.
 
 ## ⚠️ Things to Avoid
 
