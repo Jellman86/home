@@ -41,7 +41,7 @@
             performance: { fps },
             boidCount,
             recruitmentLevel,
-            cameraZ: camera?.position.z
+            cameraZ: 180
         }, null, 2);
     }
 
@@ -63,7 +63,6 @@
     let trails: THREE.LineSegments;
     let predTrailLine: THREE.Line;
     let frameId: number;
-    let debugMaterial: THREE.MeshNormalMaterial | null = null;
 
     let bgMesh: THREE.Mesh;
     let ambientLight: THREE.AmbientLight;
@@ -204,11 +203,9 @@
         if (trails) (trails.material as THREE.LineBasicMaterial).color.set(color);
     });
 
-    let frameStartTime = 0;
-    let lastFrameTime = 0;
     let avgFrameTime = 0;
     function animate() {
-        frameStartTime = performance.now(); frameId = requestAnimationFrame(animate);
+        const frameStartTime = performance.now(); frameId = requestAnimationFrame(animate);
         const now = performance.now(); frameCount++;
         if (now - lastTime >= 1000) { fps = frameCount; frameCount = 0; lastTime = now; }
         const t = now * 0.001;
@@ -236,7 +233,8 @@
 
         const maxObs = boidCount * 0.20;
         const intFactor = recruitmentLevel * (isTerminal && now - lastInteractionTime < 60000 ? 1 : 0);
-        _baseCol.set(color);
+        const baseCol = new THREE.Color(color);
+        const whiteCol = new THREE.Color(0xffffff);
 
         for (let i = 0; i < boidCount; i++) {
             const idx = i * 3;
@@ -250,7 +248,7 @@
                     _position.set((Math.random()-0.5)*350, (Math.random()-0.5)*350, 20+Math.random()*80);
                     _velocity.set((Math.random()-0.5), (Math.random()-0.5), 1).normalize().multiplyScalar(SPEED_LIMIT);
                 }
-                _tempColor.set(0xff0000).lerp(_whiteCol, Math.sin(t*15)*0.5+0.5);
+                _tempColor.set(0xff0000).lerp(whiteCol, Math.sin(t*15)*0.5+0.5);
                 mesh.setColorAt(i, _tempColor);
                 const s = scales[i] * Math.max(0, deathTimers[i]);
                 _dummy.position.copy(_position); _dummy.scale.set(s, s, s); _dummy.updateMatrix();
@@ -281,12 +279,12 @@
 
                 const vHAtDepth = 2 * Math.tan((75 * Math.PI/180)/2) * 100;
                 const vWAtDepth = vHAtDepth * (window.innerWidth / window.innerHeight);
-                _diff.set( ((tx/window.innerWidth)*2-1) * (vWAtDepth/2) + Math.sin(t*0.5+i)*10, (-(ty/window.innerHeight)*2+1) * (vHAtDepth/2) + Math.cos(t*0.4+i)*10, 100);
+                _diff.set( ((tx/window.innerWidth)*2-1) * (vWAtDepth/2) + Math.sin(t*0.5+i)*10, (-(ty/window.innerHeight)*2+1) * (vHAtDepth/2) + Math.cos(t*0.4+i)*10, 80);
                 
                 _position.lerp(_diff, 0.05); _velocity.set(0, 0, 0); 
                 _lookAt.set(((uiRect.left + uiRect.right)*0.5/window.innerWidth)*2-1, -((uiRect.top + uiRect.bottom)*0.5/window.innerHeight)*2+1, 0.5).unproject(camera);
                 _dummy.position.copy(_position); _dummy.lookAt(_lookAt);
-                mesh.setColorAt(i, _tempColor.copy(new THREE.Color(color)).multiplyScalar(1.0 + Math.sin(t*3+i)*0.1));
+                mesh.setColorAt(i, _tempColor.copy(baseCol).multiplyScalar(1.0 + Math.sin(t*3+i)*0.1));
                 _dummy.scale.set(scales[i], scales[i], scales[i]);
             } else {
                 _alignF.set(0, 0, 0); _cohF.set(0, 0, 0); _sepF.set(0, 0, 0);
@@ -315,22 +313,22 @@
                 }
 
                 _newAccel.add(_scratchV1.set(Math.sin(t*0.05+i)*0.01, Math.cos(t*0.08+i)*0.01, Math.sin(t*0.04+i)*0.008)).clampLength(0, 0.3);
-                _acceleration.lerp(_newAccel, 0.05); // Smooth glide
+                _acceleration.lerp(_newAccel, 0.05);
                 _velocity.add(_acceleration).clampLength(0.1, maxSpeeds[i]);
                 
                 if (_position.z < 20) _velocity.z += 0.3;
-                if (_position.z > 150) _velocity.z -= 0.6; // Physical barrier before camera
+                if (_position.z > 150) _velocity.z -= 0.6; 
 
                 _position.add(_velocity);
+                // HARD Z CLAMP
+                if (_position.z > 155) _position.z = 155;
+
                 _dummy.position.copy(_position);
                 if (_velocity.lengthSq() > 0.0001) _dummy.lookAt(_lookAt.copy(_position).add(_velocity));
                 _dummy.scale.set(scales[i], scales[i], scales[i]);
-                mesh.setColorAt(i, _tempColor.copy(new THREE.Color(color)).multiplyScalar(0.7 + (scales[i]-0.8)*0.5));
+                mesh.setColorAt(i, _tempColor.copy(baseCol).multiplyScalar(0.7 + (scales[i]-0.8)*0.5));
             }
-            // Final Safety Check
-            if (!Number.isFinite(_position.x) || !Number.isFinite(_velocity.x)) {
-                _position.set(0,0,50); _velocity.set(0,0,1);
-            }
+            if (!Number.isFinite(_position.x) || !Number.isFinite(_velocity.x)) { _position.set(0,0,50); _velocity.set(0,0,1); }
             positions[idx] = _position.x; positions[idx+1] = _position.y; positions[idx+2] = _position.z;
             velocities[idx] = _velocity.x; velocities[idx+1] = _velocity.y; velocities[idx+2] = _velocity.z;
             _dummy.updateMatrix(); mesh.setMatrixAt(i, _dummy.matrix);
@@ -350,8 +348,7 @@
         }
 
         if (predTargetIdx < 0 || now > predTargetUntil) { predTargetIdx = Math.floor(Math.random() * boidCount); predTargetUntil = now + 5000; }
-        const tIdx = predTargetIdx * 3;
-        const predict = _lookAt.set(positions[tIdx] + velocities[tIdx] * PREDATOR_PREDICT_T, positions[tIdx+1] + velocities[tIdx+1] * PREDATOR_PREDICT_T, positions[tIdx+2] + velocities[tIdx+2] * PREDATOR_PREDICT_T);
+        const predict = _lookAt.set(positions[predTargetIdx*3] + velocities[predTargetIdx*3] * PREDATOR_PREDICT_T, positions[predTargetIdx*3+1] + velocities[predTargetIdx*3+1] * PREDATOR_PREDICT_T, positions[predTargetIdx*3+2] + velocities[predTargetIdx*3+2] * PREDATOR_PREDICT_T);
         _diff.copy(predict).sub(_predPos);
         if (_diff.lengthSq() > 0.001) {
             const steer = _scratchV1.copy(_diff).setLength(PREDATOR_SPEED).sub(_predVel).clampLength(0, PREDATOR_MAX_STEER);
