@@ -18,69 +18,39 @@
     }
 
     let { 
-        boidCount = 800, 
-        color = '#00ffff',
-        backgroundColor = '#0f172a',
-        useSkybox = true,
-        wireframe = false,
-        predatorColor = '#cfd8e3',
-        showTrails = false,
-        fps = $bindable(0),
-        isTerminal = false,
-        lastInteractionTime = 0,
-        typingPoint = null,
-        gitHash = 'unknown'
+        boidCount = 800, color = '#00ffff', backgroundColor = '#0f172a', useSkybox = true,
+        wireframe = false, predatorColor = '#cfd8e3', showTrails = false, fps = $bindable(0),
+        isTerminal = false, lastInteractionTime = 0, typingPoint = null, gitHash = 'unknown'
     }: Props = $props();
 
     let debugMode = $state(false);
-
-    export function getDiagnosticsData(): string {
-        return JSON.stringify({
-            timestamp: new Date().toISOString(),
-            buildHash: gitHash,
-            performance: { fps },
-            boidCount,
-            recruitmentLevel,
-            cameraZ: 180
-        }, null, 2);
-    }
-
-    export function runDiagnostics() {
-        console.log('--- BOID DIAGNOSTICS ---');
-        console.log(getDiagnosticsData());
-        debugMode = !debugMode;
-    }
-
+    let recruitmentLevel = $state(0);
+    
+    // Core Refs
     let container: HTMLDivElement;
     let canvas: HTMLCanvasElement;
-    
-    let recruitmentLevel = $state(0);
     let scene: THREE.Scene;
     let camera: THREE.PerspectiveCamera;
     let renderer: THREE.WebGLRenderer;
     let mesh: THREE.InstancedMesh;
-    let predator = $state<THREE.Mesh | null>(null);
+    let predator: THREE.Mesh | null = null;
     let trails: THREE.LineSegments;
     let predTrailLine: THREE.Line;
     let frameId: number;
+    let debugMaterial: THREE.MeshNormalMaterial | null = null;
 
-    let bgMesh: THREE.Mesh;
-    let ambientLight: THREE.AmbientLight;
-    let pointLight: THREE.PointLight;
-    let dirLight: THREE.DirectionalLight;
-    
-    const TRAIL_LENGTH = 15;
-    const PRED_TRAIL_LENGTH = 30;
-
-    let lastTime = performance.now();
-    let frameCount = 0;
-
+    // Simulation Data
     let positions: Float32Array;
     let velocities: Float32Array;
     let scales: Float32Array;
     let maxSpeeds: Float32Array;
     let deathTimers: Float32Array;
     
+    // Predator State
+    let predTargetIdx = -1;
+    let predTargetUntil = 0;
+
+    // Scratch Vectors (Allocation-Free)
     const _position = new THREE.Vector3();
     const _velocity = new THREE.Vector3();
     const _acceleration = new THREE.Vector3();
@@ -91,30 +61,49 @@
     const _tempColor = new THREE.Color();
     const _predPos = new THREE.Vector3();
     const _predVel = new THREE.Vector3();
+    const _scratchV1 = new THREE.Vector3();
+    const _scratchV2 = new THREE.Vector3();
+    const _alignF = new THREE.Vector3();
+    const _cohF = new THREE.Vector3();
+    const _sepF = new THREE.Vector3();
+    const _baseCol = new THREE.Color();
+    const _whiteCol = new THREE.Color(0xffffff);
 
     let mouse = new THREE.Vector2(-9999, -9999);
     let target = new THREE.Vector3();
     let uiRect: DOMRect | null = null;
     
-    const _scratchV1 = new THREE.Vector3();
-    const _alignF = new THREE.Vector3();
-    const _cohF = new THREE.Vector3();
-    const _sepF = new THREE.Vector3();
-
     // BOID PARAMETERS
     const BOUNDARY_SIZE = 120;
-    const TARGET_SPEED = 2.4;
-    const PREDATOR_SPEED = 3.8; 
-    const PREDATOR_MAX_STEER = 0.6;
+    const TARGET_SPEED = 2.0;
+    const PREDATOR_SPEED = 3.5; 
+    const PREDATOR_MAX_STEER = 0.5;
+    const PREDATOR_PREDICT_T = 2;
     const EAT_RADIUS_SQ = 144; 
     
-    let SPEED_LIMIT = $derived(3.2);
+    let SPEED_LIMIT = $derived(2.8);
     let VISUAL_RANGE_SQ = 50 * 50; 
     let PROTECTED_RANGE_SQ = 20 * 20;
     let SEPARATION_WEIGHT = $derived(10.0); 
     let ALIGNMENT_WEIGHT = $derived(2.0); 
     let COHESION_WEIGHT = $derived(6.0); 
     const MOUSE_REPULSION_SQ = 8000;
+
+    export function getDiagnosticsData(): string {
+        return JSON.stringify({
+            timestamp: new Date().toISOString(),
+            buildHash: gitHash,
+            performance: { fps },
+            recruitmentLevel,
+            predator: predator ? 'Active' : 'Missing'
+        }, null, 2);
+    }
+
+    export function runDiagnostics() {
+        console.log('--- BOID DIAGNOSTICS ---');
+        console.log(getDiagnosticsData());
+        debugMode = !debugMode;
+    }
 
     const bgVertexShader = `varying vec2 vUv; void main() { vUv = uv; gl_Position = vec4(position.xy, 0.999, 1.0); }`;
     const bgFragmentShader = `
@@ -128,6 +117,15 @@
             gl_FragColor = vec4(sky * (1.0 - tension * 0.7) + stars, 1.0);
         }
     `;
+
+    let bgMesh: THREE.Mesh;
+    let ambientLight: THREE.AmbientLight;
+    let pointLight: THREE.PointLight;
+    let dirLight: THREE.DirectionalLight;
+    const TRAIL_LENGTH = 15;
+    const PRED_TRAIL_LENGTH = 30;
+    let lastTime = performance.now();
+    let frameCount = 0;
 
     function init() {
         scene = new THREE.Scene();
@@ -151,15 +149,13 @@
         }));
         bgMesh.renderOrder = -1; if (useSkybox) scene.add(bgMesh);
 
-        const birdGeo = new THREE.ConeGeometry(1.2, 4.5, 4);
-        birdGeo.rotateX(Math.PI / 2); birdGeo.computeVertexNormals();
+        const birdGeo = new THREE.ConeGeometry(1.2, 4.5, 4); birdGeo.rotateX(Math.PI / 2); birdGeo.computeVertexNormals();
         mesh = new THREE.InstancedMesh(birdGeo, new THREE.MeshLambertMaterial({ color: 0xffffff, transparent: true, opacity: 0.95 }), boidCount);
         mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
         mesh.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(boidCount * 3), 3);
         mesh.geometry.setAttribute('instanceColor', mesh.instanceColor); scene.add(mesh);
 
-        const predatorGeo = new THREE.ConeGeometry(5.0, 18.0, 6);
-        predatorGeo.rotateX(Math.PI / 2); predatorGeo.computeVertexNormals();
+        const predatorGeo = new THREE.ConeGeometry(5.0, 18.0, 6); predatorGeo.rotateX(Math.PI / 2); predatorGeo.computeVertexNormals();
         predator = new THREE.Mesh(predatorGeo, new THREE.MeshLambertMaterial({ color: 0xffffff, emissive: 0xffffff, emissiveIntensity: 1.0 }));
         scene.add(predator);
 
@@ -233,8 +229,7 @@
 
         const maxObs = boidCount * 0.20;
         const intFactor = recruitmentLevel * (isTerminal && now - lastInteractionTime < 60000 ? 1 : 0);
-        const baseCol = new THREE.Color(color);
-        const whiteCol = new THREE.Color(0xffffff);
+        _baseCol.set(color);
 
         for (let i = 0; i < boidCount; i++) {
             const idx = i * 3;
@@ -248,7 +243,7 @@
                     _position.set((Math.random()-0.5)*350, (Math.random()-0.5)*350, 20+Math.random()*80);
                     _velocity.set((Math.random()-0.5), (Math.random()-0.5), 1).normalize().multiplyScalar(SPEED_LIMIT);
                 }
-                _tempColor.set(0xff0000).lerp(whiteCol, Math.sin(t*15)*0.5+0.5);
+                _tempColor.set(0xff0000).lerp(_whiteCol, Math.sin(t*15)*0.5+0.5);
                 mesh.setColorAt(i, _tempColor);
                 const s = scales[i] * Math.max(0, deathTimers[i]);
                 _dummy.position.copy(_position); _dummy.scale.set(s, s, s); _dummy.updateMatrix();
@@ -277,14 +272,11 @@
                     }
                 }
 
-                const vHAtDepth = 2 * Math.tan((75 * Math.PI/180)/2) * 100;
-                const vWAtDepth = vHAtDepth * (window.innerWidth / window.innerHeight);
-                _diff.set( ((tx/window.innerWidth)*2-1) * (vWAtDepth/2) + Math.sin(t*0.5+i)*10, (-(ty/window.innerHeight)*2+1) * (vHAtDepth/2) + Math.cos(t*0.4+i)*10, 80);
-                
+                _diff.set( ((tx/window.innerWidth)*2-1) * 120 + Math.sin(t*0.5+i)*10, (-(ty/window.innerHeight)*2+1) * 80 + Math.cos(t*0.4+i)*10, 80);
                 _position.lerp(_diff, 0.05); _velocity.set(0, 0, 0); 
                 _lookAt.set(((uiRect.left + uiRect.right)*0.5/window.innerWidth)*2-1, -((uiRect.top + uiRect.bottom)*0.5/window.innerHeight)*2+1, 0.5).unproject(camera);
                 _dummy.position.copy(_position); _dummy.lookAt(_lookAt);
-                mesh.setColorAt(i, _tempColor.copy(baseCol).multiplyScalar(1.0 + Math.sin(t*3+i)*0.1));
+                mesh.setColorAt(i, _tempColor.copy(_baseCol).multiplyScalar(1.0 + Math.sin(t*3+i)*0.1));
                 _dummy.scale.set(scales[i], scales[i], scales[i]);
             } else {
                 _alignF.set(0, 0, 0); _cohF.set(0, 0, 0); _sepF.set(0, 0, 0);
@@ -320,13 +312,12 @@
                 if (_position.z > 150) _velocity.z -= 0.6; 
 
                 _position.add(_velocity);
-                // HARD Z CLAMP
-                if (_position.z > 155) _position.z = 155;
+                if (_position.z > 155) _position.z = 155; // HARD BARRIER
 
                 _dummy.position.copy(_position);
                 if (_velocity.lengthSq() > 0.0001) _dummy.lookAt(_lookAt.copy(_position).add(_velocity));
                 _dummy.scale.set(scales[i], scales[i], scales[i]);
-                mesh.setColorAt(i, _tempColor.copy(baseCol).multiplyScalar(0.7 + (scales[i]-0.8)*0.5));
+                mesh.setColorAt(i, _tempColor.copy(_baseCol).multiplyScalar(0.7 + (scales[i]-0.8)*0.5));
             }
             if (!Number.isFinite(_position.x) || !Number.isFinite(_velocity.x)) { _position.set(0,0,50); _velocity.set(0,0,1); }
             positions[idx] = _position.x; positions[idx+1] = _position.y; positions[idx+2] = _position.z;
