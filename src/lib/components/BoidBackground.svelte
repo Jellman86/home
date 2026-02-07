@@ -156,6 +156,7 @@
         // BOIDS
         const birdGeo = new THREE.ConeGeometry(0.6, 2.5, 4);
         birdGeo.rotateX(Math.PI / 2);
+        birdGeo.computeVertexNormals();
         const material = new THREE.MeshPhongMaterial({ 
             color: 0xffffff, transparent: true, opacity: 0.95, vertexColors: true, shininess: 50
         });
@@ -163,6 +164,7 @@
         mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
         mesh.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(boidCount * 3), 3);
         mesh.instanceColor.setUsage(THREE.DynamicDrawUsage);
+        mesh.geometry.setAttribute('instanceColor', mesh.instanceColor);
         scene.add(mesh);
 
         // PREDATOR
@@ -224,9 +226,11 @@
     $effect(() => {
         if (!mesh) return;
         const mat = mesh.material as THREE.MeshPhongMaterial;
-        mat.color.set(0xffffff); 
+        mat.color.set(0xffffff);
         mat.wireframe = wireframe;
         mat.shininess = isTerminal ? 100 : 30;
+        mat.emissive.set(color);
+        mat.emissiveIntensity = isTerminal ? 0.28 : 0.18;
         
         if (ambientLight) ambientLight.intensity = isTerminal ? 0.6 : 0.8;
         if (pointLight) pointLight.intensity = isTerminal ? 4.0 : 1.5;

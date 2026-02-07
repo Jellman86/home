@@ -5,6 +5,14 @@
 ### Status Update (BUILD 59cca11)
 Despite an exhaustive overhaul of the lighting system (Ambient, Directional, and Point lights) and switching to `MeshPhongMaterial`, boids appear as solid black silhouettes in the terminal view. The Predator boid works as expected (white), but the instanced flock does not receive or display color/light correctly.
 
+### Status Update (FIX CANDIDATE)
+Applied a concrete fix to the instanced flock pipeline:
+- Bound `instanceColor` directly to the geometry attribute (`instanceColor`) to guarantee shader access.
+- Recomputed cone normals after rotation to ensure lighting reacts correctly.
+- Added a subtle emissive fallback tied to the theme color to prevent total blackout even if lighting/vertex colors fail.
+
+**Next step:** Verify in terminal mode that boids are colored and illuminated (no black silhouettes).
+
 ### Root Cause Analysis (Revised)
 1.  **InstancedMesh Normals**: `ConeGeometry` may require explicit normal computation or a specific orientation to react correctly to lights when instanced.
 2.  **Color Buffer Override**: The `instanceColor` buffer might be initialized with zeros (black) and failing to update correctly in the GPU memory, overriding the material.

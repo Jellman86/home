@@ -18,6 +18,7 @@ All notable changes to this project will be documented in this file.
 - **Boid Syntax Errors**: Resolved multiple syntax errors in the animation loop that were causing build failures.
 - **Interaction Triggers**: Fixed a bug where boids would loom on initial page load; they now only react to active typing.
 - **Boredom Decay**: Implemented a significantly faster boredom decay (4x) for more responsive rejoining transitions.
+- **Instanced Boid Color Rendering**: Bound `instanceColor` to geometry, recomputed normals, and added subtle emissive fallback to prevent black silhouettes.
 
 ### Improved
 - **Code Stability**: Complete rewrite of the animation loop to remove logic duplications and optimize performance.
@@ -26,4 +27,3 @@ All notable changes to this project will be documented in this file.
 
 ### Known Issues
 - **Boid Color Multiplication**: Instanced boids are currently rendering as solid black despite the presence of light sources and vertex colors.
-

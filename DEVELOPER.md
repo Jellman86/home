@@ -22,6 +22,7 @@ This is the heavy lifter. It manages:
 - **Simulation Loop**: Running the Boid flocking and Predator pursuit algorithms.
 - **Interactivity**: Responding to mouse movement and "Interaction Points" from the foreground.
 - **Optimization**: Uses `InstancedMesh` with `MeshPhongMaterial` to render 300-800 boids with 3D shading and specular highlights in a single draw call.
+- **Instanced Colors**: The `instanceColor` attribute must be bound to the geometry for per-boid coloring; normals should be recomputed after geometry rotation to ensure lighting works.
 
 ### 2. The Theme System
 Located in `src/lib/components/themes/`, these components define the "personality" of the site:
