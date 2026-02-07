@@ -388,8 +388,8 @@
 
             // Update Boid Color
             const material = mesh.material as THREE.MeshBasicMaterial;
-            material.color.set(currentColor);
-            material.opacity = 0.85;
+            material.color.set(0xffffff); // Keep white for vertex color mixing
+            material.opacity = 0.95;
             material.wireframe = wireframe;
 
             // Update Trail Color/Visibility
@@ -425,6 +425,9 @@
     let predTargetIdx = -1;
     let predTargetUntil = 0;
     const predAim = new THREE.Vector3();
+
+    const _baseCol = new THREE.Color();
+    const _whiteCol = new THREE.Color(0xffffff);
 
     function animate() {
         frameId = requestAnimationFrame(animate);
@@ -469,15 +472,16 @@
         const timeSinceInteraction = now - lastInteractionTime;
         const interactionActive = isTerminal && timeSinceInteraction < 60000;
         
-        // Recruitment Level: Increases while typing, decreases when idle
+        // Recruitment Level: 100% slower (Halved rates)
         if (isTerminal && timeSinceInteraction < 2000) {
-            recruitmentLevel = Math.min(1, recruitmentLevel + 0.0015); // Much slower breaking away (~10s to full)
+            recruitmentLevel = Math.min(1, recruitmentLevel + 0.00075); 
         } else {
-            recruitmentLevel = Math.max(0, recruitmentLevel - 0.0006); // Much slower leaving
+            recruitmentLevel = Math.max(0, recruitmentLevel - 0.0003); 
         }
 
         // Final observer count factor
         const interactionFactor = recruitmentLevel * (interactionActive ? Math.pow(Math.max(0, 1 - (timeSinceInteraction / 60000)), 0.5) : 0);
+        _baseCol.set(color);
 
         for (let i = 0; i < boidCount; i++) {
             const idx = i * 3;
@@ -491,27 +495,22 @@
 
             if (isObserver && uiRect) {
                 // --- STATIONARY 3D SURROUND LOGIC ---
-                // Distribution with jittered spacing
-                const angle = (i * 137.5) * (Math.PI / 180); // Fibonacci angle for even-ish distribution
+                const angle = (i * 137.5) * (Math.PI / 180); 
                 
-                // Varied margins for 3D depth feel
-                const ringDepth = (i % 3); // 0, 1, 2 for layering
-                const margin = 40 + ringDepth * 30; 
+                // More spacing between birds
+                const ringDepth = (i % 5); // More layers for spacing
+                const margin = 80 + ringDepth * 55; 
                 
                 let targetSX = (uiRect.left + uiRect.right) * 0.5 + Math.cos(angle) * (uiRect.width * 0.5 + margin);
                 let targetSY = (uiRect.top + uiRect.bottom) * 0.5 + Math.sin(angle) * (uiRect.height * 0.5 + margin);
 
-                // Avatar Avoidance: The avatar is in the right 45% of the UI
+                // Avatar Avoidance: Right 45%
                 const isOverAvatar = targetSX > (uiRect.right - uiRect.width * 0.45);
-                
-                // 3D Depth variation: NDC Z between 0.88 and 0.96
-                // Higher Z is deeper (further from camera)
                 let ndcZ = 0.92 + (Math.sin(i * 0.5) * 0.04);
                 
                 if (isOverAvatar) {
-                    // Push boids behind the avatar or further out so they don't block it
-                    ndcZ = 0.97; // Deepest layer
-                    targetSX += 40; // Push further right/out
+                    ndcZ = 0.975; 
+                    targetSX += 60; 
                 }
 
                 _diff.set(
@@ -520,11 +519,10 @@
                     ndcZ
                 ).unproject(camera);
 
-                // Smoothly lerp to station, then lock
-                _position.lerp(_diff, 0.05);
+                _position.lerp(_diff, 0.04); // Slower, smoother stationing
                 _velocity.set(0, 0, 0); 
 
-                // Rotate to track typing point
+                // Look specifically at the terminal area
                 const lookX = typingPoint ? typingPoint.x : (uiRect.left + uiRect.right) * 0.5;
                 const lookY = typingPoint ? typingPoint.y : (uiRect.top + uiRect.bottom) * 0.5;
                 _lookAt.set((lookX / window.innerWidth) * 2 - 1, -(lookY / window.innerHeight) * 2 + 1, 0.5).unproject(camera);
@@ -533,21 +531,18 @@
                 _dummy.lookAt(_lookAt);
                 
                 // --- Sentience Communication: Chromatic Charge ---
-                // Higher recruitment = brighter, more focused color pulse
                 const observationPulse = 0.85 + Math.sin(t * (3.0 + recruitmentLevel * 4.0) + i * 0.2) * (0.05 + recruitmentLevel * 0.2);
                 
-                _tempColor.copy(new THREE.Color(color));
-                // Charge up to white/bright version as they focus
+                _tempColor.copy(_baseCol);
                 if (recruitmentLevel > 0.4) {
                     const chargeFactor = (recruitmentLevel - 0.4) * 1.5;
-                    _tempColor.lerp(new THREE.Color('#ffffff'), Math.min(chargeFactor, 0.8));
+                    _tempColor.lerp(_whiteCol, Math.min(chargeFactor, 0.85));
                 }
                 
                 _tempColor.multiplyScalar(observationPulse);
                 mesh.setColorAt(i, _tempColor);
                 
-                // Varied sizing within a nominal range (species variation)
-                const speciesVar = 0.35 + (Math.sin(i * 0.7) * 0.15); // Individual variation factor
+                const speciesVar = 0.3 + (Math.sin(i * 0.7) * 0.15); 
                 const scale = (scales ? scales[i] : 1) * speciesVar;
                 _dummy.scale.set(scale, scale, scale);
             } else {
