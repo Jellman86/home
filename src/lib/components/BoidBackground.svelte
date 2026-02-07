@@ -40,6 +40,12 @@
     let frameId: number;
     let debugMaterial: THREE.MeshNormalMaterial | null = null;
 
+    // Performance Tracking
+    let lastTime = performance.now();
+    let frameCount = 0;
+    let lastFrameTime = 0;
+    let avgFrameTime = 0;
+
     // Simulation Data Arrays
     let positions: Float32Array;
     let velocities: Float32Array;
@@ -99,7 +105,7 @@
         return JSON.stringify({
             timestamp: new Date().toISOString(),
             buildHash: gitHash,
-            performance: { fps },
+            performance: { fps, lastFrameTime: lastFrameTime.toFixed(2) + 'ms', avgFrameTime: avgFrameTime.toFixed(2) + 'ms' },
             boidCount,
             recruitmentLevel,
             cameraZ: 180,
@@ -200,11 +206,11 @@
         if (trails) (trails.material as THREE.LineBasicMaterial).color.set(color);
     });
 
-    let avgFrameTime = 0;
     function animate() {
-        const frameStartTime = performance.now(); frameId = requestAnimationFrame(animate);
+        const frameStartTime = performance.now();
+        frameId = requestAnimationFrame(animate);
         const now = performance.now(); frameCount++;
-        if (now - lastTime >= 1000) { fps = frameCount; frameCount = 0; lastTime = now; }
+        if (now - lastTime >= 1000) { fps = frameCount; frameCount = 0; lastTime = now; avgFrameTime = lastFrameTime; }
         const t = now * 0.001;
         
         if (bgMesh) {
@@ -356,7 +362,7 @@
         }
 
         renderer.render(scene, camera);
-        lastFrameTime = performance.now() - frameStartTime; avgFrameTime = lastFrameTime;
+        lastFrameTime = performance.now() - frameStartTime;
     }
 
     onMount(() => {
