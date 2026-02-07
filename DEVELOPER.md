@@ -82,3 +82,4 @@ When the user types, boids transition from the "Flock" state to the "Observer" s
 ## 🛠️ Tooling
 - **`gh` CLI**: Use this to check build statuses (`gh run list`).
 - **Vite `define`**: Used to pass server-side or build-time data (like the git hash) to the client-side code.
+- **Diagnostics System**: A built-in tool accessible via the UI to debug WebGL state. It logs buffer data and overrides materials to isolate geometry, lighting, and attribute issues.

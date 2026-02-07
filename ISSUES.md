@@ -31,6 +31,13 @@ Applied a concrete fix to the instanced flock pipeline:
 - Force `renderer.outputColorSpace = THREE.SRGBColorSpace` and convert input colors to linear space before upload.
 - Ensure `mesh.geometry.setAttribute('instanceColor', mesh.instanceColor)` is set and re-applied after any geometry changes.
 
+### Diagnostics Tool Added (BUILD ec46bcf)
+A new "Diagnostics" button (exclamation mark icon) has been added to the bottom-right menu.
+- **Console Output**: Logs detailed state of `InstancedMesh`, `Material`, `InstanceColor` attributes, and `Lights`.
+- **Visual Debug Mode**: Toggles a `MeshNormalMaterial` override. 
+    - If boids appear colorful (normal-mapped), the geometry and normals are correct.
+    - If boids remain black, the issue is likely in the lighting configuration or renderer state.
+
 When boids enter the "Observer" state (looming around the terminal), they are intended to turn bright white/yellow to signal active scrutiny. However, in the current build, they remain their base color or appear dark/black during this transition.
 
 ### Context
