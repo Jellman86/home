@@ -38,10 +38,10 @@
         return JSON.stringify({
             timestamp: new Date().toISOString(),
             buildHash: gitHash,
-            performance: { fps, avgFrameTime: avgFrameTime.toFixed(2) + 'ms' },
+            performance: { fps },
             boidCount,
             recruitmentLevel,
-            cameraPos: camera?.position.toArray()
+            cameraZ: camera?.position.z
         }, null, 2);
     }
 
@@ -75,7 +75,6 @@
 
     let lastTime = performance.now();
     let frameCount = 0;
-    let startupAt = performance.now();
 
     let positions: Float32Array;
     let velocities: Float32Array;
@@ -179,21 +178,14 @@
 
         _predPos.set(0, 0, 50); _predVel.set(0, 0, 1).setLength(PREDATOR_SPEED);
 
-        const trailHistory = new Float32Array(boidCount * TRAIL_LENGTH * 3);
         const trailGeo = new THREE.BufferGeometry();
-        for (let i = 0; i < boidCount; i++) {
-            for (let t = 0; t < TRAIL_LENGTH; t++) {
-                const o = (i * TRAIL_LENGTH + t) * 3;
-                trailHistory[o] = positions[i*3]; trailHistory[o+1] = positions[i*3+1]; trailHistory[o+2] = positions[i*3+2];
-            }
-        }
+        trailGeo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(boidCount * TRAIL_LENGTH * 3), 3));
         const trailIndices = [];
         for (let i = 0; i < boidCount; i++) {
             const offset = i * TRAIL_LENGTH;
             for (let t = 0; t < TRAIL_LENGTH - 1; t++) trailIndices.push(offset + t, offset + t + 1);
         }
         trailGeo.setIndex(trailIndices);
-        trailGeo.setAttribute('position', new THREE.BufferAttribute(trailHistory, 3));
         trails = new THREE.LineSegments(trailGeo, new THREE.LineBasicMaterial({ color: new THREE.Color(color), transparent: true, opacity: 0.4 }));
         trails.visible = showTrails; scene.add(trails);
 
@@ -209,16 +201,14 @@
         mat.emissive.set(color); mat.emissiveIntensity = isTerminal ? 1.0 : 0.3;
         if (ambientLight) ambientLight.intensity = isTerminal ? 0.8 : 1.0;
         if (pointLight) pointLight.intensity = isTerminal ? 5.0 : 2.0;
-        if (trails) { (trails.material as THREE.LineBasicMaterial).color.set(color); trails.visible = showTrails; }
-        if (predator) predator.visible = true; 
-        if (predTrailLine) predTrailLine.visible = showTrails;
+        if (trails) (trails.material as THREE.LineBasicMaterial).color.set(color);
     });
 
-    let frameStartTime = 0; let lastFrameTime = 0; let avgFrameTime = 0;
+    let avgFrameTime = 0;
     function animate() {
         frameStartTime = performance.now(); frameId = requestAnimationFrame(animate);
         const now = performance.now(); frameCount++;
-        if (now - lastTime >= 1000) { fps = frameCount; frameCount = 0; lastTime = now; avgFrameTime = lastFrameTime; }
+        if (now - lastTime >= 1000) { fps = frameCount; frameCount = 0; lastTime = now; }
         const t = now * 0.001;
         
         if (bgMesh) {
@@ -244,7 +234,8 @@
 
         const maxObs = boidCount * 0.20;
         const intFactor = recruitmentLevel * (isTerminal && now - lastInteractionTime < 60000 ? 1 : 0);
-        
+        _baseCol.set(color);
+
         for (let i = 0; i < boidCount; i++) {
             const idx = i * 3;
             _position.set(positions[idx], positions[idx + 1], positions[idx + 2]);
@@ -288,7 +279,7 @@
 
                 const vHAtDepth = 2 * Math.tan((75 * Math.PI/180)/2) * 100;
                 const vWAtDepth = vHAtDepth * (window.innerWidth / window.innerHeight);
-                _diff.set( ((tx/window.innerWidth)*2-1) * (vWAtDepth/2) + Math.sin(t*0.5+i)*10, (-(ty/window.innerHeight)*2+1) * (vHAtDepth/2) + Math.cos(t*0.4+i)*10, 80);
+                _diff.set( ((tx/window.innerWidth)*2-1) * (vWAtDepth/2) + Math.sin(t*0.5+i)*10, (-(ty/window.innerHeight)*2+1) * (vHAtDepth/2) + Math.cos(t*0.4+i)*10, 100);
                 
                 _position.lerp(_diff, 0.05); _velocity.set(0, 0, 0); 
                 _lookAt.set(((uiRect.left + uiRect.right)*0.5/window.innerWidth)*2-1, -((uiRect.top + uiRect.bottom)*0.5/window.innerHeight)*2+1, 0.5).unproject(camera);
@@ -310,30 +301,33 @@
                     }
                 }
 
-                if (sC > 0) _newAccel.add(_sepF.normalize().multiplyScalar(SEPARATION_WEIGHT * 0.15));
+                if (sC > 0 && _sepF.lengthSq() > 0.001) _newAccel.add(_sepF.normalize().multiplyScalar(SEPARATION_WEIGHT * 0.15));
                 if (cC > 0) _newAccel.add(_cohF.divideScalar(cC).sub(_position).normalize().multiplyScalar(COHESION_WEIGHT * 0.015));
                 if (aC > 0) _newAccel.add(_alignF.divideScalar(aC).normalize().sub(_velocity).multiplyScalar(ALIGNMENT_WEIGHT * 0.05));
 
                 const dxP = _position.x - _predPos.x, dyP = _position.y - _predPos.y, dzP = _position.z - _predPos.z;
                 const dSqP = dxP*dxP + dyP*dyP + dzP*dzP;
-                if (dSqP < 3000) { 
+                if (dSqP < 3000 && dSqP > 0.001) { 
                     _newAccel.add(_scratchV1.set(dxP, dyP, dzP).normalize().multiplyScalar(1.0));
                     if (dSqP < EAT_RADIUS_SQ) deathTimers[i] = 1.0; 
                 }
 
-                const wOff = t * 0.05 + i * 0.1;
-                _newAccel.add(_scratchV1.set(Math.sin(wOff) * 0.01, Math.cos(wOff * 0.8) * 0.01, Math.sin(wOff * 0.4) * 0.008)).clampLength(0, 0.3);
-                _acceleration.lerp(_newAccel, 0.05);
+                _newAccel.add(_scratchV1.set(Math.sin(t*0.05+i)*0.01, Math.cos(t*0.08+i)*0.01, Math.sin(t*0.04+i)*0.008)).clampLength(0, 0.3);
+                _acceleration.lerp(_newAccel, 0.05); // Smooth glide
                 _velocity.add(_acceleration).clampLength(0.1, maxSpeeds[i]);
                 
                 if (_position.z < 20) _velocity.z += 0.3;
-                if (_position.z > 150) _velocity.z -= 0.6; // Rigid clip stop
+                if (_position.z > 150) _velocity.z -= 0.6; // Physical barrier before camera
 
                 _position.add(_velocity);
                 _dummy.position.copy(_position);
                 if (_velocity.lengthSq() > 0.0001) _dummy.lookAt(_lookAt.copy(_position).add(_velocity));
                 _dummy.scale.set(scales[i], scales[i], scales[i]);
                 mesh.setColorAt(i, _tempColor.copy(new THREE.Color(color)).multiplyScalar(0.7 + (scales[i]-0.8)*0.5));
+            }
+            // Final Safety Check
+            if (!Number.isFinite(_position.x) || !Number.isFinite(_velocity.x)) {
+                _position.set(0,0,50); _velocity.set(0,0,1);
             }
             positions[idx] = _position.x; positions[idx+1] = _position.y; positions[idx+2] = _position.z;
             velocities[idx] = _velocity.x; velocities[idx+1] = _velocity.y; velocities[idx+2] = _velocity.z;
@@ -365,7 +359,7 @@
         if (predator) { predator.position.copy(_predPos); if (_predVel.lengthSq() > 0.001) predator.lookAt(_lookAt.copy(_predPos).add(_predVel)); }
 
         renderer.render(scene, camera);
-        lastFrameTime = performance.now() - frameStartTime;
+        lastFrameTime = performance.now() - frameStartTime; avgFrameTime = lastFrameTime;
     }
 
     onMount(() => {
