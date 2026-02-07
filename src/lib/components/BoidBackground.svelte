@@ -15,21 +15,32 @@
         isTerminal = false, lastInteractionTime = 0, typingPoint = null, gitHash = 'unknown'
     }: Props = $props();
 
+    // --- COMPONENT STATE ---
     let debugMode = $state(false);
     let recruitmentLevel = $state(0);
     
+    // Core Refs
     let container: HTMLDivElement; let canvas: HTMLCanvasElement;
     let scene: THREE.Scene; let camera: THREE.PerspectiveCamera; let renderer: THREE.WebGLRenderer;
     let mesh: THREE.InstancedMesh; let predator: THREE.Mesh | null = null;
     let trails: THREE.LineSegments; let predTrailLine: THREE.Line;
     let frameId: number; let debugMaterial: THREE.MeshNormalMaterial | null = null;
 
+    let bgMesh: THREE.Mesh; let ambientLight: THREE.AmbientLight;
+    let pointLight: THREE.PointLight; let dirLight: THREE.DirectionalLight;
+
+    // Simulation Data
     let positions: Float32Array; let velocities: Float32Array; let scales: Float32Array;
     let maxSpeeds: Float32Array; let deathTimers: Float32Array;
     
+    // Predator State
     let predTargetIdx = -1; let predTargetUntil = 0;
-    let lastTime = performance.now(); let frameCount = 0;
 
+    // Time Tracking
+    let lastTime = performance.now(); let frameCount = 0;
+    let lastFrameTime = 0; let avgFrameTime = 0;
+
+    // --- ALLOCATION-FREE SCRATCH OBJECTS ---
     const _position = new THREE.Vector3(); const _velocity = new THREE.Vector3(); const _acceleration = new THREE.Vector3();
     const _newAccel = new THREE.Vector3(); const _dummy = new THREE.Object3D(); const _diff = new THREE.Vector3();
     const _lookAt = new THREE.Vector3(); const _tempColor = new THREE.Color(); const _predPos = new THREE.Vector3();
@@ -41,7 +52,7 @@
     let target = new THREE.Vector3();
     let uiRect: DOMRect | null = null;
     
-    // BOID PARAMETERS - STARLING TUNING
+    // BOID PARAMETERS
     const BOUNDARY_SIZE = 125;
     const TARGET_SPEED = 2.8;
     const PREDATOR_SPEED = 4.2; 
@@ -59,14 +70,54 @@
     let COHESION_WEIGHT = $derived(4.0); 
     const MOUSE_REPULSION_SQ = 9000;
 
+    // --- COMPREHENSIVE DIAGNOSTICS ---
     export function getDiagnosticsData(): string {
-        return JSON.stringify({
-            timestamp: new Date().toISOString(), buildHash: gitHash,
-            performance: { fps }, boidCount, recruitmentLevel, cameraZ: 180
-        }, null, 2);
+        const data: any = {
+            timestamp: new Date().toISOString(),
+            buildHash: gitHash,
+            performance: {
+                fps,
+                avgFrameProcessingTime: avgFrameTime.toFixed(3) + 'ms',
+                memory: (performance as any).memory ? {
+                    usedJSHeapSize: Math.round((performance as any).memory.usedJSHeapSize / 1024 / 1024) + 'MB',
+                    totalJSHeapSize: Math.round((performance as any).memory.totalJSHeapSize / 1024 / 1024) + 'MB'
+                } : 'N/A'
+            },
+            boidCount,
+            recruitmentLevel,
+            uiRect: uiRect ? { width: uiRect.width, height: uiRect.height } : null,
+            renderer: renderer ? {
+                pixelRatio: renderer.getPixelRatio(),
+                drawCalls: renderer.info.render.calls,
+                triangles: renderer.info.render.triangles
+            } : null,
+            camera: camera ? { position: camera.position.toArray(), near: camera.near, far: camera.far } : null
+        };
+
+        if (mesh) {
+            data.instancedMesh = {
+                count: mesh.count,
+                material: mesh.material.type,
+                emissive: (mesh.material as any).emissive?.getHexString()
+            };
+        }
+
+        const lights: any[] = [];
+        scene?.traverse(obj => {
+            if (obj instanceof THREE.Light) {
+                lights.push({ type: obj.type, intensity: obj.intensity, position: obj.position.toArray() });
+            }
+        });
+        data.lights = lights;
+
+        return JSON.stringify(data, null, 2);
     }
 
-    export function runDiagnostics() { debugMode = !debugMode; }
+    export function runDiagnostics() {
+        console.log('--- COMPREHENSIVE BOID DIAGNOSTICS ---');
+        console.log(getDiagnosticsData());
+        debugMode = !debugMode;
+    }
 
     const bgVertexShader = `varying vec2 vUv; void main() { vUv = uv; gl_Position = vec4(position.xy, 0.999, 1.0); }`;
     const bgFragmentShader = `
@@ -146,11 +197,10 @@
         if (trails) (trails.material as THREE.LineBasicMaterial).color.set(color);
     });
 
-    let avgFrameTime = 0;
     function animate() {
         const frameStartTime = performance.now(); frameId = requestAnimationFrame(animate);
         const now = performance.now(); frameCount++;
-        if (now - lastTime >= 1000) { fps = frameCount; frameCount = 0; lastTime = now; }
+        if (now - lastTime >= 1000) { fps = frameCount; frameCount = 0; lastTime = now; avgFrameTime = lastFrameTime; }
         const t = now * 0.001;
         
         if (bgMesh) {
@@ -254,7 +304,7 @@
                 }
 
                 _newAccel.add(_scratchV1.set(Math.sin(t*0.05+i)*0.01, Math.cos(t*0.08+i)*0.01, Math.sin(t*0.04+i)*0.008)).clampLength(0, 0.4);
-                _acceleration.lerp(_newAccel, 0.15); // Responsive smoothing
+                _acceleration.lerp(_newAccel, 0.15); 
                 _velocity.add(_acceleration).clampLength(0.1, maxSpeeds[i]);
                 
                 if (_position.z < 20) _velocity.z += 0.3;
@@ -302,7 +352,7 @@
         }
 
         renderer.render(scene, camera);
-        lastFrameTime = performance.now() - frameStartTime; avgFrameTime = lastFrameTime;
+        lastFrameTime = performance.now() - frameStartTime;
     }
 
     onMount(() => {
