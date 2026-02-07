@@ -536,7 +536,7 @@
                 _tempColor.copy(new THREE.Color(color)).multiplyScalar(pulse);
                 mesh.setColorAt(i, _tempColor);
                 
-                const scale = (scales ? scales[i] : 1) * 0.9; // Slightly smaller when looming for better spacing
+                const scale = (scales ? scales[i] : 1) * 0.5; // Significantly smaller when looming
                 _dummy.scale.set(scale, scale, scale);
             } else {
                 // --- STANDARD BOID LOGIC (MOVING) ---
