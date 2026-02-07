@@ -206,6 +206,7 @@
     let velocities: Float32Array;
     let scales: Float32Array;
     let maxSpeeds: Float32Array;
+    let deathTimers: Float32Array;
     
     const _position = new THREE.Vector3();
     const _velocity = new THREE.Vector3();
@@ -238,25 +239,25 @@
     // BOID PARAMETERS
     const BOUNDARY_SIZE = 120;
     const NEIGHBOR_COUNT = 7; 
-    const TARGET_SPEED = 1.5;
-    const SPEED_FORCE = 0.05;
+    const TARGET_SPEED = 1.2;
+    const SPEED_FORCE = 0.035;
     const PREDATOR_RADIUS = 55;
-    const PREDATOR_SPEED = 2.5; 
+    const PREDATOR_SPEED = 2.2; 
     const PREDATOR_MIN_SPEED = 1.2;
-    const PREDATOR_MAX_STEER = 0.25;
+    const PREDATOR_MAX_STEER = 0.22;
     const PREDATOR_PREDICT_T = 4;
-    const EAT_RADIUS_SQ = 49; // ~7 world units
+    const EAT_RADIUS_SQ = 36; // ~6 world units
     
-    let SPEED_LIMIT = $derived(1.8);
+    let SPEED_LIMIT = $derived(1.4);
     let VISUAL_RANGE = $derived(45); 
-    let PROTECTED_RANGE = $derived(12);
-    let SEPARATION_WEIGHT = $derived(5.5); 
-    let ALIGNMENT_WEIGHT = $derived(2.5); 
-    let COHESION_WEIGHT = $derived(3.5); 
+    let PROTECTED_RANGE = $derived(15);
+    let SEPARATION_WEIGHT = $derived(5.0); 
+    let ALIGNMENT_WEIGHT = $derived(2.0); 
+    let COHESION_WEIGHT = $derived(3.0); 
     const MOUSE_REPULSION_WEIGHT = 15.0;
 
     const VISUAL_RANGE_SQ = 45 * 45;
-    const PROTECTED_RANGE_SQ = 12 * 12;
+    const PROTECTED_RANGE_SQ = 15 * 15;
     const MOUSE_REPULSION_SQ = 6000;
 
     const bgVertexShader = `
@@ -353,6 +354,7 @@
         velocities = new Float32Array(boidCount * 3);
         scales = new Float32Array(boidCount);
         maxSpeeds = new Float32Array(boidCount);
+        deathTimers = new Float32Array(boidCount);
         
         // Grid Initialization
         gridCellsCount = Math.ceil((BOUNDARY_SIZE * 2.5) / GRID_SIZE);
@@ -498,25 +500,43 @@
             _velocity.set(velocities[idx], velocities[idx + 1], velocities[idx + 2]);
             _acceleration.set(0, 0, 0);
 
+            // DEATH / EATING EFFECT
+            if (deathTimers[i] > 0) {
+                deathTimers[i] -= 0.025;
+                if (deathTimers[i] <= 0) {
+                    _position.set((Math.random()-0.5)*350, (Math.random()-0.5)*350, 20+Math.random()*100);
+                    _velocity.set((Math.random()-0.5), (Math.random()-0.5), 1).normalize().multiplyScalar(SPEED_LIMIT);
+                }
+                _tempColor.set(0xff0000).lerp(_baseCol, 1.0 - deathTimers[i]);
+                mesh.setColorAt(i, _tempColor);
+                const s = scales[i] * Math.max(0, deathTimers[i]);
+                _dummy.position.copy(_position);
+                _dummy.scale.set(s, s, s);
+                _dummy.updateMatrix();
+                mesh.setMatrixAt(i, _dummy.matrix);
+                positions[idx] = _position.x; positions[idx+1] = _position.y; positions[idx+2] = _position.z;
+                continue;
+            }
+
             const isObserver = intFactor > 0.02 && (i < maxObs * intFactor);
 
             if (isObserver && uiRect) {
                 const angle = (i * 137.5) * (Math.PI / 180); 
-                const margin = 120 + (i % 4) * 60; 
+                const margin = 350 + (i % 4) * 100; 
                 
                 const timeOff = t * (0.5 + (i % 5) * 0.1) + i;
                 let tsx = (uiRect.left + uiRect.right) * 0.5 + Math.cos(angle) * (uiRect.width * 0.5 + margin) + Math.sin(timeOff) * 15;
                 let tsy = (uiRect.top + uiRect.bottom) * 0.5 + Math.sin(angle) * (uiRect.height * 0.5 + margin) + Math.cos(timeOff) * 15;
                 
-                // Force outside terminal area
-                if (tsx > uiRect.left - 40 && tsx < uiRect.right + 40 && tsy > uiRect.top - 40 && tsy < uiRect.bottom + 40) {
+                // Stricter Avoidance
+                if (tsx > uiRect.left - 60 && tsx < uiRect.right + 60 && tsy > uiRect.top - 60 && tsy < uiRect.bottom + 60) {
                     const dx = tsx - (uiRect.left + uiRect.right) * 0.5;
                     const dy = tsy - (uiRect.top + uiRect.bottom) * 0.5;
-                    if (Math.abs(dx) > Math.abs(dy)) tsx = dx > 0 ? uiRect.right + 80 : uiRect.left - 80;
-                    else tsy = dy > 0 ? uiRect.bottom + 80 : uiRect.top - 80;
+                    if (Math.abs(dx) > Math.abs(dy)) tsx = dx > 0 ? uiRect.right + 120 : uiRect.left - 120;
+                    else tsy = dy > 0 ? uiRect.bottom + 120 : uiRect.top - 120;
                 }
 
-                _diff.set((tsx / window.innerWidth) * 2 - 1, -(tsy / window.innerHeight) * 2 + 1, 0.1).unproject(camera);
+                _diff.set((tsx / window.innerWidth) * 2 - 1, -(tsy / window.innerHeight) * 2 + 1, 0.05).unproject(camera);
                 _position.lerp(_diff, 0.06); _velocity.set(0, 0, 0); 
                 
                 _lookAt.set(((uiRect.left + uiRect.right)*0.5/window.innerWidth)*2-1, -((uiRect.top + uiRect.bottom)*0.5/window.innerHeight)*2+1, 0.5).unproject(camera);
@@ -533,7 +553,7 @@
                 let aC = 0, cC = 0, sC = 0;
 
                 for (let j = 0; j < boidCount; j++) {
-                    if (i === j) continue;
+                    if (i === j || deathTimers[j] > 0) continue;
                     const dx = _position.x - positions[j*3], dy = _position.y - positions[j*3+1], dz = _position.z - positions[j*3+2];
                     const dSq = dx*dx+dy*dy+dz*dz;
                     
@@ -548,29 +568,31 @@
                 if (cC > 0) _acceleration.add(_cohF.divideScalar(cC).sub(_position).normalize().multiplyScalar(COHESION_WEIGHT * 0.015));
                 if (aC > 0) _acceleration.add(_alignF.divideScalar(aC).normalize().sub(_velocity).multiplyScalar(ALIGNMENT_WEIGHT * 0.05));
 
-                // PREDATOR AVOIDANCE & KILL LOGIC
+                // Predator avoidance & Kill logic
                 const dxP = _position.x - _predPos.x, dyP = _position.y - _predPos.y, dzP = _position.z - _predPos.z;
                 const dSqP = dxP*dxP + dyP*dyP + dzP*dzP;
-                if (dSqP < 3000) { 
-                    _acceleration.add(_scratchV1.set(dxP, dyP, dzP).normalize().multiplyScalar(0.3));
+                if (dSqP < 2500) { 
+                    _acceleration.add(_scratchV1.set(dxP, dyP, dzP).normalize().multiplyScalar(0.4));
                     if (dSqP < EAT_RADIUS_SQ) {
-                        _position.set((Math.random()-0.5)*300, (Math.random()-0.5)*300, 20+Math.random()*100);
-                        _velocity.set((Math.random()-0.5), (Math.random()-0.5), 1).normalize().multiplyScalar(SPEED_LIMIT);
+                        deathTimers[i] = 1.0; // Start eating effect
                     }
                 }
 
-                // SCREEN BOUNDS AVOIDANCE (Clipping Fix)
+                // SCREEN BOUNDS AVOIDANCE (Strict Clipping Fix)
                 if (uiRect) {
-                    const ts = _position.clone().project(camera);
-                    const tx = (ts.x + 1) * window.innerWidth * 0.5;
-                    const ty = (-ts.y + 1) * window.innerHeight * 0.5;
-                    if (tx > uiRect.left - 50 && tx < uiRect.right + 50 && ty > uiRect.top - 50 && ty < uiRect.bottom + 50) {
-                        _acceleration.add(_scratchV1.set(_position.x, _position.y, 0).normalize().multiplyScalar(-0.25));
+                    _scratchV2.copy(_position).project(camera);
+                    const tx = (_scratchV2.x + 1) * window.innerWidth * 0.5;
+                    const ty = (-_scratchV2.y + 1) * window.innerHeight * 0.5;
+                    if (tx > uiRect.left - 100 && tx < uiRect.right + 100 && ty > uiRect.top - 100 && ty < uiRect.bottom + 100) {
+                        const midX = (uiRect.left + uiRect.right) * 0.5;
+                        const midY = (uiRect.top + uiRect.bottom) * 0.5;
+                        _scratchV1.set(_position.x - (midX/window.innerWidth - 0.5)*500, _position.y - (0.5 - midY/window.innerHeight)*500, 0).normalize().multiplyScalar(0.6);
+                        _acceleration.add(_scratchV1);
                     }
                 }
 
                 // Stay within boundaries
-                const turn = 0.08;
+                const turn = 0.1;
                 if (_position.x < -BOUNDARY_SIZE) _acceleration.x += turn;
                 if (_position.x > BOUNDARY_SIZE) _acceleration.x -= turn;
                 if (_position.y < -BOUNDARY_SIZE) _acceleration.y += turn;
@@ -585,11 +607,11 @@
                     _acceleration.add(_scratchV1);
                 }
                 
-                // SMOOTH personality wander
-                const wOff = t * 0.4 + i * 0.1;
-                _scratchV1.set(Math.sin(wOff) * 0.008, Math.cos(wOff * 0.7) * 0.008, Math.sin(wOff * 0.3) * 0.005);
+                // SMOOTH personality wander (low frequency)
+                const wOff = t * 0.2 + i * 0.1;
+                _scratchV1.set(Math.sin(wOff) * 0.01, Math.cos(wOff * 0.8) * 0.01, Math.sin(wOff * 0.4) * 0.008);
                 _acceleration.add(_scratchV1);
-                _acceleration.clampLength(0, 0.1);
+                _acceleration.clampLength(0, 0.12);
                 
                 _velocity.add(_acceleration).clampLength(0.1, maxSpeeds[i]);
                 _position.add(_velocity);
@@ -611,6 +633,7 @@
             const attr = trails.geometry.getAttribute('position') as THREE.BufferAttribute;
             const h = attr.array as Float32Array;
             for (let i = 0; i < boidCount; i++) {
+                if (deathTimers[i] > 0) continue; // Don't update trails for dying boids
                 const bIdx = i * 3;
                 const tOff = i * TRAIL_LENGTH * 3;
                 h.copyWithin(tOff + 3, tOff, tOff + (TRAIL_LENGTH - 1) * 3);
