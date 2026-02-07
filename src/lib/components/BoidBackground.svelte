@@ -472,17 +472,19 @@
         const timeSinceInteraction = now - lastInteractionTime;
         const interactionActive = isTerminal && timeSinceInteraction < 60000;
         
-        // Recruitment Level: Much slower (takes ~25s to full)
+        // Recruitment Level: Snappier boredom (takes ~10s to clear)
         if (isTerminal && timeSinceInteraction < 2000) {
-            recruitmentLevel = Math.min(1, recruitmentLevel + 0.0003); 
+            recruitmentLevel = Math.min(1, recruitmentLevel + 0.0004); 
         } else {
-            recruitmentLevel = Math.max(0, recruitmentLevel - 0.00015); 
+            // Decay faster when not interacting
+            recruitmentLevel = Math.max(0, recruitmentLevel - 0.0015); 
         }
 
-        // Limit observers to 25% of the flock for spacing
-        const maxObservers = boidCount * 0.25;
+        // Limit observers to 20% of the flock for even better spacing
+        const maxObservers = boidCount * 0.20;
         const interactionFactor = recruitmentLevel * (interactionActive ? Math.pow(Math.max(0, 1 - (timeSinceInteraction / 60000)), 0.5) : 0);
         
+        // CRITICAL: Ensure base color is ready for the frame
         _baseCol.set(color);
 
         for (let i = 0; i < boidCount; i++) {
@@ -491,35 +493,30 @@
             _velocity.set(velocities[idx], velocities[idx + 1], velocities[idx + 2]);
             _acceleration.set(0, 0, 0);
 
-            // Determine if this boid is an observer (capped at 25%)
+            const jitter = (Math.sin(i * 0.1) * 0.05);
             const isObserver = interactionFactor > 0.02 && (i < maxObservers * interactionFactor);
 
             if (isObserver && uiRect) {
-                // --- STATIONARY 3D SURROUND LOGIC (TERMINAL DEPTH) ---
+                // --- STATIONARY 3D SURROUND LOGIC ---
                 const angle = (i * 137.5) * (Math.PI / 180); 
                 
-                // Varied spacing to avoid 'wall' effect
+                // More radial spacing to prevent 'wall'
                 const ringDepth = (i % 6); 
-                const margin = 100 + ringDepth * 60; 
+                const margin = 120 + ringDepth * 70; 
                 
                 let targetSX = (uiRect.left + uiRect.right) * 0.5 + Math.cos(angle) * (uiRect.width * 0.5 + margin);
                 let targetSY = (uiRect.top + uiRect.bottom) * 0.5 + Math.sin(angle) * (uiRect.height * 0.5 + margin);
 
-                // Precise Avatar Avoidance (Right side of terminal)
+                // Precise Avatar Avoidance
                 const avatarCenterX = uiRect.right - (uiRect.width * 0.22);
-                const avatarCenterY = uiRect.top + (uiRect.height * 0.4);
-                const distToAvatarCenter = Math.hypot(targetSX - avatarCenterX, targetSY - avatarCenterY);
+                const isNearAvatar = targetSX > (uiRect.right - uiRect.width * 0.45);
 
-                // Depth layer: 0.88 to 0.94 is roughly the terminal plane
-                let ndcZ = 0.88 + (ringDepth * 0.012); 
+                // Depth layer: Surround the terminal plane
+                let ndcZ = 0.88 + (ringDepth * 0.015); 
                 
-                if (distToAvatarCenter < 180) {
+                if (isNearAvatar) {
                     ndcZ = 0.96; 
-                    const pushDirX = (targetSX - avatarCenterX);
-                    const pushDirY = (targetSY - avatarCenterY);
-                    const pushLen = Math.hypot(pushDirX, pushDirY) || 1;
-                    targetSX += (pushDirX / pushLen) * 120;
-                    targetSY += (pushDirY / pushLen) * 120;
+                    targetSX += 100;
                 }
 
                 _diff.set(
@@ -531,32 +528,40 @@
                 _position.lerp(_diff, 0.03); 
                 _velocity.set(0, 0, 0); 
 
-                // Look specifically at the terminal window center
-                const lookX = (uiRect.left + uiRect.right) * 0.5;
-                const lookY = (uiRect.top + uiRect.bottom) * 0.5;
-                _lookAt.set((lookX / window.innerWidth) * 2 - 1, -(lookY / window.innerHeight) * 2 + 1, 0.5).unproject(camera);
+                // Gaze: Look at the terminal window center
+                _lookAt.set(
+                    ((uiRect.left + uiRect.right) * 0.5 / window.innerWidth) * 2 - 1,
+                    -((uiRect.top + uiRect.bottom) * 0.5 / window.innerHeight) * 2 + 1,
+                    0.5
+                ).unproject(camera);
                 
                 _dummy.position.copy(_position);
                 _dummy.lookAt(_lookAt);
                 
-                // --- Sentience Communication: Intense Chromatic Charge ---
-                const observationPulse = 0.9 + Math.sin(t * (4.0 + recruitmentLevel * 5.0) + i * 0.5) * (0.1 + recruitmentLevel * 0.3);
+                // COLOR LOGIC: Clear visibility fix
+                // Use a larger multiplier and explicit lerping to ensure it's not black
+                const observationPulse = 1.0 + Math.sin(t * (3.0 + recruitmentLevel * 4.0) + i) * (0.1 + recruitmentLevel * 0.2);
                 
                 _tempColor.copy(_baseCol);
-                if (recruitmentLevel > 0.3) {
-                    const chargeFactor = (recruitmentLevel - 0.3) * 1.8;
-                    _tempColor.lerp(_whiteCol, Math.min(chargeFactor, 0.95));
+                if (recruitmentLevel > 0.2) {
+                    const chargeFactor = (recruitmentLevel - 0.2) * 1.5;
+                    _tempColor.lerp(_whiteCol, Math.min(chargeFactor, 0.9));
                 }
                 
                 _tempColor.multiplyScalar(observationPulse);
                 mesh.setColorAt(i, _tempColor);
                 
-                const speciesVar = 0.3 + (Math.sin(i * 0.7) * 0.2); 
-                // Depth Scaling: Farther boids look smaller
-                const depthScale = 1.0 - (ndcZ - 0.88) * 5.0; 
+                const speciesVar = 0.3 + (Math.sin(i * 0.7) * 0.15); 
+                const depthScale = 1.0 - (ndcZ - 0.88) * 4.0; 
                 _dummy.scale.set(speciesVar * depthScale, speciesVar * depthScale, speciesVar * depthScale);
             } else {
                 // --- STANDARD BOID LOGIC (MOVING) ---
+                // Avoid expensive new THREE.Color() in loop
+                const s = scales ? scales[i] : 1;
+                _tempColor.copy(_baseCol).multiplyScalar(0.78 + s * 0.45);
+                mesh.setColorAt(i, _tempColor);
+                
+                // ... (rest of standard boid logic)
                 let alignF = new THREE.Vector3(), cohF = new THREE.Vector3(), sepF = new THREE.Vector3();
                 let aC = 0, cC = 0, sC = 0;
 
@@ -657,10 +662,6 @@
                     const bank = Math.max(-0.6, Math.min(0.6, -_velocity.x * 1.2));
                     _dummy.rotateZ(bank);
                 }
-
-                const s = scales ? scales[i] : 1;
-                _tempColor.copy(new THREE.Color(color)).multiplyScalar(0.78 + s * 0.45);
-                mesh.setColorAt(i, _tempColor);
                 
                 const scale = scales ? scales[i] : 1;
                 _dummy.scale.set(scale, scale, scale);
