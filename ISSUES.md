@@ -1,14 +1,20 @@
 # Known Issues & Bug Tracking
 
-## ✅ [RESOLVED] Observer Color Charge Invisibility
+## 🔴 [REOPENED] Observer Color Charge Invisibility & Black Boids
 
-### Resolution (BUILD 6047ab8)
-The issue has been resolved by:
-1.  **Locking Material Color to White**: Prevents multiplication that was darkening vertex colors.
-2.  **Triple-Light System**: Introduced a `DirectionalLight` and `PointLight` to ensure physical illumination of all 3D boids.
-3.  **Code Sanitization**: Removed Svelte proxy interference in the animation loop by pre-calculating non-reactive color variables.
+### Status Update (BUILD 59cca11)
+Despite an exhaustive overhaul of the lighting system (Ambient, Directional, and Point lights) and switching to `MeshPhongMaterial`, boids appear as solid black silhouettes in the terminal view. The Predator boid works as expected (white), but the instanced flock does not receive or display color/light correctly.
 
-### Description
+### Root Cause Analysis (Revised)
+1.  **InstancedMesh Normals**: `ConeGeometry` may require explicit normal computation or a specific orientation to react correctly to lights when instanced.
+2.  **Color Buffer Override**: The `instanceColor` buffer might be initialized with zeros (black) and failing to update correctly in the GPU memory, overriding the material.
+3.  **Lighting/Material Conflict**: There may be a conflict between `vertexColors: true` and the way `MeshPhongMaterial` calculates illumination on instanced geometry.
+
+### Potential Fixes to Investigate
+- Test with `MeshLambertMaterial` (cheaper, different lighting model).
+- Verify the `instanceColor` buffer data types and usage flags.
+- Try a non-lit material with manual color calculation to prove the buffer is working.
+
 When boids enter the "Observer" state (looming around the terminal), they are intended to turn bright white/yellow to signal active scrutiny. However, in the current build, they remain their base color or appear dark/black during this transition.
 
 ### Context
