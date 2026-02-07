@@ -182,7 +182,7 @@
     let camera: THREE.PerspectiveCamera;
     let renderer: THREE.WebGLRenderer;
     let mesh: THREE.InstancedMesh;
-    let predator: THREE.Mesh;
+    let predator = $state<THREE.Mesh | null>(null);
     let trails: THREE.LineSegments;
     let predTrailLine: THREE.Line;
     let frameId: number;
@@ -302,7 +302,7 @@
         ambientLight = new THREE.AmbientLight(0xffffff, 1.0); 
         scene.add(ambientLight);
         pointLight = new THREE.PointLight(0xffffff, 5.0, 1000);
-        pointLight.position.set(0, 0, 300); 
+        pointLight.position.set(0, 0, 250); 
         scene.add(pointLight);
         dirLight = new THREE.DirectionalLight(0xffffff, 2.0);
         dirLight.position.set(0, 0, 400);
@@ -336,12 +336,12 @@
         scene.add(mesh);
 
         // PREDATOR
-        const predatorGeo = new THREE.ConeGeometry(2.2, 7.5, 6);
+        const predatorGeo = new THREE.ConeGeometry(3.5, 12.0, 6);
         predatorGeo.rotateX(Math.PI / 2);
         predatorGeo.computeVertexNormals();
-        const predatorMat = new THREE.MeshLambertMaterial({ color: 0xffffff });
+        const predatorMat = new THREE.MeshLambertMaterial({ color: 0xffffff, emissive: 0xffffff, emissiveIntensity: 1.0 });
         predator = new THREE.Mesh(predatorGeo, predatorMat);
-        predator.visible = false;
+        predator.visible = true;
         scene.add(predator);
 
         // DATA
@@ -464,7 +464,7 @@
             if (isTerminal && typingPoint) {
                 _diff.set((typingPoint.x/window.innerWidth)*2-1, -(typingPoint.y/window.innerHeight)*2+1, 0.5).unproject(camera);
                 pointLight.position.lerp(_diff, 0.1);
-            } else { pointLight.position.set(mouse.x*100, mouse.y*100, 150); }
+            } else { pointLight.position.set(mouse.x*100, mouse.y*100, 250); }
         }
         if (dirLight) dirLight.position.set(camera.position.x, camera.position.y, 300);
 
@@ -478,7 +478,8 @@
 
         // Update UI Rect dynamically for drag tracking
         if (recruitmentLevel > 0) {
-            uiRect = document.getElementById('boid-target')?.getBoundingClientRect() || null;
+            const el = document.getElementById('boid-target');
+            if (el) uiRect = el.getBoundingClientRect();
         }
 
         // PERFORMANCE: Build Spatial Grid (Allocation-Free)
