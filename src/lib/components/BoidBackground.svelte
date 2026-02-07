@@ -486,184 +486,175 @@
             _acceleration.set(0, 0, 0);
 
             // Determine if this boid is an observer
-            // Add a small boid-specific offset so they break off at slightly different times
             const jitter = (Math.sin(i * 0.1) * 0.05);
             const isObserver = interactionFactor > 0.02 && (i / boidCount) < (interactionFactor + jitter);
 
-            let alignF = new THREE.Vector3(), cohF = new THREE.Vector3(), sepF = new THREE.Vector3();
-            let aC = 0, cC = 0, sC = 0;
+            if (isObserver && uiRect) {
+                // --- OBSERVER STATIONING (STILL) ---
+                // Calculate elliptical station
+                const angle = (i / boidCount) * Math.PI * 2;
+                const margin = 120;
+                const rectW = (uiRect.right - uiRect.left);
+                const rectH = (uiRect.bottom - uiRect.top);
+                
+                const targetSX = (uiRect.left + uiRect.right) * 0.5 + Math.cos(angle) * (rectW * 0.5 + margin);
+                const targetSY = (uiRect.top + uiRect.bottom) * 0.5 + Math.sin(angle) * (rectH * 0.5 + margin);
 
-            const nearestDist = new Float32Array(NEIGHBOR_COUNT);
-            const nearestIdx = new Int32Array(NEIGHBOR_COUNT);
-            for (let k = 0; k < NEIGHBOR_COUNT; k++) {
-                nearestDist[k] = Infinity;
-                nearestIdx[k] = -1;
-            }
-
-            for (let j = 0; j < boidCount; j++) {
-                const oIdx = j * 3;
-                if (oIdx === idx) continue;
-                const dx = _position.x - positions[oIdx];
-                const dy = _position.y - positions[oIdx + 1];
-                const dz = _position.z - positions[oIdx + 2];
-                const dSq = dx * dx + dy * dy + dz * dz;
-                const dist = Math.sqrt(dSq);
-
-                if (dist < PROTECTED_RANGE && dist > 0.01) {
-                    sepF.x += dx / dist; sepF.y += dy / dist; sepF.z += dz / dist; sC++;
-                }
-
-                let maxK = 0;
-                for (let k = 1; k < NEIGHBOR_COUNT; k++) {
-                    if (nearestDist[k] > nearestDist[maxK]) maxK = k;
-                }
-                if (dist < nearestDist[maxK]) {
-                    nearestDist[maxK] = dist;
-                    nearestIdx[maxK] = oIdx;
-                }
-            }
-
-            for (let k = 0; k < NEIGHBOR_COUNT; k++) {
-                const oIdx = nearestIdx[k];
-                if (oIdx < 0) continue;
-                const dx = _position.x - positions[oIdx];
-                const dy = _position.y - positions[oIdx + 1];
-                const dz = _position.z - positions[oIdx + 2];
-                const dist = Math.sqrt(dx * dx + dy * dy + dz * dz);
-                if (dist < VISUAL_RANGE && dist > 0.01) {
-                    cohF.x += positions[oIdx]; cohF.y += positions[oIdx + 1]; cohF.z += positions[oIdx + 2]; cC++;
-                    alignF.x += velocities[oIdx]; alignF.y += velocities[oIdx + 1]; alignF.z += velocities[oIdx + 2]; aC++;
-                }
-            }
-
-            if (sC > 0) {
-                const sepWeight = isObserver ? SEPARATION_WEIGHT * 8.0 : SEPARATION_WEIGHT;
-                _acceleration.add(sepF.divideScalar(sC).normalize().multiplyScalar(sepWeight * 0.12));
-            }
-            if (cC > 0 && !isObserver) _acceleration.add(cohF.divideScalar(cC).sub(_position).normalize().multiplyScalar(COHESION_WEIGHT * 0.01));
-            if (aC > 0 && !isObserver) _acceleration.add(alignF.divideScalar(aC).normalize().sub(_velocity).multiplyScalar(ALIGNMENT_WEIGHT * 0.06));
-
-            const distM = _position.distanceToSquared(target);
-            if (distM < 4000) _acceleration.add(_diff.copy(_position).sub(target).normalize().multiplyScalar(MOUSE_REPULSION_WEIGHT * 0.035));
-
-            // Gentle global flow field to add realism
-            const flowX = Math.sin(_position.y * 0.015 + t * 0.6) * 0.008;
-            const flowY = Math.cos(_position.x * 0.012 + t * 0.5) * 0.008;
-            const flowZ = Math.sin((_position.x + _position.y) * 0.01 + t * 0.4) * 0.006;
-            _acceleration.add(_diff.set(flowX, flowY, flowZ));
-
-            // Predator avoidance (evade predicted predator position)
-            const predFuture = _lookAt.copy(_predPos).add(_predVel.clone().multiplyScalar(PREDATOR_PREDICT_T * 0.3));
-            const dPred = _position.distanceTo(predFuture);
-            if (dPred < PREDATOR_RADIUS) {
-                _acceleration.add(_diff.copy(_position).sub(predFuture).normalize().multiplyScalar(0.22));
-            }
-
-            // Preferred speed regulation
-            const speed = _velocity.length();
-            if (speed > 0.0001) {
-                const desired = _diff.copy(_velocity).setLength(TARGET_SPEED);
-                _acceleration.add(desired.sub(_velocity).multiplyScalar(SPEED_FORCE));
-            }
-
-            // Occasional camera rush to feel "inside the school"
-            if (rushStrength > 0 && (i % 5 === 0)) {
-                _acceleration.add(_diff.set(0, 0, 1).multiplyScalar(rushStrength * 0.02));
-            }
-
-            // UI behavior: Avoidance (Normal) or Observation (Typing)
-            if (uiRect) {
+                // Project current position to compare in screen space
                 _diff.copy(_position).project(camera);
                 const sx = (_diff.x * 0.5 + 0.5) * window.innerWidth;
                 const sy = (-_diff.y * 0.5 + 0.5) * window.innerHeight;
 
-                if (isObserver) {
-                    // SEEK PERIMETER - Stationing around the window
-                    // Use a fixed angle per boid index to prevent jumping
-                    const angle = (i / boidCount) * Math.PI * 2;
-                    const margin = 120;
-                    
-                    const rectW = (uiRect.right - uiRect.left);
-                    const rectH = (uiRect.bottom - uiRect.top);
-                    
-                    // Ellipse around the terminal
-                    const targetSX = (uiRect.left + uiRect.right) * 0.5 + Math.cos(angle) * (rectW * 0.5 + margin) + Math.sin(t * 0.5 + i) * 20;
-                    const targetSY = (uiRect.top + uiRect.bottom) * 0.5 + Math.sin(angle) * (rectH * 0.5 + margin) + Math.cos(t * 0.5 + i) * 20;
+                const dsx = (targetSX - sx) / window.innerWidth;
+                const dsy = -(targetSY - sy) / window.innerHeight;
+                
+                const targetZ = 135; 
+                const dz = (targetZ - _position.z);
 
-                    const dsx = (targetSX - sx) / window.innerWidth;
-                    const dsy = -(targetSY - sy) / window.innerHeight;
-                    
-                    // PRESSURE: Observers move much closer to the camera (Z=150)
-                    // Camera is at 180, so 150 is very close.
-                    const targetZ = 135 + Math.sin(angle * 10 + t * 0.5) * 10; 
-                    const dz = (targetZ - _position.z) * 0.05;
+                // High-performance "Snap-to-Station" logic
+                // No flocking, no flow, no predator avoidance here.
+                _velocity.x = dsx * 40.0; // Fast response to UI movement
+                _velocity.y = dsy * 40.0;
+                _velocity.z = dz * 0.2;
 
-                    _acceleration.add(_diff.set(dsx * 5.0, dsy * 5.0, dz).multiplyScalar(0.5));
-                    
-                    // Stationing/Docking Logic:
-                    // If close to the target, damp velocity aggressively to "stop"
-                    const distToTarget = Math.sqrt(dsx * dsx + dsy * dsy);
-                    if (distToTarget < 0.1) {
-                        _velocity.multiplyScalar(0.85); // Aggressive stop
-                    } else {
-                        _velocity.multiplyScalar(0.96); // Normal glide
-                    }
-                } else if (sx > uiRect.left && sx < uiRect.right && sy > uiRect.top && sy < uiRect.bottom) {
-                    // Avoid the UI
-                    const cx = (uiRect.left + uiRect.right) * 0.5;
-                    const cy = (uiRect.top + uiRect.bottom) * 0.5;
-                    const dx = sx - cx;
-                    const dy = sy - cy;
-                    const len = Math.hypot(dx, dy) || 1;
-                    _acceleration.add(_diff.set(dx / len, -dy / len, 0).multiplyScalar(0.04));
+                // Aggressive dampening to keep them "still" once at station
+                const dist = Math.sqrt(dsx * dsx + dsy * dsy);
+                if (dist < 0.01) {
+                    _velocity.x *= 0.1;
+                    _velocity.y *= 0.1;
                 }
-            }
 
-            const lim = BOUNDARY_SIZE * 1.2;
-            if (Math.abs(_position.x) > lim) _acceleration.x -= Math.sign(_position.x) * 0.05;
-            if (Math.abs(_position.y) > lim) _acceleration.y -= Math.sign(_position.y) * 0.05;
-            if (Math.abs(_position.z) > lim) _acceleration.z -= Math.sign(_position.z) * 0.05;
-
-            _acceleration.clampLength(0, 0.05);
-            
-            // Observers move slower
-            const maxSpeed = isObserver ? SPEED_LIMIT * 0.5 : SPEED_LIMIT * (0.4 + warmup * 0.6);
-            _velocity.add(_acceleration).clampLength(0.05, maxSpeed);
-            _position.add(_velocity);
-
-            positions[idx] = _position.x; positions[idx+1] = _position.y; positions[idx+2] = _position.z;
-            velocities[idx] = _velocity.x; velocities[idx+1] = _velocity.y; velocities[idx+2] = _velocity.z;
-
-            _dummy.position.copy(_position);
-            
-            if (isObserver && (typingPoint || uiRect)) {
-                // LOOK AT THE TYPING POINT
-                const lookX = typingPoint ? typingPoint.x : (uiRect!.left + uiRect!.right) * 0.5;
-                const lookY = typingPoint ? typingPoint.y : (uiRect!.top + uiRect!.bottom) * 0.5;
+                _position.add(_velocity);
+                
+                // Update rotation to face typing point or UI center
+                const lookX = typingPoint ? typingPoint.x : (uiRect.left + uiRect.right) * 0.5;
+                const lookY = typingPoint ? typingPoint.y : (uiRect.top + uiRect.bottom) * 0.5;
                 
                 _lookAt.set(
                     (lookX / window.innerWidth) * 2 - 1,
                     -(lookY / window.innerHeight) * 2 + 1,
                     0.5
                 ).unproject(camera);
+                
+                _dummy.position.copy(_position);
                 _dummy.lookAt(_lookAt);
-
-                // THRABBING COLOR (Breathing effect when looming)
-                // Pulse intensifies as recruitmentLevel grows
-                const pulse = 0.8 + Math.sin(t * 3.0 + i) * (0.1 + recruitmentLevel * 0.3);
+                
+                // Subtle pulse (color only)
+                const pulse = 0.85 + Math.sin(t * 3.0 + i * 0.2) * (0.05 + recruitmentLevel * 0.15);
                 _tempColor.copy(new THREE.Color(color)).multiplyScalar(pulse);
                 mesh.setColorAt(i, _tempColor);
-            } else if (_velocity.lengthSq() > 0.0001) {
-                _dummy.lookAt(_lookAt.copy(_position).add(_velocity));
+            } else {
+                // --- STANDARD BOID LOGIC (MOVING) ---
+                let alignF = new THREE.Vector3(), cohF = new THREE.Vector3(), sepF = new THREE.Vector3();
+                let aC = 0, cC = 0, sC = 0;
+
+                const nearestDist = new Float32Array(NEIGHBOR_COUNT);
+                const nearestIdx = new Int32Array(NEIGHBOR_COUNT);
+                for (let k = 0; k < NEIGHBOR_COUNT; k++) {
+                    nearestDist[k] = Infinity;
+                    nearestIdx[k] = -1;
+                }
+
+                for (let j = 0; j < boidCount; j++) {
+                    const oIdx = j * 3;
+                    if (oIdx === idx) continue;
+                    const dx = _position.x - positions[oIdx];
+                    const dy = _position.y - positions[oIdx + 1];
+                    const dz = _position.z - positions[oIdx + 2];
+                    const dSq = dx * dx + dy * dy + dz * dz;
+                    const dist = Math.sqrt(dSq);
+
+                    if (dist < PROTECTED_RANGE && dist > 0.01) {
+                        sepF.x += dx / dist; sepF.y += dy / dist; sepF.z += dz / dist; sC++;
+                    }
+
+                    let maxK = 0;
+                    for (let k = 1; k < NEIGHBOR_COUNT; k++) {
+                        if (nearestDist[k] > nearestDist[maxK]) maxK = k;
+                    }
+                    if (dist < nearestDist[maxK]) {
+                        nearestDist[maxK] = dist;
+                        nearestIdx[maxK] = oIdx;
+                    }
+                }
+
+                for (let k = 0; k < NEIGHBOR_COUNT; k++) {
+                    const oIdx = nearestIdx[k];
+                    if (oIdx < 0) continue;
+                    const dx = _position.x - positions[oIdx];
+                    const dy = _position.y - positions[oIdx + 1];
+                    const dz = _position.z - positions[oIdx + 2];
+                    const dist = Math.sqrt(dx * dx + dy * dy + dz * dz);
+                    if (dist < VISUAL_RANGE && dist > 0.01) {
+                        cohF.x += positions[oIdx]; cohF.y += positions[oIdx + 1]; cohF.z += positions[oIdx + 2]; cC++;
+                        alignF.x += velocities[oIdx]; alignF.y += velocities[oIdx + 1]; alignF.z += velocities[oIdx + 2]; aC++;
+                    }
+                }
+
+                if (sC > 0) _acceleration.add(sepF.divideScalar(sC).normalize().multiplyScalar(SEPARATION_WEIGHT * 0.12));
+                if (cC > 0) _acceleration.add(cohF.divideScalar(cC).sub(_position).normalize().multiplyScalar(COHESION_WEIGHT * 0.01));
+                if (aC > 0) _acceleration.add(alignF.divideScalar(aC).normalize().sub(_velocity).multiplyScalar(ALIGNMENT_WEIGHT * 0.06));
+
+                const distM = _position.distanceToSquared(target);
+                if (distM < 4000) _acceleration.add(_diff.copy(_position).sub(target).normalize().multiplyScalar(MOUSE_REPULSION_WEIGHT * 0.035));
+
+                const flowX = Math.sin(_position.y * 0.015 + t * 0.6) * 0.008;
+                const flowY = Math.cos(_position.x * 0.012 + t * 0.5) * 0.008;
+                const flowZ = Math.sin((_position.x + _position.y) * 0.01 + t * 0.4) * 0.006;
+                _acceleration.add(_diff.set(flowX, flowY, flowZ));
+
+                const predFuture = _lookAt.copy(_predPos).add(_predVel.clone().multiplyScalar(PREDATOR_PREDICT_T * 0.3));
+                const dPred = _position.distanceTo(predFuture);
+                if (dPred < PREDATOR_RADIUS) _acceleration.add(_diff.copy(_position).sub(predFuture).normalize().multiplyScalar(0.22));
+
+                const speed = _velocity.length();
+                if (speed > 0.0001) {
+                    const desired = _diff.copy(_velocity).setLength(TARGET_SPEED);
+                    _acceleration.add(desired.sub(_velocity).multiplyScalar(SPEED_FORCE));
+                }
+
+                if (rushStrength > 0 && (i % 5 === 0)) _acceleration.add(_diff.set(0, 0, 1).multiplyScalar(rushStrength * 0.02));
+
+                if (uiRect) {
+                    _diff.copy(_position).project(camera);
+                    const sx = (_diff.x * 0.5 + 0.5) * window.innerWidth;
+                    const sy = (-_diff.y * 0.5 + 0.5) * window.innerHeight;
+                    if (sx > uiRect.left && sx < uiRect.right && sy > uiRect.top && sy < uiRect.bottom) {
+                        const cx = (uiRect.left + uiRect.right) * 0.5;
+                        const cy = (uiRect.top + uiRect.bottom) * 0.5;
+                        const dx = sx - cx;
+                        const dy = sy - cy;
+                        const len = Math.hypot(dx, dy) || 1;
+                        _acceleration.add(_diff.set(dx / len, -dy / len, 0).multiplyScalar(0.04));
+                    }
+                }
+
+                const lim = BOUNDARY_SIZE * 1.2;
+                if (Math.abs(_position.x) > lim) _acceleration.x -= Math.sign(_position.x) * 0.05;
+                if (Math.abs(_position.y) > lim) _acceleration.y -= Math.sign(_position.y) * 0.05;
+                if (Math.abs(_position.z) > lim) _acceleration.z -= Math.sign(_position.z) * 0.05;
+
+                _acceleration.clampLength(0, 0.05);
+                _velocity.add(_acceleration).clampLength(0.05, SPEED_LIMIT * (0.4 + warmup * 0.6));
+                _position.add(_velocity);
+
+                _dummy.position.copy(_position);
+                if (_velocity.lengthSq() > 0.0001) _dummy.lookAt(_lookAt.copy(_position).add(_velocity));
+
+                if (mode === 'bird') {
+                    const bank = Math.max(-0.6, Math.min(0.6, -_velocity.x * 1.2));
+                    _dummy.rotateZ(bank);
+                }
+
+                const s = scales ? scales[i] : 1;
+                _tempColor.copy(new THREE.Color(color)).multiplyScalar(0.78 + s * 0.45);
+                mesh.setColorAt(i, _tempColor);
             }
 
-            if (mode === 'bird' && !isObserver) {
-                const bank = Math.max(-0.6, Math.min(0.6, -_velocity.x * 1.2));
-                _dummy.rotateZ(bank);
-            }
+            positions[idx] = _position.x; positions[idx+1] = _position.y; positions[idx+2] = _position.z;
+            velocities[idx] = _velocity.x; velocities[idx+1] = _velocity.y; velocities[idx+2] = _velocity.z;
 
             const scale = scales ? scales[i] : 1;
-            // PRESSURE: Observers grow larger (up to 2.5x original)
             const finalScale = isObserver ? scale * (1.2 + recruitmentLevel * 1.3) : scale;
             _dummy.scale.set(finalScale, finalScale, finalScale);
             _dummy.updateMatrix();

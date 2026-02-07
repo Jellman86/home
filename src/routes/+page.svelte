@@ -139,9 +139,9 @@
     {/key}
 
     <!-- UI Overlay -->
-    <div class="relative z-10">
+    <main class="relative z-10">
         <ActiveComponent data={portfolioData} {variant} bind:showTrails={showTrails} toggleTheme={toggleLightDark} onInteraction={handleInteraction} />
-    </div>
+    </main>
 
     <!-- Theme Switcher & Stats -->
     <div class="fixed bottom-6 right-6 z-50 flex flex-col items-end gap-3 pointer-events-auto">
