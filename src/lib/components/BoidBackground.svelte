@@ -156,6 +156,7 @@
     const _position = new THREE.Vector3();
     const _velocity = new THREE.Vector3();
     const _acceleration = new THREE.Vector3();
+    const _newAccel = new THREE.Vector3();
     const _dummy = new THREE.Object3D();
     const _diff = new THREE.Vector3();
     const _lookAt = new THREE.Vector3();
@@ -175,27 +176,27 @@
     const _cohF = new THREE.Vector3();
     const _sepF = new THREE.Vector3();
 
-    // BOID PARAMETERS - MASTER TUNING
+    // BOID PARAMETERS - FINAL REFINEMENT
     const BOUNDARY_SIZE = 120;
-    const TARGET_SPEED = 1.8;
-    const SPEED_FORCE = 0.06;
-    const PREDATOR_SPEED = 2.8; 
-    const PREDATOR_MIN_SPEED = 1.5;
-    const PREDATOR_MAX_STEER = 0.35;
-    const PREDATOR_PREDICT_T = 4;
-    const EAT_RADIUS_SQ = 64; // ~8 world units
+    const TARGET_SPEED = 2.0;
+    const SPEED_FORCE = 0.08;
+    const PREDATOR_SPEED = 3.2; 
+    const PREDATOR_MIN_SPEED = 1.8;
+    const PREDATOR_MAX_STEER = 0.4;
+    const PREDATOR_PREDICT_T = 3;
+    const EAT_RADIUS_SQ = 100; // Large kill zone for tangible results
     
-    let SPEED_LIMIT = $derived(2.5);
-    let VISUAL_RANGE = $derived(45); 
-    let PROTECTED_RANGE = $derived(15);
-    let SEPARATION_WEIGHT = $derived(6.0); 
-    let ALIGNMENT_WEIGHT = $derived(2.5); 
-    let COHESION_WEIGHT = $derived(4.0); 
-    const MOUSE_REPULSION_WEIGHT = 15.0;
+    let SPEED_LIMIT = $derived(2.8);
+    let VISUAL_RANGE = $derived(50); 
+    let PROTECTED_RANGE = $derived(18);
+    let SEPARATION_WEIGHT = $derived(7.0); 
+    let ALIGNMENT_WEIGHT = $derived(2.0); 
+    let COHESION_WEIGHT = $derived(4.5); 
+    const MOUSE_REPULSION_WEIGHT = 18.0;
 
-    const VISUAL_RANGE_SQ = 45 * 45;
-    const PROTECTED_RANGE_SQ = 15 * 15;
-    const MOUSE_REPULSION_SQ = 6000;
+    const VISUAL_RANGE_SQ = 50 * 50;
+    const PROTECTED_RANGE_SQ = 18 * 18;
+    const MOUSE_REPULSION_SQ = 7000;
 
     const bgVertexShader = `
         varying vec2 vUv;
@@ -260,7 +261,7 @@
         if (useSkybox) scene.add(bgMesh);
 
         // BOIDS
-        const birdGeo = new THREE.ConeGeometry(0.6, 2.5, 4);
+        const birdGeo = new THREE.ConeGeometry(0.8, 3.5, 4); // Slightly larger
         birdGeo.rotateX(Math.PI / 2);
         birdGeo.computeVertexNormals();
         
@@ -275,7 +276,7 @@
         scene.add(mesh);
 
         // PREDATOR
-        const predatorGeo = new THREE.ConeGeometry(3.5, 12.0, 6);
+        const predatorGeo = new THREE.ConeGeometry(4.5, 15.0, 6);
         predatorGeo.rotateX(Math.PI / 2);
         predatorGeo.computeVertexNormals();
         const predatorMat = new THREE.MeshLambertMaterial({ color: 0xffffff, emissive: 0xffffff, emissiveIntensity: 1.0 });
@@ -295,7 +296,7 @@
             _velocity.set((Math.random()-0.5), (Math.random()-0.5), 1).normalize().multiplyScalar(SPEED_LIMIT);
             positions[i*3]=_position.x; positions[i*3+1]=_position.y; positions[i*3+2]=_position.z;
             velocities[i*3]=_velocity.x; velocities[i*3+1]=_velocity.y; velocities[i*3+2]=_velocity.z;
-            scales[i] = 0.75 + Math.random() * 0.55;
+            scales[i] = 0.8 + Math.random() * 0.6;
             maxSpeeds[i] = SPEED_LIMIT * (0.8 + Math.random() * 0.4);
             mesh.setColorAt(i, new THREE.Color(color).multiplyScalar(0.8));
             _dummy.position.copy(_position);
@@ -421,11 +422,11 @@
             const idx = i * 3;
             _position.set(positions[idx], positions[idx + 1], positions[idx + 2]);
             _velocity.set(velocities[idx], velocities[idx + 1], velocities[idx + 2]);
-            _acceleration.set(0, 0, 0);
+            _newAccel.set(0, 0, 0);
 
             // DEATH EFFECT
             if (deathTimers[i] > 0) {
-                deathTimers[i] -= 0.035;
+                deathTimers[i] -= 0.025;
                 if (deathTimers[i] <= 0) {
                     _position.set((Math.random()-0.5)*350, (Math.random()-0.5)*350, 20+Math.random()*100);
                     _velocity.set((Math.random()-0.5), (Math.random()-0.5), 1).normalize().multiplyScalar(SPEED_LIMIT);
@@ -444,9 +445,9 @@
             if (isObserver && uiRect) {
                 const angle = (i * 137.5) * (Math.PI / 180); 
                 // Huge margins to stay perfectly clear of terminal area
-                const margin = 450 + (i % 4) * 100; 
+                const margin = 500 + (i % 4) * 120; 
                 
-                const timeOff = t * 0.15 + i;
+                const timeOff = t * 0.1 + i;
                 let tsx = (uiRect.left + uiRect.right) * 0.5 + Math.cos(angle) * (uiRect.width * 0.5 + margin) + Math.sin(timeOff) * 10;
                 let tsy = (uiRect.top + uiRect.bottom) * 0.5 + Math.sin(angle) * (uiRect.height * 0.5 + margin) + Math.cos(timeOff) * 10;
                 
@@ -457,7 +458,7 @@
                 _lookAt.set(((uiRect.left + uiRect.right)*0.5/window.innerWidth)*2-1, -((uiRect.top + uiRect.bottom)*0.5/window.innerHeight)*2+1, 0.5).unproject(camera);
                 _dummy.position.copy(_position); _dummy.lookAt(_lookAt);
                 
-                const pulse = 1.0 + Math.sin(t * 3.0 + i) * (0.05 + recruitmentLevel * 0.1);
+                const pulse = 1.0 + Math.sin(t * 2.0 + i) * (0.05 + recruitmentLevel * 0.1);
                 _tempColor.copy(_baseCol);
                 if (recruitmentLevel > 0.2) _tempColor.lerp(_whiteCol, Math.min((recruitmentLevel-0.2)*1.5, 0.95));
                 mesh.setColorAt(i, _tempColor.multiplyScalar(pulse));
@@ -478,23 +479,25 @@
                     }
                 }
 
-                if (sC > 0 && _sepF.lengthSq() > 0.001) _acceleration.add(_sepF.normalize().multiplyScalar(SEPARATION_WEIGHT * 0.15));
-                if (cC > 0) _acceleration.add(_cohF.divideScalar(cC).sub(_position).normalize().multiplyScalar(COHESION_WEIGHT * 0.015));
-                if (aC > 0) _acceleration.add(_alignF.divideScalar(aC).normalize().sub(_velocity).multiplyScalar(ALIGNMENT_WEIGHT * 0.05));
+                if (sC > 0 && _sepF.lengthSq() > 0.001) _newAccel.add(_sepF.normalize().multiplyScalar(SEPARATION_WEIGHT * 0.15));
+                if (cC > 0) _newAccel.add(_cohF.divideScalar(cC).sub(_position).normalize().multiplyScalar(COHESION_WEIGHT * 0.015));
+                if (aC > 0) _newAccel.add(_alignF.divideScalar(aC).normalize().sub(_velocity).multiplyScalar(ALIGNMENT_WEIGHT * 0.05));
 
                 // Predator Avoidance & Eaten Trigger
                 const dxP = _position.x - _predPos.x, dyP = _position.y - _predPos.y, dzP = _position.z - _predPos.z;
                 const dSqP = dxP*dxP + dyP*dyP + dzP*dzP;
-                if (dSqP < 2500) { 
-                    _acceleration.add(_scratchV1.set(dxP, dyP, dzP).normalize().multiplyScalar(0.5));
+                if (dSqP < 3000) { 
+                    _newAccel.add(_scratchV1.set(dxP, dyP, dzP).normalize().multiplyScalar(0.6));
                     if (dSqP < EAT_RADIUS_SQ) deathTimers[i] = 1.0; 
                 }
 
                 // Smooth Wander (Ultra-low frequency)
                 const wOff = t * 0.05 + i * 0.1;
-                _scratchV1.set(Math.sin(wOff) * 0.01, Math.cos(wOff * 0.8) * 0.01, Math.sin(wOff * 0.4) * 0.008);
-                _acceleration.add(_scratchV1);
-                _acceleration.clampLength(0, 0.15);
+                _newAccel.add(_scratchV1.set(Math.sin(wOff) * 0.01, Math.cos(wOff * 0.8) * 0.01, Math.sin(wOff * 0.4) * 0.008));
+                _newAccel.clampLength(0, 0.2);
+                
+                // SMOOTHING: Low-pass filter on acceleration
+                _acceleration.lerp(_newAccel, 0.1);
                 
                 _velocity.add(_acceleration).clampLength(0.1, maxSpeeds[i]);
                 _position.add(_velocity);
@@ -516,9 +519,10 @@
             const h = attr.array as Float32Array;
             for (let i = 0; i < boidCount; i++) {
                 if (deathTimers[i] > 0) continue; 
+                const bIdx = i * 3;
                 const tOff = i * TRAIL_LENGTH * 3;
                 h.copyWithin(tOff + 3, tOff, tOff + (TRAIL_LENGTH - 1) * 3);
-                h[tOff] = positions[i*3]; h[tOff+1] = positions[i*3+1]; h[tOff+2] = positions[i*3+2];
+                h[tOff] = positions[bIdx]; h[tOff+1] = positions[bIdx+1]; h[tOff+2] = positions[bIdx+2];
             }
             attr.needsUpdate = true;
         }
