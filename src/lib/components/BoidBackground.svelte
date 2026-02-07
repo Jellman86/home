@@ -23,11 +23,11 @@
         isTerminal = false, lastInteractionTime = 0, typingPoint = null, gitHash = 'unknown'
     }: Props = $props();
 
-    // --- SHARED STATE ---
+    // --- STATE ---
     let debugMode = $state(false);
     let recruitmentLevel = $state(0);
     
-    // Core Three.js Refs
+    // Core Refs
     let container: HTMLDivElement;
     let canvas: HTMLCanvasElement;
     let scene: THREE.Scene;
@@ -40,44 +40,24 @@
     let frameId: number;
     let debugMaterial: THREE.MeshNormalMaterial | null = null;
 
-    // Performance Tracking
-    let lastTime = performance.now();
-    let frameCount = 0;
-    let lastFrameTime = 0;
-    let avgFrameTime = 0;
-
-    // Simulation Data Arrays
+    // Simulation Data
     let positions: Float32Array;
     let velocities: Float32Array;
     let scales: Float32Array;
     let maxSpeeds: Float32Array;
     let deathTimers: Float32Array;
     
-    // Predator Logic State
+    // Predator State
     let predTargetIdx = -1;
     let predTargetUntil = 0;
 
-    // --- CONSTANTS ---
-    const BOUNDARY_SIZE = 120;
-    const TARGET_SPEED = 2.2;
-    const PREDATOR_SPEED = 3.5; 
-    const PREDATOR_MIN_SPEED = 1.8;
-    const PREDATOR_MAX_STEER = 0.5;
-    const PREDATOR_PREDICT_T = 2;
-    const EAT_RADIUS_SQ = 144; 
-    const TRAIL_LENGTH = 15;
-    const PRED_TRAIL_LENGTH = 30;
+    // Performance tracking
+    let lastTime = performance.now();
+    let frameCount = 0;
+    let lastFrameTime = 0;
+    let avgFrameTime = 0;
 
-    // Derived Simulation Parameters
-    let SPEED_LIMIT = $derived(2.8);
-    let VISUAL_RANGE_SQ = 50 * 50; 
-    let PROTECTED_RANGE_SQ = 20 * 20;
-    let SEPARATION_WEIGHT = $derived(10.0); 
-    let ALIGNMENT_WEIGHT = $derived(2.0); 
-    let COHESION_WEIGHT = $derived(6.0); 
-    const MOUSE_REPULSION_SQ = 8000;
-
-    // --- ALLOCATION-FREE SCRATCH OBJECTS ---
+    // Scratch Vectors
     const _position = new THREE.Vector3();
     const _velocity = new THREE.Vector3();
     const _acceleration = new THREE.Vector3();
@@ -99,17 +79,34 @@
     let mouse = new THREE.Vector2(-9999, -9999);
     let target = new THREE.Vector3();
     let uiRect: DOMRect | null = null;
+    
+    // BOID PARAMETERS
+    const BOUNDARY_SIZE = 120;
+    const TARGET_SPEED = 2.2;
+    const PREDATOR_SPEED = 3.5; 
+    const PREDATOR_MIN_SPEED = 1.8;
+    const PREDATOR_MAX_STEER = 0.5;
+    const PREDATOR_PREDICT_T = 2;
+    const EAT_RADIUS_SQ = 144; 
+    const TRAIL_LENGTH = 15;
+    const PRED_TRAIL_LENGTH = 30;
+    
+    let SPEED_LIMIT = $derived(2.8);
+    let VISUAL_RANGE_SQ = 50 * 50; 
+    let PROTECTED_RANGE_SQ = 20 * 20;
+    let SEPARATION_WEIGHT = $derived(10.0); 
+    let ALIGNMENT_WEIGHT = $derived(2.0); 
+    let COHESION_WEIGHT = $derived(6.0); 
+    const MOUSE_REPULSION_SQ = 8000;
 
-    // --- DIAGNOSTICS ---
     export function getDiagnosticsData(): string {
         return JSON.stringify({
             timestamp: new Date().toISOString(),
             buildHash: gitHash,
-            performance: { fps, lastFrameTime: lastFrameTime.toFixed(2) + 'ms', avgFrameTime: avgFrameTime.toFixed(2) + 'ms' },
+            performance: { fps, avgFrameTime: avgFrameTime.toFixed(2) + 'ms' },
             boidCount,
             recruitmentLevel,
-            cameraZ: 180,
-            predatorActive: !!predator
+            predator: predator ? 'Active' : 'Missing'
         }, null, 2);
     }
 
@@ -119,7 +116,6 @@
         debugMode = !debugMode;
     }
 
-    // --- SHADERS ---
     const bgVertexShader = `varying vec2 vUv; void main() { vUv = uv; gl_Position = vec4(position.xy, 0.999, 1.0); }`;
     const bgFragmentShader = `
         uniform float time; uniform float dayPhase; uniform float tension;
@@ -133,7 +129,6 @@
         }
     `;
 
-    // --- LIFECYCLE ---
     function init() {
         scene = new THREE.Scene();
         camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 2000);
@@ -145,16 +140,16 @@
         renderer.outputColorSpace = THREE.SRGBColorSpace;
         renderer.toneMapping = THREE.ACESFilmicToneMapping;
 
-        ambientLight = new THREE.AmbientLight(0xffffff, 1.0); scene.add(ambientLight);
-        pointLight = new THREE.PointLight(0xffffff, 5.0, 1000); pointLight.position.set(0, 0, 250); scene.add(pointLight);
-        dirLight = new THREE.DirectionalLight(0xffffff, 2.0); dirLight.position.set(0, 0, 400); scene.add(dirLight);
+        const ambientLight = new THREE.AmbientLight(0xffffff, 1.0); scene.add(ambientLight);
+        const pointLight = new THREE.PointLight(0xffffff, 5.0, 1000); pointLight.position.set(0, 0, 250); scene.add(pointLight);
+        const dirLight = new THREE.DirectionalLight(0xffffff, 2.0); dirLight.position.set(0, 0, 400); scene.add(dirLight);
 
         const bgGeo = new THREE.PlaneGeometry(2, 2);
-        bgMesh = new THREE.Mesh(bgGeo, new THREE.ShaderMaterial({
+        const bgMeshInstance = new THREE.Mesh(bgGeo, new THREE.ShaderMaterial({
             uniforms: { time: { value: 0 }, dayPhase: { value: 0.25 }, tension: { value: 0 } },
             vertexShader: bgVertexShader, fragmentShader: bgFragmentShader, depthWrite: false
         }));
-        bgMesh.renderOrder = -1; if (useSkybox) scene.add(bgMesh);
+        bgMeshInstance.renderOrder = -1; if (useSkybox) scene.add(bgMeshInstance);
 
         const birdGeo = new THREE.ConeGeometry(1.2, 4.5, 4); birdGeo.rotateX(Math.PI / 2); birdGeo.computeVertexNormals();
         mesh = new THREE.InstancedMesh(birdGeo, new THREE.MeshLambertMaterial({ color: 0xffffff, transparent: true, opacity: 0.95 }), boidCount);
@@ -197,15 +192,6 @@
         predTrailLine.visible = showTrails; scene.add(predTrailLine);
     }
 
-    $effect(() => {
-        if (!mesh) return;
-        const mat = mesh.material as THREE.MeshLambertMaterial;
-        mat.emissive.set(color); mat.emissiveIntensity = isTerminal ? 1.0 : 0.3;
-        if (ambientLight) ambientLight.intensity = isTerminal ? 0.8 : 1.0;
-        if (pointLight) pointLight.intensity = isTerminal ? 5.0 : 2.0;
-        if (trails) (trails.material as THREE.LineBasicMaterial).color.set(color);
-    });
-
     function animate() {
         const frameStartTime = performance.now();
         frameId = requestAnimationFrame(animate);
@@ -213,18 +199,6 @@
         if (now - lastTime >= 1000) { fps = frameCount; frameCount = 0; lastTime = now; avgFrameTime = lastFrameTime; }
         const t = now * 0.001;
         
-        if (bgMesh) {
-            const m = bgMesh.material as THREE.ShaderMaterial;
-            m.uniforms.time.value = t; m.uniforms.dayPhase.value = (t * 0.004 + 0.25) % 1.0; m.uniforms.tension.value = recruitmentLevel;
-        }
-
-        if (pointLight) {
-            if (isTerminal && typingPoint) {
-                _diff.set((typingPoint.x/window.innerWidth)*2-1, -(typingPoint.y/window.innerHeight)*2+1, 0.5).unproject(camera);
-                pointLight.position.lerp(_diff, 0.1);
-            } else { pointLight.position.set(mouse.x*100, mouse.y*100, 250); }
-        }
-
         target.set((mouse.x * window.innerWidth) / 20, -(mouse.y * window.innerHeight) / 20, 0);
         if (isTerminal && now - lastInteractionTime < 2000) { recruitmentLevel = Math.min(1, recruitmentLevel + 0.0005); } 
         else { recruitmentLevel = Math.max(0, recruitmentLevel - 0.008); }
