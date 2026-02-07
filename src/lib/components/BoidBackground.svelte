@@ -379,11 +379,13 @@
     $effect(() => {
         if (!mesh) return;
         const mat = mesh.material as THREE.MeshPhongMaterial;
-        mat.color.set(0x000000); // Base black so emissive/vertex dominates
+        mat.color.set(0xffffff); // CRITICAL: Must be white for vertex colors to work
         mat.wireframe = wireframe;
         mat.shininess = isTerminal ? 100 : 30;
-        mat.emissive.set(color); // sRGB is fine here as it's converted by mat
-        mat.emissiveIntensity = isTerminal ? 0.4 : 0.2;
+        
+        // Boost emissive for a true 'digital glow' feel
+        mat.emissive.set(color);
+        mat.emissiveIntensity = isTerminal ? 0.6 : 0.2;
         
         if (ambientLight) ambientLight.intensity = isTerminal ? 0.6 : 0.8;
         if (pointLight) pointLight.intensity = isTerminal ? 4.0 : 1.5;
@@ -395,7 +397,7 @@
         if (trails) { (trails.material as THREE.LineBasicMaterial).color.set(color); trails.visible = showTrails; }
         if (predator) { 
             const pMat = predator.material as THREE.MeshPhongMaterial;
-            pMat.color.set(0x000000);
+            pMat.color.set(0xffffff);
             pMat.emissive.set(predatorColor);
             pMat.emissiveIntensity = 1.0;
             predator.visible = true; 
@@ -417,7 +419,7 @@
             fps = frameCount; 
             frameCount = 0; 
             lastTime = now; 
-            avgFrameTime = lastFrameTime; // Sample the last frame time as average for simplicity
+            avgFrameTime = lastFrameTime;
         }
         const t = now * 0.001;
         
@@ -430,7 +432,8 @@
 
         if (pointLight) {
             if (isTerminal && typingPoint) {
-                _diff.set((typingPoint.x/window.innerWidth)*2-1, -(typingPoint.y/window.innerHeight)*2+1, 0.5).unproject(camera);
+                // Focus light on the boids stationing plane
+                _diff.set((typingPoint.x/window.innerWidth)*2-1, -(typingPoint.y/window.innerHeight)*2+1, 0.7).unproject(camera);
                 pointLight.position.lerp(_diff, 0.1);
             } else { pointLight.position.set(mouse.x*100, mouse.y*100, 120); }
         }
@@ -441,8 +444,12 @@
         const timeSinceInteraction = now - lastInteractionTime;
         const interactionActive = isTerminal && timeSinceInteraction < 60000;
         
-        if (isTerminal && timeSinceInteraction < 2000) { recruitmentLevel = Math.min(1, recruitmentLevel + 0.0003); } 
-        else { recruitmentLevel = Math.max(0, recruitmentLevel - 0.004); }
+        // RECRUITMENT & BOREDOM: Ultra-snappy boredom decay
+        if (isTerminal && timeSinceInteraction < 2000) {
+            recruitmentLevel = Math.min(1, recruitmentLevel + 0.0003); 
+        } else {
+            recruitmentLevel = Math.max(0, recruitmentLevel - 0.006); // Extremely fast departure
+        }
 
         const maxObs = boidCount * 0.20;
         const intFactor = recruitmentLevel * (interactionActive ? Math.pow(Math.max(0, 1 - (timeSinceInteraction / 60000)), 0.5) : 0);
@@ -457,26 +464,28 @@
             const isObserver = intFactor > 0.02 && (i < maxObs * intFactor);
 
             if (isObserver && uiRect) {
+                // STATIONARY OBSERVER
                 const angle = (i * 137.5) * (Math.PI / 180); 
-                const ring = (i % 6); const margin = 120 + ring * 70; 
+                const ring = (i % 6); const margin = 140 + ring * 80; 
                 let tsx = (uiRect.left + uiRect.right) * 0.5 + Math.cos(angle) * (uiRect.width * 0.5 + margin);
                 let tsy = (uiRect.top + uiRect.bottom) * 0.5 + Math.sin(angle) * (uiRect.height * 0.5 + margin);
                 
-                // Bring closer to camera (ndcZ 0.5)
-                let ndcZ = 0.5 + (ring * 0.015); 
-                if (tsx > (uiRect.right - uiRect.width * 0.45)) { ndcZ = 0.6; tsx += 100; }
+                // Move them slightly further back into the light's sweet spot
+                let ndcZ = 0.7 + (ring * 0.02); 
+                if (tsx > (uiRect.right - uiRect.width * 0.45)) { ndcZ = 0.85; tsx += 120; }
                 
                 _diff.set((tsx / window.innerWidth) * 2 - 1, -(tsy / window.innerHeight) * 2 + 1, ndcZ).unproject(camera);
                 _position.lerp(_diff, 0.03); _velocity.set(0, 0, 0); 
                 _lookAt.set(((uiRect.left + uiRect.right)*0.5/window.innerWidth)*2-1, -((uiRect.top + uiRect.bottom)*0.5/window.innerHeight)*2+1, 0.5).unproject(camera);
                 _dummy.position.copy(_position); _dummy.lookAt(_lookAt);
+                
                 const pulse = 1.0 + Math.sin(t * (3.0 + recruitmentLevel * 4.0) + i) * (0.1 + recruitmentLevel * 0.2);
                 _tempColor.copy(_baseCol);
                 if (recruitmentLevel > 0.2) _tempColor.lerp(_whiteCol, Math.min((recruitmentLevel-0.2)*1.5, 0.95));
                 _tempColor.multiplyScalar(pulse);
                 mesh.setColorAt(i, _tempColor);
                 const sVar = 0.3 + (Math.sin(i * 0.7) * 0.15); 
-                const dScale = 1.0 - (ndcZ - 0.5) * 2.0; 
+                const dScale = 1.0 - (ndcZ - 0.7) * 2.0; 
                 _dummy.scale.set(sVar * dScale, sVar * dScale, sVar * dScale);
             } else {
                 let alignF = new THREE.Vector3(), cohF = new THREE.Vector3(), sepF = new THREE.Vector3();
