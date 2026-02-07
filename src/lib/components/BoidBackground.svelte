@@ -56,52 +56,27 @@
             lastInteractionTime,
             timeSinceInteraction: performance.now() - lastInteractionTime,
             uiRect: uiRect ? {
-                top: uiRect.top,
-                bottom: uiRect.bottom,
-                left: uiRect.left,
-                right: uiRect.right,
-                width: uiRect.width,
-                height: uiRect.height
+                top: uiRect.top, bottom: uiRect.bottom, left: uiRect.left, right: uiRect.right, width: uiRect.width, height: uiRect.height
             } : null,
             renderer: {
                 pixelRatio: renderer.getPixelRatio(),
                 outputColorSpace: renderer.outputColorSpace,
                 toneMapping: renderer.toneMapping,
-                capabilities: {
-                    maxAnisotropy: renderer.capabilities.getMaxAnisotropy(),
-                    maxPrecision: renderer.capabilities.precision,
-                    isWebGL2: renderer.capabilities.isWebGL2
-                },
                 info: {
                     geometries: renderer.info.memory.geometries,
-                    textures: renderer.info.memory.textures,
-                    drawCalls: renderer.info.render.calls,
-                    triangles: renderer.info.render.triangles
+                    drawCalls: renderer.info.render.calls
                 },
                 dimensions: {
                     window: [window.innerWidth, window.innerHeight],
-                    canvas: [canvas.width, canvas.height],
-                    style: [canvas.clientWidth, canvas.clientHeight]
+                    canvas: [canvas.width, canvas.height]
                 }
             },
             scene: {
-                fog: scene.fog ? {
-                    type: (scene.fog as any).isFogExp2 ? 'FogExp2' : 'Fog',
-                    color: (scene.fog as any).color.getHexString(),
-                    density: (scene.fog as any).density || null,
-                    near: (scene.fog as any).near || null,
-                    far: (scene.fog as any).far || null
-                } : null,
-                backgroundUniforms: bgMesh ? {
-                    time: (bgMesh.material as THREE.ShaderMaterial).uniforms.time.value,
-                    dayPhase: (bgMesh.material as THREE.ShaderMaterial).uniforms.dayPhase.value,
-                    tension: (bgMesh.material as THREE.ShaderMaterial).uniforms.tension.value
-                } : null
+                fog: scene.fog ? 'Enabled' : 'None',
+                backgroundUniforms: bgMesh ? 'Shader Active' : 'None'
             },
             camera: {
                 position: camera.position.toArray(),
-                rotation: camera.rotation.toArray(),
-                zoom: camera.zoom,
                 near: camera.near,
                 far: camera.far
             }
@@ -116,50 +91,20 @@
             }
 
             data.instancedMesh = {
-                visible: mesh.visible,
-                frustumCulled: mesh.frustumCulled,
                 count: mesh.count,
                 instanceMatrixSample: matrixSample,
-                matrixWorld: mesh.matrixWorld.elements,
-                geometryAttributes: Object.keys(mesh.geometry.attributes),
                 material: {
                     type: mesh.material.type,
-                    color: (mesh.material as any).color.getHexString(),
                     emissive: (mesh.material as any).emissive?.getHexString(),
-                    emissiveIntensity: (mesh.material as any).emissiveIntensity,
-                    vertexColors: mesh.material.vertexColors,
-                    transparent: mesh.material.transparent,
-                    opacity: mesh.material.opacity,
-                    wireframe: (mesh.material as any).wireframe
+                    emissiveIntensity: (mesh.material as any).emissiveIntensity
                 }
             };
-
-            const colorAttr = mesh.geometry.getAttribute('instanceColor');
-            if (colorAttr) {
-                data.instanceColorBuffer = {
-                    count: colorAttr.count,
-                    itemSize: colorAttr.itemSize,
-                    usage: colorAttr.usage,
-                    firstFive: [
-                        [colorAttr.getX(0), colorAttr.getY(0), colorAttr.getZ(0)],
-                        [colorAttr.getX(1), colorAttr.getY(1), colorAttr.getZ(1)],
-                        [colorAttr.getX(2), colorAttr.getY(2), colorAttr.getZ(2)],
-                        [colorAttr.getX(3), colorAttr.getY(3), colorAttr.getZ(3)],
-                        [colorAttr.getX(4), colorAttr.getY(4), colorAttr.getZ(4)]
-                    ]
-                };
-            }
         }
 
         const lights: any[] = [];
         scene.traverse(obj => {
             if (obj instanceof THREE.Light) {
-                lights.push({
-                    type: obj.type,
-                    intensity: obj.intensity,
-                    color: obj.color.getHexString(),
-                    position: obj.position.toArray()
-                });
+                lights.push({ type: obj.type, intensity: obj.intensity, position: obj.position.toArray() });
             }
         });
         data.lights = lights;
@@ -224,40 +169,32 @@
     let uiRect: DOMRect | null = null;
     let mainElement: HTMLElement | null = null;
     
-    // PERFORMANCE: Spatial Partitioning & Scratch Vectors
-    const GRID_SIZE = 40;
-    let gridHeaders: Int32Array;
-    let boidNext: Int32Array;
-    let gridCellsCount = 0;
     const _scratchV1 = new THREE.Vector3();
     const _scratchV2 = new THREE.Vector3();
-    const _scratchV3 = new THREE.Vector3();
     const _alignF = new THREE.Vector3();
     const _cohF = new THREE.Vector3();
     const _sepF = new THREE.Vector3();
 
-    // BOID PARAMETERS
+    // BOID PARAMETERS - MASTER TUNING
     const BOUNDARY_SIZE = 120;
-    const NEIGHBOR_COUNT = 7; 
-    const TARGET_SPEED = 1.3;
-    const SPEED_FORCE = 0.04;
-    const PREDATOR_RADIUS = 55;
-    const PREDATOR_SPEED = 2.4; 
-    const PREDATOR_MIN_SPEED = 1.3;
-    const PREDATOR_MAX_STEER = 0.25;
+    const TARGET_SPEED = 1.8;
+    const SPEED_FORCE = 0.06;
+    const PREDATOR_SPEED = 2.8; 
+    const PREDATOR_MIN_SPEED = 1.5;
+    const PREDATOR_MAX_STEER = 0.35;
     const PREDATOR_PREDICT_T = 4;
-    const EAT_RADIUS_SQ = 49; // ~7 world units
+    const EAT_RADIUS_SQ = 64; // ~8 world units
     
-    let SPEED_LIMIT = $derived(1.6);
+    let SPEED_LIMIT = $derived(2.5);
     let VISUAL_RANGE = $derived(45); 
-    let PROTECTED_RANGE = $derived(12);
-    let SEPARATION_WEIGHT = $derived(5.5); 
+    let PROTECTED_RANGE = $derived(15);
+    let SEPARATION_WEIGHT = $derived(6.0); 
     let ALIGNMENT_WEIGHT = $derived(2.5); 
-    let COHESION_WEIGHT = $derived(3.5); 
+    let COHESION_WEIGHT = $derived(4.0); 
     const MOUSE_REPULSION_WEIGHT = 15.0;
 
     const VISUAL_RANGE_SQ = 45 * 45;
-    const PROTECTED_RANGE_SQ = 12 * 12;
+    const PROTECTED_RANGE_SQ = 15 * 15;
     const MOUSE_REPULSION_SQ = 6000;
 
     const bgVertexShader = `
@@ -328,10 +265,7 @@
         birdGeo.computeVertexNormals();
         
         const material = new THREE.MeshLambertMaterial({ 
-            color: 0xffffff, 
-            transparent: true, 
-            opacity: 0.95, 
-            emissive: 0x000000
+            color: 0xffffff, transparent: true, opacity: 0.95, emissive: 0x000000
         });
         mesh = new THREE.InstancedMesh(birdGeo, material, boidCount);
         mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
@@ -356,23 +290,14 @@
         maxSpeeds = new Float32Array(boidCount);
         deathTimers = new Float32Array(boidCount);
         
-        // Grid Initialization
-        gridCellsCount = Math.ceil((BOUNDARY_SIZE * 2.5) / GRID_SIZE);
-        const totalCells = gridCellsCount * gridCellsCount * gridCellsCount;
-        gridHeaders = new Int32Array(totalCells);
-        boidNext = new Int32Array(boidCount);
-        mainElement = document.querySelector('main');
-
-        const baseColor = new THREE.Color(color);
         for (let i = 0; i < boidCount; i++) {
             _position.set((Math.random()-0.5)*250, (Math.random()-0.5)*250, 20+Math.random()*100);
-            _velocity.set((Math.random()-0.5), (Math.random()-0.5), 1).normalize().multiplyScalar(SPEED_LIMIT*2);
+            _velocity.set((Math.random()-0.5), (Math.random()-0.5), 1).normalize().multiplyScalar(SPEED_LIMIT);
             positions[i*3]=_position.x; positions[i*3+1]=_position.y; positions[i*3+2]=_position.z;
             velocities[i*3]=_velocity.x; velocities[i*3+1]=_velocity.y; velocities[i*3+2]=_velocity.z;
             scales[i] = 0.75 + Math.random() * 0.55;
-            maxSpeeds[i] = SPEED_LIMIT * (0.85 + Math.random() * 0.4);
-            _tempColor.copy(baseColor).multiplyScalar(0.8);
-            mesh.setColorAt(i, _tempColor);
+            maxSpeeds[i] = SPEED_LIMIT * (0.8 + Math.random() * 0.4);
+            mesh.setColorAt(i, new THREE.Color(color).multiplyScalar(0.8));
             _dummy.position.copy(_position);
             _dummy.scale.set(scales[i], scales[i], scales[i]);
             _dummy.updateMatrix();
@@ -380,7 +305,6 @@
         }
         if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
 
-        // Initialize predator near a random boid
         const startIdx = Math.floor(Math.random() * boidCount) * 3;
         _predPos.set(positions[startIdx], positions[startIdx+1], positions[startIdx+2]);
         _predVel.set(velocities[startIdx], velocities[startIdx+1], velocities[startIdx+2]).setLength(PREDATOR_SPEED);
@@ -484,7 +408,6 @@
         if (isTerminal && timeSinceInteraction < 2000) { recruitmentLevel = Math.min(1, recruitmentLevel + 0.0005); } 
         else { recruitmentLevel = Math.max(0, recruitmentLevel - 0.008); }
 
-        // Update UI Rect dynamically for drag tracking
         if (recruitmentLevel > 0) {
             const el = document.getElementById('boid-target');
             if (el) uiRect = el.getBoundingClientRect();
@@ -500,9 +423,9 @@
             _velocity.set(velocities[idx], velocities[idx + 1], velocities[idx + 2]);
             _acceleration.set(0, 0, 0);
 
-            // DEATH / EATING EFFECT
+            // DEATH EFFECT
             if (deathTimers[i] > 0) {
-                deathTimers[i] -= 0.025;
+                deathTimers[i] -= 0.035;
                 if (deathTimers[i] <= 0) {
                     _position.set((Math.random()-0.5)*350, (Math.random()-0.5)*350, 20+Math.random()*100);
                     _velocity.set((Math.random()-0.5), (Math.random()-0.5), 1).normalize().multiplyScalar(SPEED_LIMIT);
@@ -510,9 +433,7 @@
                 _tempColor.set(0xff0000).lerp(_baseCol, 1.0 - deathTimers[i]);
                 mesh.setColorAt(i, _tempColor);
                 const s = scales[i] * Math.max(0, deathTimers[i]);
-                _dummy.position.copy(_position);
-                _dummy.scale.set(s, s, s);
-                _dummy.updateMatrix();
+                _dummy.position.copy(_position); _dummy.scale.set(s, s, s); _dummy.updateMatrix();
                 mesh.setMatrixAt(i, _dummy.matrix);
                 positions[idx] = _position.x; positions[idx+1] = _position.y; positions[idx+2] = _position.z;
                 continue;
@@ -522,31 +443,24 @@
 
             if (isObserver && uiRect) {
                 const angle = (i * 137.5) * (Math.PI / 180); 
-                const margin = 120 + (i % 4) * 60; 
+                // Huge margins to stay perfectly clear of terminal area
+                const margin = 450 + (i % 4) * 100; 
                 
-                const timeOff = t * (0.2 + (i % 5) * 0.05) + i;
-                let tsx = (uiRect.left + uiRect.right) * 0.5 + Math.cos(angle) * (uiRect.width * 0.5 + margin) + Math.sin(timeOff) * 15;
-                let tsy = (uiRect.top + uiRect.bottom) * 0.5 + Math.sin(angle) * (uiRect.height * 0.5 + margin) + Math.cos(timeOff) * 15;
+                const timeOff = t * 0.15 + i;
+                let tsx = (uiRect.left + uiRect.right) * 0.5 + Math.cos(angle) * (uiRect.width * 0.5 + margin) + Math.sin(timeOff) * 10;
+                let tsy = (uiRect.top + uiRect.bottom) * 0.5 + Math.sin(angle) * (uiRect.height * 0.5 + margin) + Math.cos(timeOff) * 10;
                 
-                // Force outside terminal area (Observer Avoidance)
-                if (tsx > uiRect.left - 40 && tsx < uiRect.right + 40 && tsy > uiRect.top - 40 && tsy < uiRect.bottom + 40) {
-                    const dx = tsx - (uiRect.left + uiRect.right) * 0.5;
-                    const dy = tsy - (uiRect.top + uiRect.bottom) * 0.5;
-                    if (Math.abs(dx) > Math.abs(dy)) tsx = dx > 0 ? uiRect.right + 80 : uiRect.left - 80;
-                    else tsy = dy > 0 ? uiRect.bottom + 80 : uiRect.top - 80;
-                }
-
-                _diff.set((tsx / window.innerWidth) * 2 - 1, -(tsy / window.innerHeight) * 2 + 1, 0.2).unproject(camera);
-                _position.lerp(_diff, 0.06); _velocity.set(0, 0, 0); 
+                // Safe unproject depth (not inside camera plane)
+                _diff.set((tsx / window.innerWidth) * 2 - 1, -(tsy / window.innerHeight) * 2 + 1, 0.3).unproject(camera);
+                _position.lerp(_diff, 0.05); _velocity.set(0, 0, 0); 
                 
                 _lookAt.set(((uiRect.left + uiRect.right)*0.5/window.innerWidth)*2-1, -((uiRect.top + uiRect.bottom)*0.5/window.innerHeight)*2+1, 0.5).unproject(camera);
                 _dummy.position.copy(_position); _dummy.lookAt(_lookAt);
                 
-                const pulse = 1.0 + Math.sin(t * (2.0 + recruitmentLevel * 2.0) + i) * (0.05 + recruitmentLevel * 0.1);
+                const pulse = 1.0 + Math.sin(t * 3.0 + i) * (0.05 + recruitmentLevel * 0.1);
                 _tempColor.copy(_baseCol);
                 if (recruitmentLevel > 0.2) _tempColor.lerp(_whiteCol, Math.min((recruitmentLevel-0.2)*1.5, 0.95));
-                _tempColor.multiplyScalar(pulse);
-                mesh.setColorAt(i, _tempColor);
+                mesh.setColorAt(i, _tempColor.multiplyScalar(pulse));
                 _dummy.scale.set(scales[i], scales[i], scales[i]);
             } else {
                 _alignF.set(0, 0, 0); _cohF.set(0, 0, 0); _sepF.set(0, 0, 0);
@@ -568,37 +482,19 @@
                 if (cC > 0) _acceleration.add(_cohF.divideScalar(cC).sub(_position).normalize().multiplyScalar(COHESION_WEIGHT * 0.015));
                 if (aC > 0) _acceleration.add(_alignF.divideScalar(aC).normalize().sub(_velocity).multiplyScalar(ALIGNMENT_WEIGHT * 0.05));
 
-                // Predator avoidance & Kill logic
+                // Predator Avoidance & Eaten Trigger
                 const dxP = _position.x - _predPos.x, dyP = _position.y - _predPos.y, dzP = _position.z - _predPos.z;
                 const dSqP = dxP*dxP + dyP*dyP + dzP*dzP;
-                if (dSqP < 3000) { 
-                    _acceleration.add(_scratchV1.set(dxP, dyP, dzP).normalize().multiplyScalar(0.4));
-                    if (dSqP < EAT_RADIUS_SQ) {
-                        deathTimers[i] = 1.0; // Start eating effect
-                    }
+                if (dSqP < 2500) { 
+                    _acceleration.add(_scratchV1.set(dxP, dyP, dzP).normalize().multiplyScalar(0.5));
+                    if (dSqP < EAT_RADIUS_SQ) deathTimers[i] = 1.0; 
                 }
 
-                // Stay within boundaries
-                const turn = 0.1;
-                if (_position.x < -BOUNDARY_SIZE) _acceleration.x += turn;
-                if (_position.x > BOUNDARY_SIZE) _acceleration.x -= turn;
-                if (_position.y < -BOUNDARY_SIZE) _acceleration.y += turn;
-                if (_position.y > BOUNDARY_SIZE) _acceleration.y -= turn;
-                if (_position.z < 20) _acceleration.z += turn;
-                if (_position.z > BOUNDARY_SIZE + 20) _acceleration.z -= turn;
-
-                const dxT = _position.x - target.x, dyT = _position.y - target.y, dzT = _position.z - target.z;
-                const dSqToTarget = dxT*dxT + dyT*dyT + dzT*dzT;
-                if (dSqToTarget < MOUSE_REPULSION_SQ) {
-                    _scratchV1.set(dxT, dyT, dzT).normalize().multiplyScalar(MOUSE_REPULSION_WEIGHT * 0.045);
-                    _acceleration.add(_scratchV1);
-                }
-                
-                // Personality wander (low frequency)
-                const wOff = t * 0.1 + i * 0.1;
+                // Smooth Wander (Ultra-low frequency)
+                const wOff = t * 0.05 + i * 0.1;
                 _scratchV1.set(Math.sin(wOff) * 0.01, Math.cos(wOff * 0.8) * 0.01, Math.sin(wOff * 0.4) * 0.008);
                 _acceleration.add(_scratchV1);
-                _acceleration.clampLength(0, 0.12);
+                _acceleration.clampLength(0, 0.15);
                 
                 _velocity.add(_acceleration).clampLength(0.1, maxSpeeds[i]);
                 _position.add(_velocity);
@@ -615,16 +511,14 @@
         mesh.instanceColor!.needsUpdate = true;
         mesh.instanceMatrix.needsUpdate = true;
 
-        // Update Trails
         if (showTrails && trails) {
             const attr = trails.geometry.getAttribute('position') as THREE.BufferAttribute;
             const h = attr.array as Float32Array;
             for (let i = 0; i < boidCount; i++) {
                 if (deathTimers[i] > 0) continue; 
-                const bIdx = i * 3;
                 const tOff = i * TRAIL_LENGTH * 3;
                 h.copyWithin(tOff + 3, tOff, tOff + (TRAIL_LENGTH - 1) * 3);
-                h[tOff] = positions[bIdx]; h[tOff+1] = positions[bIdx+1]; h[tOff+2] = positions[bIdx+2];
+                h[tOff] = positions[i*3]; h[tOff+1] = positions[i*3+1]; h[tOff+2] = positions[i*3+2];
             }
             attr.needsUpdate = true;
         }
@@ -639,46 +533,25 @@
         if (predTargetIdx < 0 || now > predTargetUntil) { predTargetIdx = Math.floor(Math.random() * boidCount); predTargetUntil = now + 5000; }
         const tIdx = predTargetIdx * 3;
         const predict = _lookAt.set(positions[tIdx] + velocities[tIdx] * PREDATOR_PREDICT_T, positions[tIdx+1] + velocities[tIdx+1] * PREDATOR_PREDICT_T, positions[tIdx+2] + velocities[tIdx+2] * PREDATOR_PREDICT_T);
-        
         _diff.copy(predict).sub(_predPos);
         if (_diff.lengthSq() > 0.001) {
             const steer = _scratchV1.copy(_diff).setLength(PREDATOR_SPEED).sub(_predVel).clampLength(0, PREDATOR_MAX_STEER);
             _predVel.add(steer).clampLength(PREDATOR_MIN_SPEED, PREDATOR_SPEED);
         }
-
-        const pTurn = 0.08;
-        if (_predPos.x < -BOUNDARY_SIZE) _predVel.x += pTurn;
-        if (_predPos.x > BOUNDARY_SIZE) _predVel.x -= pTurn;
-        if (_predPos.y < -BOUNDARY_SIZE) _predVel.y += pTurn;
-        if (_predPos.y > BOUNDARY_SIZE) _predVel.y -= pTurn;
-        if (_predPos.z < 20) _predVel.z += pTurn;
-        if (_predPos.z > BOUNDARY_SIZE + 20) _predVel.z -= pTurn;
-
         _predPos.add(_predVel);
         if (predator) { 
             predator.position.copy(_predPos); 
             if (_predVel.lengthSq() > 0.001) predator.lookAt(_lookAt.copy(_predPos).add(_predVel)); 
         }
 
-        if (mesh && debugMode) {
-            if (!debugMaterial) debugMaterial = new THREE.MeshNormalMaterial();
-            const originalMat = mesh.material;
-            mesh.material = debugMaterial;
-            renderer.render(scene, camera);
-            mesh.material = originalMat;
-        } else {
-            renderer.render(scene, camera);
-        }
+        renderer.render(scene, camera);
         lastFrameTime = performance.now() - frameStartTime;
     }
 
     onMount(() => {
         init(); animate();
-        const updateUIRect = () => { uiRect = (document.querySelector('main') as HTMLElement | null)?.getBoundingClientRect() || null; };
-        updateUIRect();
         window.addEventListener('resize', () => { 
             if (camera && renderer) { camera.aspect = window.innerWidth / window.innerHeight; camera.updateProjectionMatrix(); renderer.setSize(window.innerWidth, window.innerHeight); }
-            updateUIRect();
         });
         window.addEventListener('mousemove', (e) => { mouse.x = (e.clientX/window.innerWidth)*2-1; mouse.y = -(e.clientY/window.innerHeight)*2+1; });
     });
