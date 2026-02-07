@@ -17,7 +17,8 @@
 
     // Trigger interaction when typing
     $effect(() => {
-        if (commandInput !== undefined && onInteraction) {
+        // Only trigger if there is actual input, avoiding initial load trigger
+        if (commandInput && commandInput.length > 0 && onInteraction) {
             // Get the bounding box of the input area to tell boids where to look
             if (inputRef) {
                 const rect = inputRef.getBoundingClientRect();

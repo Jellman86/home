@@ -471,9 +471,9 @@
         
         // Recruitment Level: Increases while typing, decreases when idle
         if (isTerminal && timeSinceInteraction < 2000) {
-            recruitmentLevel = Math.min(1, recruitmentLevel + 0.005); // Takes ~3 seconds of typing to reach 100%
+            recruitmentLevel = Math.min(1, recruitmentLevel + 0.0015); // Much slower breaking away (~10s to full)
         } else {
-            recruitmentLevel = Math.max(0, recruitmentLevel - 0.002);
+            recruitmentLevel = Math.max(0, recruitmentLevel - 0.0006); // Much slower leaving
         }
 
         // Final observer count factor
@@ -490,24 +490,39 @@
             const isObserver = interactionFactor > 0.02 && (i / boidCount) < (interactionFactor + jitter);
 
             if (isObserver && uiRect) {
-                // --- STATIONARY OBSERVER LOGIC ---
-                const angle = (i / boidCount) * Math.PI * 2;
-                const margin = 130;
-                const targetSX = (uiRect.left + uiRect.right) * 0.5 + Math.cos(angle) * (uiRect.width * 0.5 + margin);
-                const targetSY = (uiRect.top + uiRect.bottom) * 0.5 + Math.sin(angle) * (uiRect.height * 0.5 + margin);
+                // --- STATIONARY 3D SURROUND LOGIC ---
+                // Distribution with jittered spacing
+                const angle = (i * 137.5) * (Math.PI / 180); // Fibonacci angle for even-ish distribution
+                
+                // Varied margins for 3D depth feel
+                const ringDepth = (i % 3); // 0, 1, 2 for layering
+                const margin = 40 + ringDepth * 30; 
+                
+                let targetSX = (uiRect.left + uiRect.right) * 0.5 + Math.cos(angle) * (uiRect.width * 0.5 + margin);
+                let targetSY = (uiRect.top + uiRect.bottom) * 0.5 + Math.sin(angle) * (uiRect.height * 0.5 + margin);
 
-                // Calculate the world position at a fixed Z (135) that corresponds to the screen target
-                // We use unproject with NDC coordinates. 
-                // Z=0.9 corresponds to roughly 135-145 world units away from the camera at Z=180
+                // Avatar Avoidance: The avatar is in the right 45% of the UI
+                const isOverAvatar = targetSX > (uiRect.right - uiRect.width * 0.45);
+                
+                // 3D Depth variation: NDC Z between 0.88 and 0.96
+                // Higher Z is deeper (further from camera)
+                let ndcZ = 0.92 + (Math.sin(i * 0.5) * 0.04);
+                
+                if (isOverAvatar) {
+                    // Push boids behind the avatar or further out so they don't block it
+                    ndcZ = 0.97; // Deepest layer
+                    targetSX += 40; // Push further right/out
+                }
+
                 _diff.set(
                     (targetSX / window.innerWidth) * 2 - 1,
                     -(targetSY / window.innerHeight) * 2 + 1,
-                    0.925
+                    ndcZ
                 ).unproject(camera);
 
-                // Snap/Lerp to station
-                _position.lerp(_diff, 0.2);
-                _velocity.set(0, 0, 0); // Absolute freeze on velocity
+                // Smoothly lerp to station, then lock
+                _position.lerp(_diff, 0.05);
+                _velocity.set(0, 0, 0); 
 
                 // Rotate to track typing point
                 const lookX = typingPoint ? typingPoint.x : (uiRect.left + uiRect.right) * 0.5;
@@ -517,13 +532,11 @@
                 _dummy.position.copy(_position);
                 _dummy.lookAt(_lookAt);
                 
-                // Still use the pulse for color (visual only, not movement)
                 const pulse = 0.85 + Math.sin(t * 3.0 + i * 0.2) * (0.05 + recruitmentLevel * 0.15);
                 _tempColor.copy(new THREE.Color(color)).multiplyScalar(pulse);
                 mesh.setColorAt(i, _tempColor);
                 
-                // NO scale change while looming to remain perfectly still
-                const scale = scales ? scales[i] : 1;
+                const scale = (scales ? scales[i] : 1) * 0.9; // Slightly smaller when looming for better spacing
                 _dummy.scale.set(scale, scale, scale);
             } else {
                 // --- STANDARD BOID LOGIC (MOVING) ---
