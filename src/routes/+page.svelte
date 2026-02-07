@@ -48,7 +48,7 @@
     let showTrails = $state(false);
     
     let fps = $state(0);
-    const gitHash = '04eca52'; 
+    const gitHash = __GIT_HASH__; 
 
     // Derived theme properties
     let ActiveComponent = $derived(themes[currentTheme].component);
