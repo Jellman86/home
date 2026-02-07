@@ -203,6 +203,7 @@
     let positions: Float32Array;
     let velocities: Float32Array;
     let scales: Float32Array;
+    let maxSpeeds: Float32Array;
     
     const _position = new THREE.Vector3();
     const _velocity = new THREE.Vector3();
@@ -246,9 +247,9 @@
     let SPEED_LIMIT = $derived(0.8);
     let VISUAL_RANGE = $derived(45); 
     let PROTECTED_RANGE = $derived(8);
-    let SEPARATION_WEIGHT = $derived(2.5); 
-    let ALIGNMENT_WEIGHT = $derived(4.0); 
-    let COHESION_WEIGHT = $derived(1.5); 
+    let SEPARATION_WEIGHT = $derived(2.8); 
+    let ALIGNMENT_WEIGHT = $derived(3.2); 
+    let COHESION_WEIGHT = $derived(1.4); 
     const MOUSE_REPULSION_WEIGHT = 12.0;
 
     const VISUAL_RANGE_SQ = 45 * 45;
@@ -348,6 +349,7 @@
         positions = new Float32Array(boidCount * 3);
         velocities = new Float32Array(boidCount * 3);
         scales = new Float32Array(boidCount);
+        maxSpeeds = new Float32Array(boidCount);
         
         // Grid Initialization
         gridCellsCount = Math.ceil((BOUNDARY_SIZE * 2.5) / GRID_SIZE);
@@ -363,6 +365,7 @@
             positions[i*3]=_position.x; positions[i*3+1]=_position.y; positions[i*3+2]=_position.z;
             velocities[i*3]=_velocity.x; velocities[i*3+1]=_velocity.y; velocities[i*3+2]=_velocity.z;
             scales[i] = 0.75 + Math.random() * 0.55;
+            maxSpeeds[i] = SPEED_LIMIT * (0.85 + Math.random() * 0.3);
             _tempColor.copy(baseColor).multiplyScalar(0.8);
             mesh.setColorAt(i, _tempColor);
             _dummy.position.copy(_position);
@@ -619,10 +622,12 @@
                     _acceleration.add(_scratchV1);
                 }
                 
-                _scratchV1.set(Math.sin(py*0.015+t*0.6)*0.008, Math.cos(px*0.012+t*0.5)*0.008, Math.sin((px+py)*0.01+t*0.4)*0.006);
+                _scratchV1.set(Math.sin(py*0.015+t*0.6+i*0.1)*0.012, Math.cos(px*0.012+t*0.5+i*0.2)*0.012, Math.sin((px+py)*0.01+t*0.4+i*0.3)*0.01);
                 _acceleration.add(_scratchV1);
-                _acceleration.clampLength(0, 0.05);
-                _velocity.add(_acceleration).clampLength(0.05, SPEED_LIMIT * 0.8);
+                _acceleration.clampLength(0, 0.06);
+                
+                const myMaxSpeed = maxSpeeds[i];
+                _velocity.add(_acceleration).clampLength(0.05, myMaxSpeed);
                 _position.add(_velocity);
                 _dummy.position.copy(_position);
                 if (_velocity.lengthSq() > 0.0001) _dummy.lookAt(_lookAt.copy(_position).add(_velocity));
