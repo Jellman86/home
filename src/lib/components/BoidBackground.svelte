@@ -472,16 +472,17 @@
         const timeSinceInteraction = now - lastInteractionTime;
         const interactionActive = isTerminal && timeSinceInteraction < 60000;
         
-        // Recruitment Level: 100% slower
+        // Recruitment Level: Much slower (takes ~25s to full)
         if (isTerminal && timeSinceInteraction < 2000) {
-            recruitmentLevel = Math.min(1, recruitmentLevel + 0.0006); 
+            recruitmentLevel = Math.min(1, recruitmentLevel + 0.0003); 
         } else {
-            recruitmentLevel = Math.max(0, recruitmentLevel - 0.00025); 
+            recruitmentLevel = Math.max(0, recruitmentLevel - 0.00015); 
         }
 
+        // Limit observers to 25% of the flock for spacing
+        const maxObservers = boidCount * 0.25;
         const interactionFactor = recruitmentLevel * (interactionActive ? Math.pow(Math.max(0, 1 - (timeSinceInteraction / 60000)), 0.5) : 0);
         
-        // Reactively update base color for the loop
         _baseCol.set(color);
 
         for (let i = 0; i < boidCount; i++) {
@@ -490,16 +491,16 @@
             _velocity.set(velocities[idx], velocities[idx + 1], velocities[idx + 2]);
             _acceleration.set(0, 0, 0);
 
-            const jitter = (Math.sin(i * 0.1) * 0.05);
-            const isObserver = interactionFactor > 0.02 && (i / boidCount) < (interactionFactor + jitter);
+            // Determine if this boid is an observer (capped at 25%)
+            const isObserver = interactionFactor > 0.02 && (i < maxObservers * interactionFactor);
 
             if (isObserver && uiRect) {
-                // --- STATIONARY 3D SURROUND LOGIC (FOREGROUND) ---
+                // --- STATIONARY 3D SURROUND LOGIC (TERMINAL DEPTH) ---
                 const angle = (i * 137.5) * (Math.PI / 180); 
                 
-                // Significantly more spacing and closer to terminal
-                const ringDepth = (i % 8); 
-                const margin = 60 + ringDepth * 45; 
+                // Varied spacing to avoid 'wall' effect
+                const ringDepth = (i % 6); 
+                const margin = 100 + ringDepth * 60; 
                 
                 let targetSX = (uiRect.left + uiRect.right) * 0.5 + Math.cos(angle) * (uiRect.width * 0.5 + margin);
                 let targetSY = (uiRect.top + uiRect.bottom) * 0.5 + Math.sin(angle) * (uiRect.height * 0.5 + margin);
@@ -508,19 +509,17 @@
                 const avatarCenterX = uiRect.right - (uiRect.width * 0.22);
                 const avatarCenterY = uiRect.top + (uiRect.height * 0.4);
                 const distToAvatarCenter = Math.hypot(targetSX - avatarCenterX, targetSY - avatarCenterY);
-                
-                // Move them significantly closer to the camera (ndcZ 0.1 to 0.4)
-                // This puts them in the foreground, between user and terminal
-                let ndcZ = 0.2 + (Math.sin(i * 0.3) * 0.15); 
+
+                // Depth layer: 0.88 to 0.94 is roughly the terminal plane
+                let ndcZ = 0.88 + (ringDepth * 0.012); 
                 
                 if (distToAvatarCenter < 180) {
-                    // Push boids away from avatar area in 3D
-                    ndcZ = 0.6; // Push deeper
+                    ndcZ = 0.96; 
                     const pushDirX = (targetSX - avatarCenterX);
                     const pushDirY = (targetSY - avatarCenterY);
                     const pushLen = Math.hypot(pushDirX, pushDirY) || 1;
-                    targetSX += (pushDirX / pushLen) * 100;
-                    targetSY += (pushDirY / pushLen) * 100;
+                    targetSX += (pushDirX / pushLen) * 120;
+                    targetSY += (pushDirY / pushLen) * 120;
                 }
 
                 _diff.set(
@@ -532,8 +531,9 @@
                 _position.lerp(_diff, 0.03); 
                 _velocity.set(0, 0, 0); 
 
-                const lookX = typingPoint ? typingPoint.x : (uiRect.left + uiRect.right) * 0.5;
-                const lookY = typingPoint ? typingPoint.y : (uiRect.top + uiRect.bottom) * 0.5;
+                // Look specifically at the terminal window center
+                const lookX = (uiRect.left + uiRect.right) * 0.5;
+                const lookY = (uiRect.top + uiRect.bottom) * 0.5;
                 _lookAt.set((lookX / window.innerWidth) * 2 - 1, -(lookY / window.innerHeight) * 2 + 1, 0.5).unproject(camera);
                 
                 _dummy.position.copy(_position);
@@ -543,19 +543,24 @@
                 const observationPulse = 0.9 + Math.sin(t * (4.0 + recruitmentLevel * 5.0) + i * 0.5) * (0.1 + recruitmentLevel * 0.3);
                 
                 _tempColor.copy(_baseCol);
-                if (recruitmentLevel > 0.2) {
-                    const chargeFactor = (recruitmentLevel - 0.2) * 1.8;
-                    // Dramatic shift to white to ensure it's visible
+                if (recruitmentLevel > 0.3) {
+                    const chargeFactor = (recruitmentLevel - 0.3) * 1.8;
                     _tempColor.lerp(_whiteCol, Math.min(chargeFactor, 0.95));
                 }
                 
                 _tempColor.multiplyScalar(observationPulse);
                 mesh.setColorAt(i, _tempColor);
                 
-                const speciesVar = 0.25 + (Math.sin(i * 0.7) * 0.15); 
-                const scale = (scales ? scales[i] : 1) * speciesVar;
-                _dummy.scale.set(scale, scale, scale);
+                const speciesVar = 0.3 + (Math.sin(i * 0.7) * 0.2); 
+                // Depth Scaling: Farther boids look smaller
+                const depthScale = 1.0 - (ndcZ - 0.88) * 5.0; 
+                _dummy.scale.set(speciesVar * depthScale, speciesVar * depthScale, speciesVar * depthScale);
             } else {
+                // --- STANDARD BOID LOGIC (MOVING) ---
+                let alignF = new THREE.Vector3(), cohF = new THREE.Vector3(), sepF = new THREE.Vector3();
+                let aC = 0, cC = 0, sC = 0;
+                // ... (rest of standard logic remains same)
+
                 // --- STANDARD BOID LOGIC (MOVING) ---
                 let alignF = new THREE.Vector3(), cohF = new THREE.Vector3(), sepF = new THREE.Vector3();
                 let aC = 0, cC = 0, sC = 0;
