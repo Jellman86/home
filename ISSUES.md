@@ -20,11 +20,16 @@ Applied a concrete fix to the instanced flock pipeline:
 1.  **InstancedMesh Normals**: `ConeGeometry` may require explicit normal computation or a specific orientation to react correctly to lights when instanced.
 2.  **Color Buffer Override**: The `instanceColor` buffer might be initialized with zeros (black) and failing to update correctly in the GPU memory, overriding the material.
 3.  **Lighting/Material Conflict**: There may be a conflict between `vertexColors: true` and the way `MeshPhongMaterial` calculates illumination on instanced geometry.
+4.  **Color-Space Mismatch**: Three.js uses Linear-sRGB internally, but CSS/hex colors are sRGB. If colors are not converted or the renderer output color space is misconfigured, colors can appear darker or black under lighting.
+5.  **InstanceColor Attribute Binding**: `instanceColor` must exist on the geometry attribute map. If the attribute is missing or replaced (e.g., geometry rebuilds), per-instance colors are ignored and default to black.
+6.  **Renderer Output Pipeline**: Output color space and tone mapping settings can significantly affect perceived brightness, even when color management is disabled.
 
 ### Potential Fixes to Investigate
 - Test with `MeshLambertMaterial` (cheaper, different lighting model).
 - Verify the `instanceColor` buffer data types and usage flags.
 - Try a non-lit material with manual color calculation to prove the buffer is working.
+- Force `renderer.outputColorSpace = THREE.SRGBColorSpace` and convert input colors to linear space before upload.
+- Ensure `mesh.geometry.setAttribute('instanceColor', mesh.instanceColor)` is set and re-applied after any geometry changes.
 
 When boids enter the "Observer" state (looming around the terminal), they are intended to turn bright white/yellow to signal active scrutiny. However, in the current build, they remain their base color or appear dark/black during this transition.
 
