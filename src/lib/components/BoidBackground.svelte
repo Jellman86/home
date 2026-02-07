@@ -251,6 +251,10 @@
     let COHESION_WEIGHT = $derived(0.9); 
     const MOUSE_REPULSION_WEIGHT = 8.0;
 
+    const VISUAL_RANGE_SQ = 36 * 36;
+    const PROTECTED_RANGE_SQ = 9 * 9;
+    const MOUSE_REPULSION_SQ = 4000;
+
     const bgVertexShader = `
         varying vec2 vUv;
         void main() {
@@ -499,10 +503,16 @@
         const intFactor = recruitmentLevel * (interactionActive ? Math.pow(Math.max(0, 1 - (timeSinceInteraction / 60000)), 0.5) : 0);
         _baseCol.set(color);
 
+        const mArray = mesh.instanceMatrix.array;
+        const cArray = mesh.instanceColor!.array;
+
         for (let i = 0; i < boidCount; i++) {
             const idx = i * 3;
-            _position.set(positions[idx], positions[idx + 1], positions[idx + 2]);
-            _velocity.set(velocities[idx], velocities[idx + 1], velocities[idx + 2]);
+            const px = positions[idx], py = positions[idx + 1], pz = positions[idx + 2];
+            const vx = velocities[idx], vy = velocities[idx + 1], vz = velocities[idx + 2];
+            
+            _position.set(px, py, pz);
+            _velocity.set(vx, vy, vz);
             _acceleration.set(0, 0, 0);
 
             const isObserver = intFactor > 0.02 && (i < maxObs * intFactor);
@@ -510,12 +520,10 @@
             if (isObserver && uiRect) {
                 const angle = (i * 137.5) * (Math.PI / 180); 
                 // Increased margin significantly to stay "a centimeter outside"
-                // Terminal width is ~900px, margin ensures they are clear of the edges
                 const ring = (i % 5); const margin = 120 + ring * 60; 
                 let tsx = (uiRect.left + uiRect.right) * 0.5 + Math.cos(angle) * (uiRect.width * 0.5 + margin);
                 let tsy = (uiRect.top + uiRect.bottom) * 0.5 + Math.sin(angle) * (uiRect.height * 0.5 + margin);
                 
-                // Positioned closer to camera to emphasize the "scrutiny" but outside the UI rect
                 _diff.set((tsx / window.innerWidth) * 2 - 1, -(tsy / window.innerHeight) * 2 + 1, 0.2).unproject(camera);
                 
                 _position.lerp(_diff, 0.05); _velocity.set(0, 0, 0); 
@@ -526,16 +534,21 @@
                 _tempColor.copy(_baseCol);
                 if (recruitmentLevel > 0.2) _tempColor.lerp(_whiteCol, Math.min((recruitmentLevel-0.2)*1.5, 0.95));
                 _tempColor.multiplyScalar(pulse);
-                mesh.setColorAt(i, _tempColor);
+                
+                const cIdx = i * 3;
+                cArray[cIdx] = _tempColor.r; cArray[cIdx+1] = _tempColor.g; cArray[cIdx+2] = _tempColor.b;
+                
                 const sVar = 0.3 + (Math.sin(i * 0.7) * 0.15); 
                 _dummy.scale.set(sVar, sVar, sVar);
             } else {
-                _alignF.set(0, 0, 0); _cohF.set(0, 0, 0); _sepF.set(0, 0, 0);
+                let aliX = 0, aliY = 0, aliZ = 0;
+                let cohX = 0, cohY = 0, cohZ = 0;
+                let sepX = 0, sepY = 0, sepZ = 0;
                 let aC = 0, cC = 0, sC = 0;
 
-                const gx = Math.floor((_position.x + gridOffset) / GRID_SIZE);
-                const gy = Math.floor((_position.y + gridOffset) / GRID_SIZE);
-                const gz = Math.floor((_position.z + gridOffset) / GRID_SIZE);
+                const gx = Math.floor((px + gridOffset) / GRID_SIZE);
+                const gy = Math.floor((py + gridOffset) / GRID_SIZE);
+                const gz = Math.floor((pz + gridOffset) / GRID_SIZE);
 
                 for (let ox = -1; ox <= 1; ox++) {
                     const nx = gx + ox; if (nx < 0 || nx >= gridCellsCount) continue;
@@ -550,12 +563,17 @@
                             while (boidIdx !== -1) {
                                 if (boidIdx !== i) {
                                     const oIdx = boidIdx * 3;
-                                    const dx = _position.x - positions[oIdx], dy = _position.y - positions[oIdx + 1], dz = _position.z - positions[oIdx + 2];
+                                    const opx = positions[oIdx], opy = positions[oIdx+1], opz = positions[oIdx+2];
+                                    const dx = px - opx, dy = py - opy, dz = pz - opz;
                                     const dSq = dx*dx+dy*dy+dz*dz;
-                                    if (dSq < PROTECTED_RANGE * PROTECTED_RANGE && dSq > 0.01) { _sepF.x += dx; _sepF.y += dy; _sepF.z += dz; sC++; }
-                                    else if (dSq < VISUAL_RANGE * VISUAL_RANGE) {
-                                        _cohF.x += positions[oIdx]; _cohF.y += positions[oIdx+1]; _cohF.z += positions[oIdx+2]; cC++;
-                                        _alignF.x += velocities[oIdx]; _alignF.y += velocities[oIdx+1]; _alignF.z += velocities[oIdx+2]; aC++;
+                                    
+                                    if (dSq < PROTECTED_RANGE_SQ && dSq > 0.01) {
+                                        sepX += dx; sepY += dy; sepZ += dz;
+                                        sC++;
+                                    } else if (dSq < VISUAL_RANGE_SQ) {
+                                        cohX += opx; cohY += opy; cohZ += opz;
+                                        aliX += velocities[oIdx]; aliY += velocities[oIdx+1]; aliZ += velocities[oIdx+2];
+                                        aC++;
                                     }
                                 }
                                 boidIdx = boidNext[boidIdx];
@@ -564,25 +582,35 @@
                     }
                 }
 
-                if (sC > 0) _acceleration.add(_sepF.normalize().multiplyScalar(SEPARATION_WEIGHT * 0.12));
-                if (cC > 0) _acceleration.add(_cohF.divideScalar(cC).sub(_position).normalize().multiplyScalar(COHESION_WEIGHT * 0.01));
-                if (aC > 0) _acceleration.add(_alignF.divideScalar(aC).normalize().sub(_velocity).multiplyScalar(ALIGNMENT_WEIGHT * 0.06));
+                if (sC > 0) {
+                    _scratchV1.set(sepX, sepY, sepZ).normalize().multiplyScalar(SEPARATION_WEIGHT * 0.12);
+                    _acceleration.add(_scratchV1);
+                }
+                if (cC > 0) {
+                    _scratchV1.set(cohX/cC - px, cohY/cC - py, cohZ/cC - pz).normalize().multiplyScalar(COHESION_WEIGHT * 0.01);
+                    _acceleration.add(_scratchV1);
+                }
+                if (aC > 0) {
+                    _scratchV1.set(aliX/aC - vx, aliY/aC - vy, aliZ/aC - vz).normalize().multiplyScalar(ALIGNMENT_WEIGHT * 0.06);
+                    _acceleration.add(_scratchV1);
+                }
 
                 // Stay within boundaries
                 const turn = 0.05;
-                if (_position.x < -BOUNDARY_SIZE) _acceleration.x += turn;
-                if (_position.x > BOUNDARY_SIZE) _acceleration.x -= turn;
-                if (_position.y < -BOUNDARY_SIZE) _acceleration.y += turn;
-                if (_position.y > BOUNDARY_SIZE) _acceleration.y -= turn;
-                if (_position.z < 20) _acceleration.z += turn;
-                if (_position.z > BOUNDARY_SIZE + 20) _acceleration.z -= turn;
+                if (px < -BOUNDARY_SIZE) _acceleration.x += turn;
+                if (px > BOUNDARY_SIZE) _acceleration.x -= turn;
+                if (py < -BOUNDARY_SIZE) _acceleration.y += turn;
+                if (py > BOUNDARY_SIZE) _acceleration.y -= turn;
+                if (pz < 20) _acceleration.z += turn;
+                if (pz > BOUNDARY_SIZE + 20) _acceleration.z -= turn;
 
-                if (_position.distanceToSquared(target) < 4000) {
-                    _scratchV1.copy(_position).sub(target).normalize().multiplyScalar(MOUSE_REPULSION_WEIGHT * 0.035);
+                const dSqToTarget = px*px + py*py + pz*pz; // Approximation for center-target
+                if (dSqToTarget < MOUSE_REPULSION_SQ) {
+                    _scratchV1.set(px, py, pz).normalize().multiplyScalar(MOUSE_REPULSION_WEIGHT * 0.035);
                     _acceleration.add(_scratchV1);
                 }
                 
-                _scratchV1.set(Math.sin(_position.y*0.015+t*0.6)*0.008, Math.cos(_position.x*0.012+t*0.5)*0.008, Math.sin((_position.x+_position.y)*0.01+t*0.4)*0.006);
+                _scratchV1.set(Math.sin(py*0.015+t*0.6)*0.008, Math.cos(px*0.012+t*0.5)*0.008, Math.sin((px+py)*0.01+t*0.4)*0.006);
                 _acceleration.add(_scratchV1);
                 _acceleration.clampLength(0, 0.05);
                 _velocity.add(_acceleration).clampLength(0.05, SPEED_LIMIT * 0.8);
@@ -590,14 +618,18 @@
                 _dummy.position.copy(_position);
                 if (_velocity.lengthSq() > 0.0001) _dummy.lookAt(_lookAt.copy(_position).add(_velocity));
                 _dummy.scale.set(scales[i], scales[i], scales[i]);
+                
+                const cIdx = i * 3;
                 _tempColor.copy(_baseCol).multiplyScalar(0.7 + (scales[i]-0.7)*0.5);
-                mesh.setColorAt(i, _tempColor);
+                cArray[cIdx] = _tempColor.r; cArray[cIdx+1] = _tempColor.g; cArray[cIdx+2] = _tempColor.b;
             }
             positions[idx] = _position.x; positions[idx+1] = _position.y; positions[idx+2] = _position.z;
             velocities[idx] = _velocity.x; velocities[idx+1] = _velocity.y; velocities[idx+2] = _velocity.z;
-            _dummy.updateMatrix(); mesh.setMatrixAt(i, _dummy.matrix);
+            _dummy.updateMatrix();
+            const mIdx = i * 16;
+            for (let m = 0; m < 16; m++) mArray[mIdx + m] = _dummy.matrix.elements[m];
         }
-        mesh.instanceColor.needsUpdate = true;
+        mesh.instanceColor!.needsUpdate = true;
         mesh.instanceMatrix.needsUpdate = true;
 
         // Update Trails
@@ -607,10 +639,8 @@
             for (let i = 0; i < boidCount; i++) {
                 const bIdx = i * 3;
                 const tOff = i * TRAIL_LENGTH * 3;
-                for (let t = TRAIL_LENGTH - 1; t > 0; t--) {
-                    const to = tOff + t * 3, fr = tOff + (t - 1) * 3;
-                    h[to] = h[fr]; h[to+1] = h[fr+1]; h[to+2] = h[fr+2];
-                }
+                // PERFORMANCE: Use fast copyWithin instead of manual shifting
+                h.copyWithin(tOff + 3, tOff, tOff + (TRAIL_LENGTH - 1) * 3);
                 h[tOff] = positions[bIdx]; h[tOff+1] = positions[bIdx+1]; h[tOff+2] = positions[bIdx+2];
             }
             attr.needsUpdate = true;
@@ -618,10 +648,7 @@
         if (showTrails && predTrailLine) {
             const attr = predTrailLine.geometry.getAttribute('position') as THREE.BufferAttribute;
             const h = attr.array as Float32Array;
-            for (let t = PRED_TRAIL_LENGTH - 1; t > 0; t--) {
-                const to = t * 3, fr = (t - 1) * 3;
-                h[to] = h[fr]; h[to+1] = h[fr+1]; h[to+2] = h[fr+2];
-            }
+            h.copyWithin(3, 0, (PRED_TRAIL_LENGTH - 1) * 3);
             h[0] = _predPos.x; h[1] = _predPos.y; h[2] = _predPos.z;
             attr.needsUpdate = true;
         }
