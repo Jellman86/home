@@ -239,22 +239,22 @@
     const TARGET_SPEED = 0.83;
     const SPEED_FORCE = 0.025;
     const PREDATOR_RADIUS = 55;
-    const PREDATOR_SPEED = 1.6; // Faster predator
-    const PREDATOR_MIN_SPEED = 1.1;
-    const PREDATOR_MAX_STEER = 0.15; // Much sharper turns
-    const PREDATOR_PREDICT_T = 6;  // Look ahead less
+    const PREDATOR_SPEED = 1.5; 
+    const PREDATOR_MIN_SPEED = 1.0;
+    const PREDATOR_MAX_STEER = 0.15;
+    const PREDATOR_PREDICT_T = 6;
     
     let SPEED_LIMIT = $derived(0.8);
-    let VISUAL_RANGE = $derived(40); 
-    let PROTECTED_RANGE = $derived(12); // Keep them further apart
-    let SEPARATION_WEIGHT = $derived(4.0); // High separation for individualism
-    let ALIGNMENT_WEIGHT = $derived(1.5); // Lower alignment to prevent "one mass" feel
-    let COHESION_WEIGHT = $derived(1.8); 
-    const MOUSE_REPULSION_WEIGHT = 12.0;
+    let VISUAL_RANGE = $derived(36); 
+    let PROTECTED_RANGE = $derived(10);
+    let SEPARATION_WEIGHT = $derived(3.0); 
+    let ALIGNMENT_WEIGHT = $derived(3.5); 
+    let COHESION_WEIGHT = $derived(1.2); 
+    const MOUSE_REPULSION_WEIGHT = 10.0;
 
-    const VISUAL_RANGE_SQ = 40 * 40;
-    const PROTECTED_RANGE_SQ = 12 * 12;
-    const MOUSE_REPULSION_SQ = 5000;
+    const VISUAL_RANGE_SQ = 36 * 36;
+    const PROTECTED_RANGE_SQ = 10 * 10;
+    const MOUSE_REPULSION_SQ = 4500;
 
     const bgVertexShader = `
         varying vec2 vUv;
@@ -485,23 +485,9 @@
             if (el) uiRect = el.getBoundingClientRect();
         }
 
-        // PERFORMANCE: Build Spatial Grid (Allocation-Free)
-        const gridOffset = BOUNDARY_SIZE * 1.25;
-        gridHeaders.fill(-1);
-        for (let i = 0; i < boidCount; i++) {
-            const idx = i * 3;
-            const gx = Math.floor((positions[idx] + gridOffset) / GRID_SIZE);
-            const gy = Math.floor((positions[idx+1] + gridOffset) / GRID_SIZE);
-            const gz = Math.floor((positions[idx+2] + gridOffset) / GRID_SIZE);
-            
-            if (gx >= 0 && gx < gridCellsCount && gy >= 0 && gy < gridCellsCount && gz >= 0 && gz < gridCellsCount) {
-                const cellKey = gx + gy * gridCellsCount + gz * gridCellsCount * gridCellsCount;
-                boidNext[i] = gridHeaders[cellKey];
-                gridHeaders[cellKey] = i;
-            } else {
-                boidNext[i] = -1;
-            }
-        }
+        const maxObs = boidCount * 0.20;
+        const intFactor = recruitmentLevel * (interactionActive ? Math.pow(Math.max(0, 1 - (timeSinceInteraction / 60000)), 0.5) : 0);
+        _baseCol.set(color);
 
         for (let i = 0; i < boidCount; i++) {
             const idx = i * 3;
@@ -513,28 +499,19 @@
 
             if (isObserver && uiRect) {
                 const angle = (i * 137.5) * (Math.PI / 180); 
-                // Adapt margin to screen size but ensure it stays outside terminal
-                const minMargin = Math.min(window.innerWidth * 0.15, 200);
-                const ring = (i % 4); const margin = minMargin + ring * 80; 
+                const margin = 250 + (i % 4) * 80; 
                 
-                // Individual organic hover
                 const timeOff = t * (0.8 + (i % 5) * 0.2) + i;
-                const jitterX = Math.sin(timeOff) * 30;
-                const jitterY = Math.cos(timeOff * 0.7) * 30;
-
-                let tsx = (uiRect.left + uiRect.right) * 0.5 + Math.cos(angle) * (uiRect.width * 0.5 + margin) + jitterX;
-                let tsy = (uiRect.top + uiRect.bottom) * 0.5 + Math.sin(angle) * (uiRect.height * 0.5 + margin) + jitterY;
+                let tsx = (uiRect.left + uiRect.right) * 0.5 + Math.cos(angle) * (uiRect.width * 0.5 + margin) + Math.sin(timeOff) * 20;
+                let tsy = (uiRect.top + uiRect.bottom) * 0.5 + Math.sin(angle) * (uiRect.height * 0.5 + margin) + Math.cos(timeOff) * 20;
                 
-                // FORCE OUTSIDE: If still inside uiRect (e.g. jitter pushed them in), push them out
-                if (tsx > uiRect.left - 20 && tsx < uiRect.right + 20 && tsy > uiRect.top - 20 && tsy < uiRect.bottom + 20) {
-                    if (tsx < (uiRect.left + uiRect.right) * 0.5) tsx = uiRect.left - 50; else tsx = uiRect.right + 50;
+                // Strict Avoidance
+                if (tsx > uiRect.left - 40 && tsx < uiRect.right + 40 && tsy > uiRect.top - 40 && tsy < uiRect.bottom + 40) {
+                    if (tsx < (uiRect.left + uiRect.right) * 0.5) tsx = uiRect.left - 100; else tsx = uiRect.right + 100;
                 }
 
                 _diff.set((tsx / window.innerWidth) * 2 - 1, -(tsy / window.innerHeight) * 2 + 1, 0.25).unproject(camera);
-                
-                const individualLerp = 0.03 + (i % 10) * 0.005;
-                _position.lerp(_diff, individualLerp); 
-                _velocity.set(Math.sin(timeOff)*0.03, Math.cos(timeOff)*0.03, 0); 
+                _position.lerp(_diff, 0.04); _velocity.set(0, 0, 0); 
                 
                 _lookAt.set(((uiRect.left + uiRect.right)*0.5/window.innerWidth)*2-1, -((uiRect.top + uiRect.bottom)*0.5/window.innerHeight)*2+1, 0.5).unproject(camera);
                 _dummy.position.copy(_position); _dummy.lookAt(_lookAt);
@@ -544,9 +521,7 @@
                 if (recruitmentLevel > 0.2) _tempColor.lerp(_whiteCol, Math.min((recruitmentLevel-0.2)*1.5, 0.95));
                 _tempColor.multiplyScalar(pulse);
                 mesh.setColorAt(i, _tempColor);
-                
-                const sVar = 0.3 + (Math.sin(i * 0.7) * 0.15); 
-                _dummy.scale.set(sVar, sVar, sVar);
+                _dummy.scale.set(scales[i], scales[i], scales[i]);
             } else {
                 _alignF.set(0, 0, 0); _cohF.set(0, 0, 0); _sepF.set(0, 0, 0);
                 let aC = 0, cC = 0, sC = 0;
@@ -554,18 +529,17 @@
                 for (let j = 0; j < boidCount; j++) {
                     if (i === j) continue;
                     const oIdx = j * 3;
-                    const opx = positions[oIdx], opy = positions[oIdx+1], opz = positions[oIdx+2];
-                    const dx = _position.x - opx, dy = _position.y - opy, dz = _position.z - opz;
+                    const dx = _position.x - positions[oIdx], dy = _position.y - positions[oIdx+1], dz = _position.z - positions[oIdx+2];
                     const dSq = dx*dx+dy*dy+dz*dz;
                     
                     if (dSq < PROTECTED_RANGE_SQ && dSq > 0.01) { _sepF.x += dx; _sepF.y += dy; _sepF.z += dz; sC++; }
                     if (dSq < VISUAL_RANGE_SQ && dSq > 0.01) {
-                        _cohF.x += opx; _cohF.y += opy; _cohF.z += opz; cC++;
+                        _cohF.x += positions[oIdx]; _cohF.y += positions[oIdx+1]; _cohF.z += positions[oIdx+2]; cC++;
                         _alignF.x += velocities[oIdx]; _alignF.y += velocities[oIdx+1]; _alignF.z += velocities[oIdx+2]; aC++;
                     }
                 }
 
-                if (sC > 0) _acceleration.add(_sepF.normalize().multiplyScalar(SEPARATION_WEIGHT * 0.12));
+                if (sC > 0 && _sepF.lengthSq() > 0.001) _acceleration.add(_sepF.normalize().multiplyScalar(SEPARATION_WEIGHT * 0.12));
                 if (cC > 0) _acceleration.add(_cohF.divideScalar(cC).sub(_position).normalize().multiplyScalar(COHESION_WEIGHT * 0.01));
                 if (aC > 0) _acceleration.add(_alignF.divideScalar(aC).normalize().sub(_velocity).multiplyScalar(ALIGNMENT_WEIGHT * 0.06));
 
@@ -585,10 +559,10 @@
                     _acceleration.add(_scratchV1);
                 }
                 
-                _scratchV1.set(Math.sin(_position.y*0.015+t*0.6)*0.008, Math.cos(_position.x*0.012+t*0.5)*0.008, Math.sin((_position.x+_position.y)*0.01+t*0.4)*0.006);
+                _scratchV1.set(Math.sin(_position.y*0.015+t*0.6+i*0.1)*0.01, Math.cos(_position.x*0.012+t*0.5+i*0.2)*0.01, Math.sin((_position.x+_position.y)*0.01+t*0.4+i*0.3)*0.008);
                 _acceleration.add(_scratchV1);
                 _acceleration.clampLength(0, 0.05);
-                _velocity.add(_acceleration).clampLength(0.05, SPEED_LIMIT * 0.8);
+                _velocity.add(_acceleration).clampLength(0.05, maxSpeeds[i]);
                 _position.add(_velocity);
                 _dummy.position.copy(_position);
                 if (_velocity.lengthSq() > 0.0001) _dummy.lookAt(_lookAt.copy(_position).add(_velocity));
@@ -596,6 +570,12 @@
                 _tempColor.copy(_baseCol).multiplyScalar(0.7 + (scales[i]-0.7)*0.5);
                 mesh.setColorAt(i, _tempColor);
             }
+            positions[idx] = _position.x; positions[idx+1] = _position.y; positions[idx+2] = _position.z;
+            velocities[idx] = _velocity.x; velocities[idx+1] = _velocity.y; velocities[idx+2] = _velocity.z;
+            _dummy.updateMatrix(); mesh.setMatrixAt(i, _dummy.matrix);
+        }
+        mesh.instanceColor!.needsUpdate = true;
+        mesh.instanceMatrix.needsUpdate = true;
             positions[idx] = _position.x; positions[idx+1] = _position.y; positions[idx+2] = _position.z;
             velocities[idx] = _velocity.x; velocities[idx+1] = _velocity.y; velocities[idx+2] = _velocity.z;
             _dummy.updateMatrix(); mesh.setMatrixAt(i, _dummy.matrix);
