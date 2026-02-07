@@ -479,70 +479,42 @@
         // Final observer count factor
         const interactionFactor = recruitmentLevel * (interactionActive ? Math.pow(Math.max(0, 1 - (timeSinceInteraction / 60000)), 0.5) : 0);
 
-        for (let i = 0; i < boidCount; i++) {
-            const idx = i * 3;
-            _position.set(positions[idx], positions[idx + 1], positions[idx + 2]);
-            _velocity.set(velocities[idx], velocities[idx + 1], velocities[idx + 2]);
-            _acceleration.set(0, 0, 0);
-
-            // Determine if this boid is an observer
-            const jitter = (Math.sin(i * 0.1) * 0.05);
-            const isObserver = interactionFactor > 0.02 && (i / boidCount) < (interactionFactor + jitter);
-
             if (isObserver && uiRect) {
-                // --- OBSERVER STATIONING (STILL) ---
-                // Calculate elliptical station
+                // --- STATIONARY OBSERVER LOGIC ---
                 const angle = (i / boidCount) * Math.PI * 2;
-                const margin = 120;
-                const rectW = (uiRect.right - uiRect.left);
-                const rectH = (uiRect.bottom - uiRect.top);
-                
-                const targetSX = (uiRect.left + uiRect.right) * 0.5 + Math.cos(angle) * (rectW * 0.5 + margin);
-                const targetSY = (uiRect.top + uiRect.bottom) * 0.5 + Math.sin(angle) * (rectH * 0.5 + margin);
+                const margin = 130;
+                const targetSX = (uiRect.left + uiRect.right) * 0.5 + Math.cos(angle) * (uiRect.width * 0.5 + margin);
+                const targetSY = (uiRect.top + uiRect.bottom) * 0.5 + Math.sin(angle) * (uiRect.height * 0.5 + margin);
 
-                // Project current position to compare in screen space
-                _diff.copy(_position).project(camera);
-                const sx = (_diff.x * 0.5 + 0.5) * window.innerWidth;
-                const sy = (-_diff.y * 0.5 + 0.5) * window.innerHeight;
+                // Calculate the world position at a fixed Z (135) that corresponds to the screen target
+                // We use unproject with NDC coordinates. 
+                // Z=0.9 corresponds to roughly 135-145 world units away from the camera at Z=180
+                _diff.set(
+                    (targetSX / window.innerWidth) * 2 - 1,
+                    -(targetSY / window.innerHeight) * 2 + 1,
+                    0.925
+                ).unproject(camera);
 
-                const dsx = (targetSX - sx) / window.innerWidth;
-                const dsy = -(targetSY - sy) / window.innerHeight;
-                
-                const targetZ = 135; 
-                const dz = (targetZ - _position.z);
+                // Snap/Lerp to station
+                _position.lerp(_diff, 0.2);
+                _velocity.set(0, 0, 0); // Absolute freeze on velocity
 
-                // High-performance "Snap-to-Station" logic
-                // No flocking, no flow, no predator avoidance here.
-                _velocity.x = dsx * 40.0; // Fast response to UI movement
-                _velocity.y = dsy * 40.0;
-                _velocity.z = dz * 0.2;
-
-                // Aggressive dampening to keep them "still" once at station
-                const dist = Math.sqrt(dsx * dsx + dsy * dsy);
-                if (dist < 0.01) {
-                    _velocity.x *= 0.1;
-                    _velocity.y *= 0.1;
-                }
-
-                _position.add(_velocity);
-                
-                // Update rotation to face typing point or UI center
+                // Rotate to track typing point
                 const lookX = typingPoint ? typingPoint.x : (uiRect.left + uiRect.right) * 0.5;
                 const lookY = typingPoint ? typingPoint.y : (uiRect.top + uiRect.bottom) * 0.5;
-                
-                _lookAt.set(
-                    (lookX / window.innerWidth) * 2 - 1,
-                    -(lookY / window.innerHeight) * 2 + 1,
-                    0.5
-                ).unproject(camera);
+                _lookAt.set((lookX / window.innerWidth) * 2 - 1, -(lookY / window.innerHeight) * 2 + 1, 0.5).unproject(camera);
                 
                 _dummy.position.copy(_position);
                 _dummy.lookAt(_lookAt);
                 
-                // Subtle pulse (color only)
+                // Still use the pulse for color (visual only, not movement)
                 const pulse = 0.85 + Math.sin(t * 3.0 + i * 0.2) * (0.05 + recruitmentLevel * 0.15);
                 _tempColor.copy(new THREE.Color(color)).multiplyScalar(pulse);
                 mesh.setColorAt(i, _tempColor);
+                
+                // NO scale change while looming to remain perfectly still
+                const scale = scales ? scales[i] : 1;
+                _dummy.scale.set(scale, scale, scale);
             } else {
                 // --- STANDARD BOID LOGIC (MOVING) ---
                 let alignF = new THREE.Vector3(), cohF = new THREE.Vector3(), sepF = new THREE.Vector3();
@@ -649,14 +621,14 @@
                 const s = scales ? scales[i] : 1;
                 _tempColor.copy(new THREE.Color(color)).multiplyScalar(0.78 + s * 0.45);
                 mesh.setColorAt(i, _tempColor);
+                
+                const scale = scales ? scales[i] : 1;
+                _dummy.scale.set(scale, scale, scale);
             }
 
             positions[idx] = _position.x; positions[idx+1] = _position.y; positions[idx+2] = _position.z;
             velocities[idx] = _velocity.x; velocities[idx+1] = _velocity.y; velocities[idx+2] = _velocity.z;
 
-            const scale = scales ? scales[i] : 1;
-            const finalScale = isObserver ? scale * (1.2 + recruitmentLevel * 1.3) : scale;
-            _dummy.scale.set(finalScale, finalScale, finalScale);
             _dummy.updateMatrix();
             mesh.setMatrixAt(i, _dummy.matrix);
         }
