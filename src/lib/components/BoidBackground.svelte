@@ -15,7 +15,7 @@
         isTerminal = false, lastInteractionTime = 0, typingPoint = null, gitHash = 'unknown'
     }: Props = $props();
 
-    // --- COMPONENT STATE ---
+    // --- SHARED COMPONENT STATE ---
     let debugMode = $state(false);
     let recruitmentLevel = $state(0);
     
@@ -26,21 +26,23 @@
     let trails: THREE.LineSegments; let predTrailLine: THREE.Line;
     let frameId: number; let debugMaterial: THREE.MeshNormalMaterial | null = null;
 
-    let bgMesh: THREE.Mesh; let ambientLight: THREE.AmbientLight;
-    let pointLight: THREE.PointLight; let dirLight: THREE.DirectionalLight;
+    let bgMesh: THREE.Mesh; 
+    let ambientLight: THREE.AmbientLight;
+    let pointLight: THREE.PointLight; 
+    let dirLight: THREE.DirectionalLight;
 
     // Simulation Data
     let positions: Float32Array; let velocities: Float32Array; let scales: Float32Array;
     let maxSpeeds: Float32Array; let deathTimers: Float32Array;
     
-    // Predator State
+    // Predator Logic State
     let predTargetIdx = -1; let predTargetUntil = 0;
 
-    // Time Tracking
+    // Performance Tracking
     let lastTime = performance.now(); let frameCount = 0;
     let lastFrameTime = 0; let avgFrameTime = 0;
 
-    // --- ALLOCATION-FREE SCRATCH OBJECTS ---
+    // Scratch Objects (Allocation-Free)
     const _position = new THREE.Vector3(); const _velocity = new THREE.Vector3(); const _acceleration = new THREE.Vector3();
     const _newAccel = new THREE.Vector3(); const _dummy = new THREE.Object3D(); const _diff = new THREE.Vector3();
     const _lookAt = new THREE.Vector3(); const _tempColor = new THREE.Color(); const _predPos = new THREE.Vector3();
@@ -70,47 +72,13 @@
     let COHESION_WEIGHT = $derived(4.0); 
     const MOUSE_REPULSION_SQ = 9000;
 
-    // --- COMPREHENSIVE DIAGNOSTICS ---
+    // --- DIAGNOSTICS ---
     export function getDiagnosticsData(): string {
-        const data: any = {
-            timestamp: new Date().toISOString(),
-            buildHash: gitHash,
-            performance: {
-                fps,
-                avgFrameProcessingTime: avgFrameTime.toFixed(3) + 'ms',
-                memory: (performance as any).memory ? {
-                    usedJSHeapSize: Math.round((performance as any).memory.usedJSHeapSize / 1024 / 1024) + 'MB',
-                    totalJSHeapSize: Math.round((performance as any).memory.totalJSHeapSize / 1024 / 1024) + 'MB'
-                } : 'N/A'
-            },
-            boidCount,
-            recruitmentLevel,
-            uiRect: uiRect ? { width: uiRect.width, height: uiRect.height } : null,
-            renderer: renderer ? {
-                pixelRatio: renderer.getPixelRatio(),
-                drawCalls: renderer.info.render.calls,
-                triangles: renderer.info.render.triangles
-            } : null,
-            camera: camera ? { position: camera.position.toArray(), near: camera.near, far: camera.far } : null
-        };
-
-        if (mesh) {
-            data.instancedMesh = {
-                count: mesh.count,
-                material: mesh.material.type,
-                emissive: (mesh.material as any).emissive?.getHexString()
-            };
-        }
-
-        const lights: any[] = [];
-        scene?.traverse(obj => {
-            if (obj instanceof THREE.Light) {
-                lights.push({ type: obj.type, intensity: obj.intensity, position: obj.position.toArray() });
-            }
-        });
-        data.lights = lights;
-
-        return JSON.stringify(data, null, 2);
+        return JSON.stringify({
+            timestamp: new Date().toISOString(), buildHash: gitHash,
+            performance: { fps, avgFrameTime: avgFrameTime.toFixed(3) + 'ms' },
+            boidCount, recruitmentLevel, cameraZ: 180, predatorActive: !!predator
+        }, null, 2);
     }
 
     export function runDiagnostics() {
@@ -139,7 +107,7 @@
         renderer.setSize(window.innerWidth, window.innerHeight); renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
         renderer.outputColorSpace = THREE.SRGBColorSpace; renderer.toneMapping = THREE.ACESFilmicToneMapping;
 
-        scene.add(new THREE.AmbientLight(0xffffff, 1.0));
+        ambientLight = new THREE.AmbientLight(0xffffff, 1.0); scene.add(ambientLight);
         pointLight = new THREE.PointLight(0xffffff, 5.0, 1000); pointLight.position.set(0, 0, 250); scene.add(pointLight);
         dirLight = new THREE.DirectionalLight(0xffffff, 2.0); dirLight.position.set(0, 0, 400); scene.add(dirLight);
 
