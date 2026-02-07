@@ -536,7 +536,9 @@
                 _tempColor.copy(new THREE.Color(color)).multiplyScalar(pulse);
                 mesh.setColorAt(i, _tempColor);
                 
-                const scale = (scales ? scales[i] : 1) * 0.5; // Significantly smaller when looming
+                // Varied sizing within a nominal range (species variation)
+                const speciesVar = 0.35 + (Math.sin(i * 0.7) * 0.15); // Individual variation factor
+                const scale = (scales ? scales[i] : 1) * speciesVar;
                 _dummy.scale.set(scale, scale, scale);
             } else {
                 // --- STANDARD BOID LOGIC (MOVING) ---
