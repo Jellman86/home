@@ -23,10 +23,11 @@
         isTerminal = false, lastInteractionTime = 0, typingPoint = null, gitHash = 'unknown'
     }: Props = $props();
 
+    // --- SHARED STATE ---
     let debugMode = $state(false);
     let recruitmentLevel = $state(0);
     
-    // Core Refs
+    // Core Three.js Refs
     let container: HTMLDivElement;
     let canvas: HTMLCanvasElement;
     let scene: THREE.Scene;
@@ -39,18 +40,38 @@
     let frameId: number;
     let debugMaterial: THREE.MeshNormalMaterial | null = null;
 
-    // Simulation Data
+    // Simulation Data Arrays
     let positions: Float32Array;
     let velocities: Float32Array;
     let scales: Float32Array;
     let maxSpeeds: Float32Array;
     let deathTimers: Float32Array;
     
-    // Predator State
+    // Predator Logic State
     let predTargetIdx = -1;
     let predTargetUntil = 0;
 
-    // Scratch Vectors (Allocation-Free)
+    // --- CONSTANTS ---
+    const BOUNDARY_SIZE = 120;
+    const TARGET_SPEED = 2.2;
+    const PREDATOR_SPEED = 3.5; 
+    const PREDATOR_MIN_SPEED = 1.8;
+    const PREDATOR_MAX_STEER = 0.5;
+    const PREDATOR_PREDICT_T = 2;
+    const EAT_RADIUS_SQ = 144; 
+    const TRAIL_LENGTH = 15;
+    const PRED_TRAIL_LENGTH = 30;
+
+    // Derived Simulation Parameters
+    let SPEED_LIMIT = $derived(2.8);
+    let VISUAL_RANGE_SQ = 50 * 50; 
+    let PROTECTED_RANGE_SQ = 20 * 20;
+    let SEPARATION_WEIGHT = $derived(10.0); 
+    let ALIGNMENT_WEIGHT = $derived(2.0); 
+    let COHESION_WEIGHT = $derived(6.0); 
+    const MOUSE_REPULSION_SQ = 8000;
+
+    // --- ALLOCATION-FREE SCRATCH OBJECTS ---
     const _position = new THREE.Vector3();
     const _velocity = new THREE.Vector3();
     const _acceleration = new THREE.Vector3();
@@ -72,31 +93,17 @@
     let mouse = new THREE.Vector2(-9999, -9999);
     let target = new THREE.Vector3();
     let uiRect: DOMRect | null = null;
-    
-    // BOID PARAMETERS
-    const BOUNDARY_SIZE = 120;
-    const TARGET_SPEED = 2.2;
-    const PREDATOR_SPEED = 3.5; 
-    const PREDATOR_MIN_SPEED = 1.8;
-    const PREDATOR_MAX_STEER = 0.5;
-    const PREDATOR_PREDICT_T = 2;
-    const EAT_RADIUS_SQ = 144; 
-    
-    let SPEED_LIMIT = $derived(2.8);
-    let VISUAL_RANGE_SQ = 50 * 50; 
-    let PROTECTED_RANGE_SQ = 20 * 20;
-    let SEPARATION_WEIGHT = $derived(10.0); 
-    let ALIGNMENT_WEIGHT = $derived(2.0); 
-    let COHESION_WEIGHT = $derived(6.0); 
-    const MOUSE_REPULSION_SQ = 8000;
 
+    // --- DIAGNOSTICS ---
     export function getDiagnosticsData(): string {
         return JSON.stringify({
             timestamp: new Date().toISOString(),
             buildHash: gitHash,
             performance: { fps },
+            boidCount,
             recruitmentLevel,
-            predator: predator ? 'Active' : 'Missing'
+            cameraZ: 180,
+            predatorActive: !!predator
         }, null, 2);
     }
 
@@ -106,6 +113,7 @@
         debugMode = !debugMode;
     }
 
+    // --- SHADERS ---
     const bgVertexShader = `varying vec2 vUv; void main() { vUv = uv; gl_Position = vec4(position.xy, 0.999, 1.0); }`;
     const bgFragmentShader = `
         uniform float time; uniform float dayPhase; uniform float tension;
@@ -119,15 +127,7 @@
         }
     `;
 
-    let bgMesh: THREE.Mesh;
-    let ambientLight: THREE.AmbientLight;
-    let pointLight: THREE.PointLight;
-    let dirLight: THREE.DirectionalLight;
-    const TRAIL_LENGTH = 15;
-    const PRED_TRAIL_LENGTH = 30;
-    let lastTime = performance.now();
-    let frameCount = 0;
-
+    // --- LIFECYCLE ---
     function init() {
         scene = new THREE.Scene();
         camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 2000);
@@ -231,6 +231,7 @@
         const maxObs = boidCount * 0.20;
         const intFactor = recruitmentLevel * (isTerminal && now - lastInteractionTime < 60000 ? 1 : 0);
         _baseCol.set(color);
+        _whiteCol.set(0xffffff);
 
         for (let i = 0; i < boidCount; i++) {
             const idx = i * 3;
@@ -341,14 +342,18 @@
         }
 
         if (predTargetIdx < 0 || now > predTargetUntil) { predTargetIdx = Math.floor(Math.random() * boidCount); predTargetUntil = now + 5000; }
-        const predict = _lookAt.set(positions[predTargetIdx*3] + velocities[predTargetIdx*3] * PREDATOR_PREDICT_T, positions[predTargetIdx*3+1] + velocities[predTargetIdx*3+1] * PREDATOR_PREDICT_T, positions[predTargetIdx*3+2] + velocities[predTargetIdx*3+2] * PREDATOR_PREDICT_T);
+        const tIdx = predTargetIdx * 3;
+        const predict = _lookAt.set(positions[tIdx] + velocities[tIdx] * PREDATOR_PREDICT_T, positions[tIdx+1] + velocities[tIdx+1] * PREDATOR_PREDICT_T, positions[tIdx+2] + velocities[tIdx+2] * PREDATOR_PREDICT_T);
         _diff.copy(predict).sub(_predPos);
         if (_diff.lengthSq() > 0.001) {
             const steer = _scratchV1.copy(_diff).setLength(PREDATOR_SPEED).sub(_predVel).clampLength(0, PREDATOR_MAX_STEER);
             _predVel.add(steer).clampLength(PREDATOR_MIN_SPEED, PREDATOR_SPEED);
         }
         _predPos.add(_predVel);
-        if (predator) { predator.position.copy(_predPos); if (_predVel.lengthSq() > 0.001) predator.lookAt(_lookAt.copy(_predPos).add(_predVel)); }
+        if (predator) { 
+            predator.position.copy(_predPos); 
+            if (_predVel.lengthSq() > 0.001) predator.lookAt(_lookAt.copy(_predPos).add(_predVel)); 
+        }
 
         renderer.render(scene, camera);
         lastFrameTime = performance.now() - frameStartTime; avgFrameTime = lastFrameTime;
