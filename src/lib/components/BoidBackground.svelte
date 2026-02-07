@@ -218,10 +218,13 @@
     let mouse = new THREE.Vector2(-9999, -9999);
     let target = new THREE.Vector3();
     let uiRect: DOMRect | null = null;
+    let mainElement: HTMLElement | null = null;
     
     // PERFORMANCE: Spatial Partitioning & Scratch Vectors
     const GRID_SIZE = 40;
-    const grid: number[][] = [];
+    let gridHeaders: Int32Array;
+    let boidNext: Int32Array;
+    let gridCellsCount = 0;
     const _scratchV1 = new THREE.Vector3();
     const _scratchV2 = new THREE.Vector3();
     const _scratchV3 = new THREE.Vector3();
@@ -341,6 +344,14 @@
         positions = new Float32Array(boidCount * 3);
         velocities = new Float32Array(boidCount * 3);
         scales = new Float32Array(boidCount);
+        
+        // Grid Initialization
+        gridCellsCount = Math.ceil((BOUNDARY_SIZE * 2.5) / GRID_SIZE);
+        const totalCells = gridCellsCount * gridCellsCount * gridCellsCount;
+        gridHeaders = new Int32Array(totalCells);
+        boidNext = new Int32Array(boidCount);
+        mainElement = document.querySelector('main');
+
         const baseColor = new THREE.Color(color);
         for (let i = 0; i < boidCount; i++) {
             _position.set((Math.random()-0.5)*250, (Math.random()-0.5)*250, 20+Math.random()*100);
@@ -463,21 +474,25 @@
 
         // Update UI Rect dynamically for drag tracking
         if (isTerminal && recruitmentLevel > 0) {
-            uiRect = (document.querySelector('main') as HTMLElement | null)?.getBoundingClientRect() || null;
+            uiRect = mainElement?.getBoundingClientRect() || null;
         }
 
-        // PERFORMANCE: Build Spatial Grid
-        const gridCells = Math.ceil((BOUNDARY_SIZE * 2.5) / GRID_SIZE);
+        // PERFORMANCE: Build Spatial Grid (Allocation-Free)
         const gridOffset = BOUNDARY_SIZE * 1.25;
-        grid.length = 0;
+        gridHeaders.fill(-1);
         for (let i = 0; i < boidCount; i++) {
             const idx = i * 3;
             const gx = Math.floor((positions[idx] + gridOffset) / GRID_SIZE);
             const gy = Math.floor((positions[idx+1] + gridOffset) / GRID_SIZE);
             const gz = Math.floor((positions[idx+2] + gridOffset) / GRID_SIZE);
-            const cellKey = gx + gy * gridCells + gz * gridCells * gridCells;
-            if (!grid[cellKey]) grid[cellKey] = [];
-            grid[cellKey].push(i);
+            
+            if (gx >= 0 && gx < gridCellsCount && gy >= 0 && gy < gridCellsCount && gz >= 0 && gz < gridCellsCount) {
+                const cellKey = gx + gy * gridCellsCount + gz * gridCellsCount * gridCellsCount;
+                boidNext[i] = gridHeaders[cellKey];
+                gridHeaders[cellKey] = i;
+            } else {
+                boidNext[i] = -1;
+            }
         }
 
         const maxObs = boidCount * 0.20;
@@ -494,12 +509,11 @@
 
             if (isObserver && uiRect) {
                 const angle = (i * 137.5) * (Math.PI / 180); 
-                // Increased margin to stay "outside" terminal window
-                const ring = (i % 5); const margin = 80 + ring * 50; 
+                // Adjusted margin to be exactly a "centimeter" outside
+                const ring = (i % 5); const margin = 50 + ring * 40; 
                 let tsx = (uiRect.left + uiRect.right) * 0.5 + Math.cos(angle) * (uiRect.width * 0.5 + margin);
                 let tsy = (uiRect.top + uiRect.bottom) * 0.5 + Math.sin(angle) * (uiRect.height * 0.5 + margin);
                 
-                // Positioned slightly closer but consistent to avoid clipping behind terminal
                 _diff.set((tsx / window.innerWidth) * 2 - 1, -(tsy / window.innerHeight) * 2 + 1, 0.2).unproject(camera);
                 
                 _position.lerp(_diff, 0.03); _velocity.set(0, 0, 0); 
@@ -517,28 +531,32 @@
                 _alignF.set(0, 0, 0); _cohF.set(0, 0, 0); _sepF.set(0, 0, 0);
                 let aC = 0, cC = 0, sC = 0;
 
-                // PERFORMANCE: Check grid neighbors instead of every boid
                 const gx = Math.floor((_position.x + gridOffset) / GRID_SIZE);
                 const gy = Math.floor((_position.y + gridOffset) / GRID_SIZE);
                 const gz = Math.floor((_position.z + gridOffset) / GRID_SIZE);
 
                 for (let ox = -1; ox <= 1; ox++) {
+                    const nx = gx + ox; if (nx < 0 || nx >= gridCellsCount) continue;
                     for (let oy = -1; oy <= 1; oy++) {
+                        const ny = gy + oy; if (ny < 0 || ny >= gridCellsCount) continue;
                         for (let oz = -1; oz <= 1; oz++) {
-                            const ck = (gx+ox) + (gy+oy) * gridCells + (gz+oz) * gridCells * gridCells;
-                            const cell = grid[ck];
-                            if (!cell) continue;
-                            for (let n = 0; n < cell.length; n++) {
-                                const j = cell[n];
-                                if (i === j) continue;
-                                const oIdx = j * 3;
-                                const dx = _position.x - positions[oIdx], dy = _position.y - positions[oIdx + 1], dz = _position.z - positions[oIdx + 2];
-                                const dSq = dx*dx+dy*dy+dz*dz;
-                                if (dSq < PROTECTED_RANGE * PROTECTED_RANGE && dSq > 0.01) { _sepF.x += dx; _sepF.y += dy; _sepF.z += dz; sC++; }
-                                else if (dSq < VISUAL_RANGE * VISUAL_RANGE) {
-                                    _cohF.x += positions[oIdx]; _cohF.y += positions[oIdx+1]; _cohF.z += positions[oIdx+2]; cC++;
-                                    _alignF.x += velocities[oIdx]; _alignF.y += velocities[oIdx+1]; _alignF.z += velocities[oIdx+2]; aC++;
+                            const nz = gz + oz; if (nz < 0 || nz >= gridCellsCount) continue;
+                            
+                            const cellKey = nx + ny * gridCellsCount + nz * gridCellsCount * gridCellsCount;
+                            let boidIdx = gridHeaders[cellKey];
+                            
+                            while (boidIdx !== -1) {
+                                if (boidIdx !== i) {
+                                    const oIdx = boidIdx * 3;
+                                    const dx = _position.x - positions[oIdx], dy = _position.y - positions[oIdx + 1], dz = _position.z - positions[oIdx + 2];
+                                    const dSq = dx*dx+dy*dy+dz*dz;
+                                    if (dSq < PROTECTED_RANGE * PROTECTED_RANGE && dSq > 0.01) { _sepF.x += dx; _sepF.y += dy; _sepF.z += dz; sC++; }
+                                    else if (dSq < VISUAL_RANGE * VISUAL_RANGE) {
+                                        _cohF.x += positions[oIdx]; _cohF.y += positions[oIdx+1]; _cohF.z += positions[oIdx+2]; cC++;
+                                        _alignF.x += velocities[oIdx]; _alignF.y += velocities[oIdx+1]; _alignF.z += velocities[oIdx+2]; aC++;
+                                    }
                                 }
+                                boidIdx = boidNext[boidIdx];
                             }
                         }
                     }
