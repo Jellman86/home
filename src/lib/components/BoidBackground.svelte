@@ -75,8 +75,9 @@
     
     // BOID PARAMETERS
     const BOUNDARY_SIZE = 120;
-    const TARGET_SPEED = 2.0;
+    const TARGET_SPEED = 2.2;
     const PREDATOR_SPEED = 3.5; 
+    const PREDATOR_MIN_SPEED = 1.8;
     const PREDATOR_MAX_STEER = 0.5;
     const PREDATOR_PREDICT_T = 2;
     const EAT_RADIUS_SQ = 144; 
@@ -273,6 +274,7 @@
                 }
 
                 _diff.set( ((tx/window.innerWidth)*2-1) * 120 + Math.sin(t*0.5+i)*10, (-(ty/window.innerHeight)*2+1) * 80 + Math.cos(t*0.4+i)*10, 80);
+                
                 _position.lerp(_diff, 0.05); _velocity.set(0, 0, 0); 
                 _lookAt.set(((uiRect.left + uiRect.right)*0.5/window.innerWidth)*2-1, -((uiRect.top + uiRect.bottom)*0.5/window.innerHeight)*2+1, 0.5).unproject(camera);
                 _dummy.position.copy(_position); _dummy.lookAt(_lookAt);
@@ -312,7 +314,7 @@
                 if (_position.z > 150) _velocity.z -= 0.6; 
 
                 _position.add(_velocity);
-                if (_position.z > 155) _position.z = 155; // HARD BARRIER
+                if (_position.z > 155) _position.z = 155; 
 
                 _dummy.position.copy(_position);
                 if (_velocity.lengthSq() > 0.0001) _dummy.lookAt(_lookAt.copy(_position).add(_velocity));
