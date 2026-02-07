@@ -54,7 +54,18 @@
             renderer: {
                 pixelRatio: renderer.getPixelRatio(),
                 outputColorSpace: renderer.outputColorSpace,
-                toneMapping: renderer.toneMapping
+                toneMapping: renderer.toneMapping,
+                info: {
+                    geometries: renderer.info.memory.geometries,
+                    textures: renderer.info.memory.textures,
+                    drawCalls: renderer.info.render.calls,
+                    triangles: renderer.info.render.triangles
+                },
+                dimensions: {
+                    window: [window.innerWidth, window.innerHeight],
+                    canvas: [canvas.width, canvas.height],
+                    style: [canvas.clientWidth, canvas.clientHeight]
+                }
             },
             scene: {
                 fog: scene.fog ? {
@@ -63,6 +74,11 @@
                     density: (scene.fog as any).density || null,
                     near: (scene.fog as any).near || null,
                     far: (scene.fog as any).far || null
+                } : null,
+                backgroundUniforms: bgMesh ? {
+                    time: (bgMesh.material as THREE.ShaderMaterial).uniforms.time.value,
+                    dayPhase: (bgMesh.material as THREE.ShaderMaterial).uniforms.dayPhase.value,
+                    tension: (bgMesh.material as THREE.ShaderMaterial).uniforms.tension.value
                 } : null
             },
             camera: {
@@ -75,10 +91,18 @@
         };
 
         if (mesh) {
+            const matrixSample: number[][] = [];
+            const _tempMatrix = new THREE.Matrix4();
+            for (let i = 0; i < Math.min(3, boidCount); i++) {
+                mesh.getMatrixAt(i, _tempMatrix);
+                matrixSample.push(_tempMatrix.elements.slice());
+            }
+
             data.instancedMesh = {
                 visible: mesh.visible,
                 frustumCulled: mesh.frustumCulled,
                 count: mesh.count,
+                instanceMatrixSample: matrixSample,
                 material: {
                     type: mesh.material.type,
                     color: mesh.material.color.getHexString(),
