@@ -43,6 +43,8 @@
     
     let currentTheme = $state<ThemeKey>('blueprint');
     let lastBlueprintTheme = $state<ThemeKey>('blueprint'); // Remembers if we were in light or dark mode
+    let lastInteractionTime = $state(0);
+    let typingPoint = $state<{x: number, y: number} | null>(null);
     let showTrails = $state(false);
     
     let fps = $state(0);
@@ -57,6 +59,7 @@
     let isWireframe = $derived(themes[currentTheme].wireframe);
     let boidCount = $derived(themes[currentTheme].count);
     let variant = $derived(themes[currentTheme].variant);
+    let isTerminal = $derived(currentTheme === 'terminal');
     
     // Data
     const portfolioData: PortfolioData = {
@@ -82,6 +85,11 @@
         'bg-slate-950/60 border-blue-500/30 text-blue-400' : 
         'bg-white/60 border-blue-600/30 text-blue-700'
     );
+
+    function handleInteraction(point?: {x: number, y: number}) {
+        lastInteractionTime = performance.now();
+        if (point) typingPoint = point;
+    }
 
     // Toggles between Light/Dark for Blueprint only
     function toggleLightDark() {
@@ -115,12 +123,24 @@
 <div class="relative min-h-screen w-full overflow-hidden transition-colors duration-1000" style="background-color: {backgroundColor}">
     <!-- WebGL Background Layer -->
     {#key boidCount}
-        <BoidBackground {boidCount} color={boidColor} {backgroundColor} {useSkybox} wireframe={isWireframe} {predatorColor} {showTrails} bind:fps />
+        <BoidBackground 
+            {boidCount} 
+            color={boidColor} 
+            {backgroundColor} 
+            {useSkybox} 
+            wireframe={isWireframe} 
+            {predatorColor} 
+            {showTrails} 
+            bind:fps 
+            {isTerminal}
+            {lastInteractionTime}
+            {typingPoint}
+        />
     {/key}
 
     <!-- UI Overlay -->
     <div class="relative z-10">
-        <ActiveComponent data={portfolioData} {variant} bind:showTrails={showTrails} toggleTheme={toggleLightDark} />
+        <ActiveComponent data={portfolioData} {variant} bind:showTrails={showTrails} toggleTheme={toggleLightDark} onInteraction={handleInteraction} />
     </div>
 
     <!-- Theme Switcher & Stats -->

@@ -11,6 +11,9 @@
         predatorColor?: string;
         showTrails?: boolean;
         fps?: number;
+        isTerminal?: boolean;
+        lastInteractionTime?: number;
+        typingPoint?: {x: number, y: number} | null;
     }
 
     let { 
@@ -21,7 +24,10 @@
         wireframe = false,
         predatorColor = '#cfd8e3',
         showTrails = false,
-        fps = $bindable(0)
+        fps = $bindable(0),
+        isTerminal = false,
+        lastInteractionTime = 0,
+        typingPoint = null
     }: Props = $props();
 
     const mode: 'bird' = 'bird';
@@ -29,6 +35,7 @@
     let container: HTMLDivElement;
     let canvas: HTMLCanvasElement;
     
+    let recruitmentLevel = $state(0);
     let scene: THREE.Scene;
     let camera: THREE.PerspectiveCamera;
     let renderer: THREE.WebGLRenderer;
@@ -106,11 +113,13 @@
     const bgFragmentShader = `
         uniform float time;
         uniform float dayPhase;
+        uniform float tension;
         varying vec2 vUv;
 
         float hash31(vec3 p) {
             return fract(sin(dot(p, vec3(127.1, 311.7, 74.7))) * 43758.5453);
         }
+        // ... (rest of noise functions)
         float noise3(vec3 p) {
             vec3 i = floor(p);
             vec3 f = fract(p);
@@ -172,6 +181,10 @@
             horizonColor = mix(horizonColor, warmTwilight, twilight * 0.35);
 
             vec3 skyResult = mix(horizonColor, zenithColor, pow(uv.y, 0.85));
+            
+            // PRESSURE EFFECT: Dim the sky as more watch
+            skyResult *= (1.0 - tension * 0.75);
+
             float hazeBand = smoothstep(0.08, 0.2, uv.y) * (1.0 - smoothstep(0.2, 0.38, uv.y));
             skyResult = mix(skyResult, horizonColor, hazeBand * 0.12);
 
@@ -182,26 +195,17 @@
             float dust = smoothstep(0.06, 0.0, abs(p.y + p.x * 0.6 + 0.02));
             float mwBase = band * night * (1.0 - dust * 0.6);
 
-            // Continuous star field with band-density gradient (no grid artifacts)
             float starNoise = hash(uv * vec2(1800.0, 1000.0));
             float bandBoost = mix(0.9975, 0.991, band);
             float stars = step(bandBoost, starNoise) * night;
             skyResult += stars * vec3(1.0, 1.0, 1.2) * (0.6 + night);
 
-            // Soft band glow
             skyResult += mwBase * vec3(0.45, 0.6, 0.9) * 0.35;
 
-            // Exposure curve
             float exposure = mix(0.15, 1.0, pow(sun, 1.4));
             skyResult *= exposure;
 
-            // Birds-only scene
-            vec3 finalColor = skyResult;
-
-            // Soft vignette for depth and focus
-            // Vignette removed for a clean scene
-            
-            gl_FragColor = vec4(finalColor, 1.0);
+            gl_FragColor = vec4(skyResult, 1.0);
         }
     `;
 
@@ -223,7 +227,8 @@
         bgMesh = new THREE.Mesh(bgGeo, new THREE.ShaderMaterial({
             uniforms: { 
                 time: { value: 0 },
-                dayPhase: { value: 0.25 }
+                dayPhase: { value: 0.25 },
+                tension: { value: 0 }
             },
             vertexShader: bgVertexShader, 
             fragmentShader: bgFragmentShader, 
@@ -433,6 +438,7 @@
             const material = bgMesh.material as THREE.ShaderMaterial;
             material.uniforms.time.value = t;
             material.uniforms.dayPhase.value = (t * 0.004 + 0.25) % 1.0; // start at midday
+            material.uniforms.tension.value = recruitmentLevel;
         }
 
         target.set((mouse.x * window.innerWidth) / 20, -(mouse.y * window.innerHeight) / 20, 0);
@@ -459,11 +465,30 @@
             predTargetUntil = now + 5000 + Math.random() * 4000;
         }
 
+        // Interaction / Observer Logic
+        const timeSinceInteraction = now - lastInteractionTime;
+        const interactionActive = isTerminal && timeSinceInteraction < 60000;
+        
+        // Recruitment Level: Increases while typing, decreases when idle
+        if (isTerminal && timeSinceInteraction < 2000) {
+            recruitmentLevel = Math.min(1, recruitmentLevel + 0.005); // Takes ~3 seconds of typing to reach 100%
+        } else {
+            recruitmentLevel = Math.max(0, recruitmentLevel - 0.002);
+        }
+
+        // Final observer count factor
+        const interactionFactor = recruitmentLevel * (interactionActive ? Math.pow(Math.max(0, 1 - (timeSinceInteraction / 60000)), 0.5) : 0);
+
         for (let i = 0; i < boidCount; i++) {
             const idx = i * 3;
             _position.set(positions[idx], positions[idx + 1], positions[idx + 2]);
             _velocity.set(velocities[idx], velocities[idx + 1], velocities[idx + 2]);
             _acceleration.set(0, 0, 0);
+
+            // Determine if this boid is an observer
+            // Add a small boid-specific offset so they break off at slightly different times
+            const jitter = (Math.sin(i * 0.1) * 0.05);
+            const isObserver = interactionFactor > 0.02 && (i / boidCount) < (interactionFactor + jitter);
 
             let alignF = new THREE.Vector3(), cohF = new THREE.Vector3(), sepF = new THREE.Vector3();
             let aC = 0, cC = 0, sC = 0;
@@ -511,9 +536,12 @@
                 }
             }
 
-            if (sC > 0) _acceleration.add(sepF.divideScalar(sC).normalize().multiplyScalar(SEPARATION_WEIGHT * 0.12));
-            if (cC > 0) _acceleration.add(cohF.divideScalar(cC).sub(_position).normalize().multiplyScalar(COHESION_WEIGHT * 0.01));
-            if (aC > 0) _acceleration.add(alignF.divideScalar(aC).normalize().sub(_velocity).multiplyScalar(ALIGNMENT_WEIGHT * 0.06));
+            if (sC > 0) {
+                const sepWeight = isObserver ? SEPARATION_WEIGHT * 8.0 : SEPARATION_WEIGHT;
+                _acceleration.add(sepF.divideScalar(sC).normalize().multiplyScalar(sepWeight * 0.12));
+            }
+            if (cC > 0 && !isObserver) _acceleration.add(cohF.divideScalar(cC).sub(_position).normalize().multiplyScalar(COHESION_WEIGHT * 0.01));
+            if (aC > 0 && !isObserver) _acceleration.add(alignF.divideScalar(aC).normalize().sub(_velocity).multiplyScalar(ALIGNMENT_WEIGHT * 0.06));
 
             const distM = _position.distanceToSquared(target);
             if (distM < 4000) _acceleration.add(_diff.copy(_position).sub(target).normalize().multiplyScalar(MOUSE_REPULSION_WEIGHT * 0.035));
@@ -543,12 +571,45 @@
                 _acceleration.add(_diff.set(0, 0, 1).multiplyScalar(rushStrength * 0.02));
             }
 
-            // UI avoidance: steer away from the main panel in screen space
+            // UI behavior: Avoidance (Normal) or Observation (Typing)
             if (uiRect) {
                 _diff.copy(_position).project(camera);
                 const sx = (_diff.x * 0.5 + 0.5) * window.innerWidth;
                 const sy = (-_diff.y * 0.5 + 0.5) * window.innerHeight;
-                if (sx > uiRect.left && sx < uiRect.right && sy > uiRect.top && sy < uiRect.bottom) {
+
+                if (isObserver) {
+                    // SEEK PERIMETER - Stationing around the window
+                    // Use a fixed angle per boid index to prevent jumping
+                    const angle = (i / boidCount) * Math.PI * 2;
+                    const margin = 120;
+                    
+                    const rectW = (uiRect.right - uiRect.left);
+                    const rectH = (uiRect.bottom - uiRect.top);
+                    
+                    // Ellipse around the terminal
+                    const targetSX = (uiRect.left + uiRect.right) * 0.5 + Math.cos(angle) * (rectW * 0.5 + margin) + Math.sin(t * 0.5 + i) * 20;
+                    const targetSY = (uiRect.top + uiRect.bottom) * 0.5 + Math.sin(angle) * (rectH * 0.5 + margin) + Math.cos(t * 0.5 + i) * 20;
+
+                    const dsx = (targetSX - sx) / window.innerWidth;
+                    const dsy = -(targetSY - sy) / window.innerHeight;
+                    
+                    // PRESSURE: Observers move much closer to the camera (Z=150)
+                    // Camera is at 180, so 150 is very close.
+                    const targetZ = 135 + Math.sin(angle * 10 + t * 0.5) * 10; 
+                    const dz = (targetZ - _position.z) * 0.05;
+
+                    _acceleration.add(_diff.set(dsx * 5.0, dsy * 5.0, dz).multiplyScalar(0.5));
+                    
+                    // Stationing/Docking Logic:
+                    // If close to the target, damp velocity aggressively to "stop"
+                    const distToTarget = Math.sqrt(dsx * dsx + dsy * dsy);
+                    if (distToTarget < 0.1) {
+                        _velocity.multiplyScalar(0.85); // Aggressive stop
+                    } else {
+                        _velocity.multiplyScalar(0.96); // Normal glide
+                    }
+                } else if (sx > uiRect.left && sx < uiRect.right && sy > uiRect.top && sy < uiRect.bottom) {
+                    // Avoid the UI
                     const cx = (uiRect.left + uiRect.right) * 0.5;
                     const cy = (uiRect.top + uiRect.bottom) * 0.5;
                     const dx = sx - cx;
@@ -563,21 +624,48 @@
             if (Math.abs(_position.y) > lim) _acceleration.y -= Math.sign(_position.y) * 0.05;
             if (Math.abs(_position.z) > lim) _acceleration.z -= Math.sign(_position.z) * 0.05;
 
-            _acceleration.clampLength(0, 0.04);
-            _velocity.add(_acceleration).clampLength(0.2, SPEED_LIMIT * (0.4 + warmup * 0.6));
+            _acceleration.clampLength(0, 0.05);
+            
+            // Observers move slower
+            const maxSpeed = isObserver ? SPEED_LIMIT * 0.5 : SPEED_LIMIT * (0.4 + warmup * 0.6);
+            _velocity.add(_acceleration).clampLength(0.05, maxSpeed);
             _position.add(_velocity);
 
             positions[idx] = _position.x; positions[idx+1] = _position.y; positions[idx+2] = _position.z;
             velocities[idx] = _velocity.x; velocities[idx+1] = _velocity.y; velocities[idx+2] = _velocity.z;
 
             _dummy.position.copy(_position);
-            if (_velocity.lengthSq() > 0.0001) _dummy.lookAt(_lookAt.copy(_position).add(_velocity));
-            if (mode === 'bird') {
+            
+            if (isObserver && (typingPoint || uiRect)) {
+                // LOOK AT THE TYPING POINT
+                const lookX = typingPoint ? typingPoint.x : (uiRect!.left + uiRect!.right) * 0.5;
+                const lookY = typingPoint ? typingPoint.y : (uiRect!.top + uiRect!.bottom) * 0.5;
+                
+                _lookAt.set(
+                    (lookX / window.innerWidth) * 2 - 1,
+                    -(lookY / window.innerHeight) * 2 + 1,
+                    0.5
+                ).unproject(camera);
+                _dummy.lookAt(_lookAt);
+
+                // THRABBING COLOR (Breathing effect when looming)
+                // Pulse intensifies as recruitmentLevel grows
+                const pulse = 0.8 + Math.sin(t * 3.0 + i) * (0.1 + recruitmentLevel * 0.3);
+                _tempColor.copy(new THREE.Color(color)).multiplyScalar(pulse);
+                mesh.setColorAt(i, _tempColor);
+            } else if (_velocity.lengthSq() > 0.0001) {
+                _dummy.lookAt(_lookAt.copy(_position).add(_velocity));
+            }
+
+            if (mode === 'bird' && !isObserver) {
                 const bank = Math.max(-0.6, Math.min(0.6, -_velocity.x * 1.2));
                 _dummy.rotateZ(bank);
             }
+
             const scale = scales ? scales[i] : 1;
-            _dummy.scale.set(scale, scale, scale);
+            // PRESSURE: Observers grow larger (up to 2.5x original)
+            const finalScale = isObserver ? scale * (1.2 + recruitmentLevel * 1.3) : scale;
+            _dummy.scale.set(finalScale, finalScale, finalScale);
             _dummy.updateMatrix();
             mesh.setMatrixAt(i, _dummy.matrix);
         }

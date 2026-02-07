@@ -7,12 +7,14 @@
         data, 
         variant = 'dark', 
         showTrails = $bindable(false),
-        toggleTheme 
+        toggleTheme,
+        onInteraction
     }: { 
         data: PortfolioData, 
         variant?: 'light' | 'dark', 
         showTrails?: boolean,
-        toggleTheme?: () => void 
+        toggleTheme?: () => void,
+        onInteraction?: () => void
     } = $props();
 
     let position = $state({ x: 0, y: 0 });

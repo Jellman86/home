@@ -3,7 +3,7 @@
     import { tick } from 'svelte';
     import type { PortfolioData } from '$lib/types';
 
-    let { data }: { data: PortfolioData } = $props();
+    let { data, onInteraction }: { data: PortfolioData, onInteraction?: (point?: {x: number, y: number}) => void } = $props();
 
     let position = $state({ x: 0, y: 0 });
     let isDragging = $state(false);
@@ -14,6 +14,22 @@
     let commandInput = $state("");
     let inputRef: HTMLInputElement;
     let terminalContentRef: HTMLDivElement;
+
+    // Trigger interaction when typing
+    $effect(() => {
+        if (commandInput !== undefined && onInteraction) {
+            // Get the bounding box of the input area to tell boids where to look
+            if (inputRef) {
+                const rect = inputRef.getBoundingClientRect();
+                onInteraction({
+                    x: rect.left + (rect.width * 0.5),
+                    y: rect.top + (rect.height * 0.5)
+                });
+            } else {
+                onInteraction();
+            }
+        }
+    });
     
     // Command History
     let cmdHistory = $state<string[]>([]);
