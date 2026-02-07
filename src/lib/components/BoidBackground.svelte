@@ -443,17 +443,49 @@
             const isObserver = intFactor > 0.02 && (i < maxObs * intFactor);
 
             if (isObserver && uiRect) {
-                const angle = (i * 137.5) * (Math.PI / 180); 
-                // Huge margins to stay perfectly clear of terminal area
-                const margin = 500 + (i % 4) * 120; 
+                // RECTANGULAR PERIMETER DISTRIBUTION
+                // Map the linear index 'i' to a position along the rectangle's perimeter
+                const perimeter = 2 * (uiRect.width + uiRect.height);
+                const step = perimeter / Math.min(boidCount * 0.2, 50); // Distribute roughly 50 boids
+                let dist = (i * step) % perimeter;
                 
-                const timeOff = t * 0.1 + i;
-                let tsx = (uiRect.left + uiRect.right) * 0.5 + Math.cos(angle) * (uiRect.width * 0.5 + margin) + Math.sin(timeOff) * 10;
-                let tsy = (uiRect.top + uiRect.bottom) * 0.5 + Math.sin(angle) * (uiRect.height * 0.5 + margin) + Math.cos(timeOff) * 10;
+                // Gap from the window edge (approx 100px = "a centimeter" visual feel)
+                const gap = 120 + (i % 3) * 40; 
+
+                let tx = 0, ty = 0;
+
+                // Walk the perimeter: Top -> Right -> Bottom -> Left
+                if (dist < uiRect.width) { // TOP
+                    tx = uiRect.left + dist;
+                    ty = uiRect.top - gap;
+                } else {
+                    dist -= uiRect.width;
+                    if (dist < uiRect.height) { // RIGHT
+                        tx = uiRect.right + gap;
+                        ty = uiRect.top + dist;
+                    } else {
+                        dist -= uiRect.height;
+                        if (dist < uiRect.width) { // BOTTOM
+                            tx = uiRect.right - dist;
+                            ty = uiRect.bottom + gap;
+                        } else { // LEFT
+                            dist -= uiRect.width;
+                            tx = uiRect.left - gap;
+                            ty = uiRect.bottom - dist;
+                        }
+                    }
+                }
+
+                // Add smooth organic float (Low frequency, high amplitude)
+                const floatTime = t * 0.5 + i * 0.2;
+                tx += Math.sin(floatTime) * 15;
+                ty += Math.cos(floatTime * 0.8) * 15;
+
+                _diff.set((tx / window.innerWidth) * 2 - 1, -(ty / window.innerHeight) * 2 + 1, 0.25).unproject(camera);
                 
-                // Safe unproject depth (not inside camera plane)
-                _diff.set((tsx / window.innerWidth) * 2 - 1, -(tsy / window.innerHeight) * 2 + 1, 0.3).unproject(camera);
-                _position.lerp(_diff, 0.05); _velocity.set(0, 0, 0); 
+                // Ultra-smooth lerp for "floating" feel
+                _position.lerp(_diff, 0.03); 
+                _velocity.set(0, 0, 0); 
                 
                 _lookAt.set(((uiRect.left + uiRect.right)*0.5/window.innerWidth)*2-1, -((uiRect.top + uiRect.bottom)*0.5/window.innerHeight)*2+1, 0.5).unproject(camera);
                 _dummy.position.copy(_position); _dummy.lookAt(_lookAt);
