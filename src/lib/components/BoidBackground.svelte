@@ -239,22 +239,22 @@
     const TARGET_SPEED = 0.83;
     const SPEED_FORCE = 0.025;
     const PREDATOR_RADIUS = 55;
-    const PREDATOR_SPEED = 1.35; 
-    const PREDATOR_MIN_SPEED = 1.0;
-    const PREDATOR_MAX_STEER = 0.12;
-    const PREDATOR_PREDICT_T = 8;
+    const PREDATOR_SPEED = 1.6; // Faster predator
+    const PREDATOR_MIN_SPEED = 1.1;
+    const PREDATOR_MAX_STEER = 0.15; // Much sharper turns
+    const PREDATOR_PREDICT_T = 6;  // Look ahead less
     
     let SPEED_LIMIT = $derived(0.8);
-    let VISUAL_RANGE = $derived(36); 
-    let PROTECTED_RANGE = $derived(9);
-    let SEPARATION_WEIGHT = $derived(2.3); 
-    let ALIGNMENT_WEIGHT = $derived(4.5); 
-    let COHESION_WEIGHT = $derived(0.9); 
-    const MOUSE_REPULSION_WEIGHT = 10.0;
+    let VISUAL_RANGE = $derived(40); 
+    let PROTECTED_RANGE = $derived(12); // Keep them further apart
+    let SEPARATION_WEIGHT = $derived(4.0); // High separation for individualism
+    let ALIGNMENT_WEIGHT = $derived(1.5); // Lower alignment to prevent "one mass" feel
+    let COHESION_WEIGHT = $derived(1.8); 
+    const MOUSE_REPULSION_WEIGHT = 12.0;
 
-    const VISUAL_RANGE_SQ = 36 * 36;
-    const PROTECTED_RANGE_SQ = 9 * 9;
-    const MOUSE_REPULSION_SQ = 4000;
+    const VISUAL_RANGE_SQ = 40 * 40;
+    const PROTECTED_RANGE_SQ = 12 * 12;
+    const MOUSE_REPULSION_SQ = 5000;
 
     const bgVertexShader = `
         varying vec2 vUv;
@@ -513,22 +513,28 @@
 
             if (isObserver && uiRect) {
                 const angle = (i * 137.5) * (Math.PI / 180); 
-                // EXTREME margin to prevent clipping behind terminal background
-                const ring = (i % 4); const margin = 300 + ring * 100; 
+                // Adapt margin to screen size but ensure it stays outside terminal
+                const minMargin = Math.min(window.innerWidth * 0.15, 200);
+                const ring = (i % 4); const margin = minMargin + ring * 80; 
                 
                 // Individual organic hover
                 const timeOff = t * (0.8 + (i % 5) * 0.2) + i;
-                const jitterX = Math.sin(timeOff) * 35;
-                const jitterY = Math.cos(timeOff * 0.7) * 35;
+                const jitterX = Math.sin(timeOff) * 30;
+                const jitterY = Math.cos(timeOff * 0.7) * 30;
 
                 let tsx = (uiRect.left + uiRect.right) * 0.5 + Math.cos(angle) * (uiRect.width * 0.5 + margin) + jitterX;
                 let tsy = (uiRect.top + uiRect.bottom) * 0.5 + Math.sin(angle) * (uiRect.height * 0.5 + margin) + jitterY;
                 
-                _diff.set((tsx / window.innerWidth) * 2 - 1, -(tsy / window.innerHeight) * 2 + 1, 0.2).unproject(camera);
+                // FORCE OUTSIDE: If still inside uiRect (e.g. jitter pushed them in), push them out
+                if (tsx > uiRect.left - 20 && tsx < uiRect.right + 20 && tsy > uiRect.top - 20 && tsy < uiRect.bottom + 20) {
+                    if (tsx < (uiRect.left + uiRect.right) * 0.5) tsx = uiRect.left - 50; else tsx = uiRect.right + 50;
+                }
+
+                _diff.set((tsx / window.innerWidth) * 2 - 1, -(tsy / window.innerHeight) * 2 + 1, 0.25).unproject(camera);
                 
-                const individualLerp = 0.02 + (i % 10) * 0.005;
+                const individualLerp = 0.03 + (i % 10) * 0.005;
                 _position.lerp(_diff, individualLerp); 
-                _velocity.set(Math.sin(timeOff)*0.02, Math.cos(timeOff)*0.02, 0); 
+                _velocity.set(Math.sin(timeOff)*0.03, Math.cos(timeOff)*0.03, 0); 
                 
                 _lookAt.set(((uiRect.left + uiRect.right)*0.5/window.innerWidth)*2-1, -((uiRect.top + uiRect.bottom)*0.5/window.innerHeight)*2+1, 0.5).unproject(camera);
                 _dummy.position.copy(_position); _dummy.lookAt(_lookAt);
