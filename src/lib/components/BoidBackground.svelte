@@ -585,12 +585,18 @@
                                         cohX += opx; cohY += opy; cohZ += opz;
                                         aliX += velocities[oIdx]; aliY += velocities[oIdx+1]; aliZ += velocities[oIdx+2];
                                         aC++;
+                                        cC++;
                                     }
                                 }
+                                // Topological limit: only consider nearest 7 neighbors
+                                if (aC + sC >= NEIGHBOR_COUNT) break;
                                 boidIdx = boidNext[boidIdx];
                             }
+                            if (aC + sC >= NEIGHBOR_COUNT) break;
                         }
+                        if (aC + sC >= NEIGHBOR_COUNT) break;
                     }
+                    if (aC + sC >= NEIGHBOR_COUNT) break;
                 }
 
                 if (sC > 0) {
