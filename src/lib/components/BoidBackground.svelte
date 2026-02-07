@@ -44,70 +44,20 @@
                 avgFrameProcessingTime: avgFrameTime.toFixed(3) + 'ms',
                 memory: (performance as any).memory ? {
                     usedJSHeapSize: Math.round((performance as any).memory.usedJSHeapSize / 1024 / 1024) + 'MB',
-                    totalJSHeapSize: Math.round((performance as any).memory.totalJSHeapSize / 1024 / 1024) + 'MB',
-                    jsHeapSizeLimit: Math.round((performance as any).memory.jsHeapSizeLimit / 1024 / 1024) + 'MB'
-                } : 'Not available (non-Chrome)',
-                navigation: performance.getEntriesByType('navigation')[0] || 'N/A'
+                    totalJSHeapSize: Math.round((performance as any).memory.totalJSHeapSize / 1024 / 1024) + 'MB'
+                } : 'N/A'
             },
             boidCount,
             themeColor: color,
             isTerminal,
             recruitmentLevel,
-            lastInteractionTime,
-            timeSinceInteraction: performance.now() - lastInteractionTime,
-            uiRect: uiRect ? {
-                top: uiRect.top, bottom: uiRect.bottom, left: uiRect.left, right: uiRect.right, width: uiRect.width, height: uiRect.height
-            } : null,
-            renderer: {
-                pixelRatio: renderer.getPixelRatio(),
-                outputColorSpace: renderer.outputColorSpace,
-                toneMapping: renderer.toneMapping,
-                info: {
-                    geometries: renderer.info.memory.geometries,
-                    drawCalls: renderer.info.render.calls
-                },
-                dimensions: {
-                    window: [window.innerWidth, window.innerHeight],
-                    canvas: [canvas.width, canvas.height]
-                }
-            },
-            scene: {
-                fog: scene.fog ? 'Enabled' : 'None',
-                backgroundUniforms: bgMesh ? 'Shader Active' : 'None'
-            },
-            camera: {
-                position: camera.position.toArray(),
-                near: camera.near,
-                far: camera.far
-            }
+            cameraZ: camera?.position.z,
+            uiRect: uiRect ? { width: uiRect.width, height: uiRect.height } : null
         };
 
         if (mesh) {
-            const matrixSample: number[][] = [];
-            const _tempMatrix = new THREE.Matrix4();
-            for (let i = 0; i < Math.min(3, boidCount); i++) {
-                mesh.getMatrixAt(i, _tempMatrix);
-                matrixSample.push(_tempMatrix.elements.slice());
-            }
-
-            data.instancedMesh = {
-                count: mesh.count,
-                instanceMatrixSample: matrixSample,
-                material: {
-                    type: mesh.material.type,
-                    emissive: (mesh.material as any).emissive?.getHexString(),
-                    emissiveIntensity: (mesh.material as any).emissiveIntensity
-                }
-            };
+            data.instancedMesh = { count: mesh.count, material: mesh.material.type };
         }
-
-        const lights: any[] = [];
-        scene.traverse(obj => {
-            if (obj instanceof THREE.Light) {
-                lights.push({ type: obj.type, intensity: obj.intensity, position: obj.position.toArray() });
-            }
-        });
-        data.lights = lights;
 
         return JSON.stringify(data, null, 2);
     }
@@ -117,8 +67,6 @@
         console.log('--- COMPREHENSIVE BOID DIAGNOSTICS ---');
         console.log(report);
         debugMode = !debugMode;
-        console.log('Debug Mode Toggled:', debugMode);
-        console.log('------------------------');
     }
 
     let container: HTMLDivElement;
@@ -163,20 +111,17 @@
     const _tempColor = new THREE.Color();
     const _predPos = new THREE.Vector3();
     const _predVel = new THREE.Vector3();
-    const _predDesiredDir = new THREE.Vector3();
 
     let mouse = new THREE.Vector2(-9999, -9999);
     let target = new THREE.Vector3();
     let uiRect: DOMRect | null = null;
-    let mainElement: HTMLElement | null = null;
     
     const _scratchV1 = new THREE.Vector3();
-    const _scratchV2 = new THREE.Vector3();
     const _alignF = new THREE.Vector3();
     const _cohF = new THREE.Vector3();
     const _sepF = new THREE.Vector3();
 
-    // BOID PARAMETERS - FINAL MASTER REFINEMENT
+    // BOID PARAMETERS
     const BOUNDARY_SIZE = 120;
     const TARGET_SPEED = 2.2;
     const SPEED_FORCE = 0.1;
@@ -184,7 +129,7 @@
     const PREDATOR_MIN_SPEED = 2.0;
     const PREDATOR_MAX_STEER = 0.5;
     const PREDATOR_PREDICT_T = 2;
-    const EAT_RADIUS_SQ = 144; // Large kill zone
+    const EAT_RADIUS_SQ = 144; 
     
     let SPEED_LIMIT = $derived(3.0);
     let VISUAL_RANGE = $derived(50); 
@@ -200,31 +145,22 @@
 
     const bgVertexShader = `
         varying vec2 vUv;
-        void main() {
-            vUv = uv;
-            gl_Position = vec4(position.xy, 0.999, 1.0);
-        }
+        void main() { vUv = uv; gl_Position = vec4(position.xy, 0.999, 1.0); }
     `;
 
     const bgFragmentShader = `
-        uniform float time;
-        uniform float dayPhase;
-        uniform float tension;
+        uniform float time; uniform float dayPhase; uniform float tension;
         varying vec2 vUv;
-        float hash31(vec3 p) { return fract(sin(dot(p, vec3(127.1, 311.7, 74.7))) * 43758.5453); }
         float hash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
         void main() {
             vec2 uv = vUv;
             float sun = clamp(sin(dayPhase * 6.28318) * 0.5 + 0.5, 0.0, 1.0);
-            vec3 nightZenith = vec3(0.01, 0.02, 0.08);
-            vec3 nightHorizon = vec3(0.02, 0.04, 0.1);
-            vec3 dayZenith = vec3(0.12, 0.32, 0.75);
-            vec3 dayHorizon = vec3(0.3, 0.55, 0.85);
+            vec3 nightZenith = vec3(0.01, 0.02, 0.08); vec3 nightHorizon = vec3(0.02, 0.04, 0.1);
+            vec3 dayZenith = vec3(0.12, 0.32, 0.75); vec3 dayHorizon = vec3(0.3, 0.55, 0.85);
             vec3 skyResult = mix(mix(nightHorizon, dayHorizon, pow(sun, 1.1)), mix(nightZenith, dayZenith, pow(sun, 1.2)), pow(uv.y, 0.85));
             skyResult *= (1.0 - tension * 0.75);
             float night = 1.0 - sun;
-            float starNoise = hash(uv * vec2(1800.0, 1000.0));
-            float stars = step(0.997, starNoise) * night;
+            float stars = step(0.997, hash(uv * vec2(1800.0, 1000.0))) * night;
             skyResult += stars * vec3(1.0, 1.0, 1.2) * (0.6 + night);
             gl_FragColor = vec4(skyResult, 1.0);
         }
@@ -241,62 +177,42 @@
         renderer.outputColorSpace = THREE.SRGBColorSpace;
         renderer.toneMapping = THREE.ACESFilmicToneMapping;
 
-        ambientLight = new THREE.AmbientLight(0xffffff, 1.0); 
-        scene.add(ambientLight);
-        pointLight = new THREE.PointLight(0xffffff, 5.0, 1000);
-        pointLight.position.set(0, 0, 250); 
-        scene.add(pointLight);
-        dirLight = new THREE.DirectionalLight(0xffffff, 2.0);
-        dirLight.position.set(0, 0, 400);
-        scene.add(dirLight);
+        ambientLight = new THREE.AmbientLight(0xffffff, 1.0); scene.add(ambientLight);
+        pointLight = new THREE.PointLight(0xffffff, 5.0, 1000); pointLight.position.set(0, 0, 250); scene.add(pointLight);
+        dirLight = new THREE.DirectionalLight(0xffffff, 2.0); dirLight.position.set(0, 0, 400); scene.add(dirLight);
 
         const bgGeo = new THREE.PlaneGeometry(2, 2);
         bgMesh = new THREE.Mesh(bgGeo, new THREE.ShaderMaterial({
             uniforms: { time: { value: 0 }, dayPhase: { value: 0.25 }, tension: { value: 0 } },
             vertexShader: bgVertexShader, fragmentShader: bgFragmentShader, depthWrite: false
         }));
-        bgMesh.renderOrder = -1;
-        if (useSkybox) scene.add(bgMesh);
+        bgMesh.renderOrder = -1; if (useSkybox) scene.add(bgMesh);
 
-        const birdGeo = new THREE.ConeGeometry(1.0, 4.0, 4); // Robust size
-        birdGeo.rotateX(Math.PI / 2);
-        birdGeo.computeVertexNormals();
-        
-        const material = new THREE.MeshLambertMaterial({ 
-            color: 0xffffff, transparent: true, opacity: 0.95, emissive: 0x000000
-        });
+        const birdGeo = new THREE.ConeGeometry(1.0, 4.0, 4);
+        birdGeo.rotateX(Math.PI / 2); birdGeo.computeVertexNormals();
+        const material = new THREE.MeshLambertMaterial({ color: 0xffffff, transparent: true, opacity: 0.95, emissive: 0x000000 });
         mesh = new THREE.InstancedMesh(birdGeo, material, boidCount);
         mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
         mesh.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(boidCount * 3), 3);
-        mesh.instanceColor.setUsage(THREE.DynamicDrawUsage);
         mesh.geometry.setAttribute('instanceColor', mesh.instanceColor); 
         scene.add(mesh);
 
         const predatorGeo = new THREE.ConeGeometry(5.0, 18.0, 6);
-        predatorGeo.rotateX(Math.PI / 2);
-        predatorGeo.computeVertexNormals();
+        predatorGeo.rotateX(Math.PI / 2); predatorGeo.computeVertexNormals();
         const predatorMat = new THREE.MeshLambertMaterial({ color: 0xffffff, emissive: 0xffffff, emissiveIntensity: 1.0 });
-        predator = new THREE.Mesh(predatorGeo, predatorMat);
-        predator.visible = true;
-        scene.add(predator);
+        predator = new THREE.Mesh(predatorGeo, predatorMat); predator.visible = true; scene.add(predator);
 
-        positions = new Float32Array(boidCount * 3);
-        velocities = new Float32Array(boidCount * 3);
-        scales = new Float32Array(boidCount);
-        maxSpeeds = new Float32Array(boidCount);
-        deathTimers = new Float32Array(boidCount);
+        positions = new Float32Array(boidCount * 3); velocities = new Float32Array(boidCount * 3);
+        scales = new Float32Array(boidCount); maxSpeeds = new Float32Array(boidCount); deathTimers = new Float32Array(boidCount);
         
         for (let i = 0; i < boidCount; i++) {
-            _position.set((Math.random()-0.5)*250, (Math.random()-0.5)*250, 20+Math.random()*100);
+            _position.set((Math.random()-0.5)*250, (Math.random()-0.5)*250, 20+Math.random()*80);
             _velocity.set((Math.random()-0.5), (Math.random()-0.5), 1).normalize().multiplyScalar(SPEED_LIMIT);
             positions[i*3]=_position.x; positions[i*3+1]=_position.y; positions[i*3+2]=_position.z;
             velocities[i*3]=_velocity.x; velocities[i*3+1]=_velocity.y; velocities[i*3+2]=_velocity.z;
-            scales[i] = 0.8 + Math.random() * 0.8;
-            maxSpeeds[i] = SPEED_LIMIT * (0.8 + Math.random() * 0.5);
+            scales[i] = 0.8 + Math.random() * 0.8; maxSpeeds[i] = SPEED_LIMIT * (0.8 + Math.random() * 0.5);
             mesh.setColorAt(i, new THREE.Color(color).multiplyScalar(0.8));
-            _dummy.position.copy(_position);
-            _dummy.scale.set(scales[i], scales[i], scales[i]);
-            _dummy.updateMatrix();
+            _dummy.position.copy(_position); _dummy.scale.set(scales[i], scales[i], scales[i]); _dummy.updateMatrix();
             mesh.setMatrixAt(i, _dummy.matrix);
         }
         if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
@@ -321,70 +237,47 @@
         trailGeo.setIndex(trailIndices);
         trailGeo.setAttribute('position', new THREE.BufferAttribute(trailHistory, 3));
         const trailMat = new THREE.LineBasicMaterial({ color: new THREE.Color(color), transparent: true, opacity: 0.4 });
-        trails = new THREE.LineSegments(trailGeo, trailMat);
-        trails.visible = showTrails;
-        scene.add(trails);
+        trails = new THREE.LineSegments(trailGeo, trailMat); trails.visible = showTrails; scene.add(trails);
 
         const predTrailGeo = new THREE.BufferGeometry();
         predTrailGeo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(PRED_TRAIL_LENGTH * 3), 3));
         predTrailLine = new THREE.Line(predTrailGeo, new THREE.LineBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.5 }));
-        predTrailLine.visible = showTrails;
-        scene.add(predTrailLine);
+        predTrailLine.visible = showTrails; scene.add(predTrailLine);
     }
 
     $effect(() => {
         if (!mesh) return;
         const mat = mesh.material as THREE.MeshLambertMaterial;
-        mat.color.set(0xffffff); 
-        mat.wireframe = wireframe;
-        mat.emissive.set(color);
-        mat.emissiveIntensity = isTerminal ? 1.0 : 0.3;
-        
+        mat.color.set(0xffffff); mat.wireframe = wireframe;
+        mat.emissive.set(color); mat.emissiveIntensity = isTerminal ? 1.0 : 0.3;
         if (ambientLight) ambientLight.intensity = isTerminal ? 0.8 : 1.0;
         if (pointLight) pointLight.intensity = isTerminal ? 5.0 : 2.0;
         if (dirLight) dirLight.intensity = isTerminal ? 2.0 : 1.5;
-
         if (useSkybox) { if (bgMesh && !scene.children.includes(bgMesh)) scene.add(bgMesh); }
         else { if (bgMesh && scene.children.includes(bgMesh)) scene.remove(bgMesh); }
-
         if (trails) { (trails.material as THREE.LineBasicMaterial).color.set(color); trails.visible = showTrails; }
         if (predator) { 
             const pMat = predator.material as THREE.MeshLambertMaterial;
-            pMat.color.set(0xffffff);
-            pMat.emissive.set(predatorColor);
-            pMat.emissiveIntensity = 1.0;
+            pMat.color.set(0xffffff); pMat.emissive.set(predatorColor); pMat.emissiveIntensity = 1.0;
             predator.visible = true; 
         }
         if (predTrailLine) { (predTrailLine.material as THREE.LineBasicMaterial).color.set(predatorColor); predTrailLine.visible = showTrails; }
     });
 
-    let predTargetIdx = -1;
-    let predTargetUntil = 0;
-    const _baseCol = new THREE.Color();
-    const _whiteCol = new THREE.Color(0xffffff);
-
-    let frameStartTime = 0;
-    let lastFrameTime = 0;
-    let avgFrameTime = 0;
+    let predTargetIdx = -1; let predTargetUntil = 0;
+    const _baseCol = new THREE.Color(); const _whiteCol = new THREE.Color(0xffffff);
+    let frameStartTime = 0; let lastFrameTime = 0; let avgFrameTime = 0;
 
     function animate() {
         frameStartTime = performance.now();
         frameId = requestAnimationFrame(animate);
-        const now = performance.now();
-        frameCount++;
-        if (now - lastTime >= 1000) { 
-            fps = frameCount; 
-            frameCount = 0; 
-            lastTime = now; 
-            avgFrameTime = lastFrameTime;
-        }
+        const now = performance.now(); frameCount++;
+        if (now - lastTime >= 1000) { fps = frameCount; frameCount = 0; lastTime = now; avgFrameTime = lastFrameTime; }
         const t = now * 0.001;
         
         if (bgMesh) {
             const m = bgMesh.material as THREE.ShaderMaterial;
-            m.uniforms.time.value = t;
-            m.uniforms.dayPhase.value = (t * 0.004 + 0.25) % 1.0;
-            m.uniforms.tension.value = recruitmentLevel;
+            m.uniforms.time.value = t; m.uniforms.dayPhase.value = (t * 0.004 + 0.25) % 1.0; m.uniforms.tension.value = recruitmentLevel;
         }
 
         if (pointLight) {
@@ -396,10 +289,8 @@
         if (dirLight) dirLight.position.set(camera.position.x, camera.position.y, 300);
 
         target.set((mouse.x * window.innerWidth) / 20, -(mouse.y * window.innerHeight) / 20, 0);
-
         const timeSinceInteraction = now - lastInteractionTime;
         const interactionActive = isTerminal && timeSinceInteraction < 60000;
-        
         if (isTerminal && timeSinceInteraction < 2000) { recruitmentLevel = Math.min(1, recruitmentLevel + 0.0005); } 
         else { recruitmentLevel = Math.max(0, recruitmentLevel - 0.008); }
 
@@ -418,14 +309,13 @@
             _velocity.set(velocities[idx], velocities[idx + 1], velocities[idx + 2]);
             _newAccel.set(0, 0, 0);
 
-            // DEATH EFFECT
             if (deathTimers[i] > 0) {
                 deathTimers[i] -= 0.025;
                 if (deathTimers[i] <= 0) {
-                    _position.set((Math.random()-0.5)*350, (Math.random()-0.5)*350, 20+Math.random()*100);
+                    _position.set((Math.random()-0.5)*350, (Math.random()-0.5)*350, 20+Math.random()*80);
                     _velocity.set((Math.random()-0.5), (Math.random()-0.5), 1).normalize().multiplyScalar(SPEED_LIMIT);
                 }
-                _tempColor.set(0xff0000).lerp(_baseCol, 1.0 - deathTimers[i]);
+                _tempColor.set(0xff0000).lerp(_whiteCol, Math.sin(t*10)*0.5+0.5);
                 mesh.setColorAt(i, _tempColor);
                 const s = scales[i] * Math.max(0, deathTimers[i]);
                 _dummy.position.copy(_position); _dummy.scale.set(s, s, s); _dummy.updateMatrix();
@@ -437,39 +327,31 @@
             const isObserver = intFactor > 0.02 && (i < maxObs * intFactor);
 
             if (isObserver && uiRect) {
-                // RECTANGULAR PERIMETER DISTRIBUTION (SOLID PLAN)
                 const perimeter = 2 * (uiRect.width + uiRect.height);
                 const step = perimeter / Math.min(boidCount * 0.2, 60);
-                let dist = (i * step) % perimeter;
-                
-                // Gap is fixed and large to ensure no clipping
+                let dOnP = (i * step) % perimeter;
                 const gap = 180 + (i % 3) * 60; 
 
                 let tx = 0, ty = 0;
-                if (dist < uiRect.width) { // TOP
-                    tx = uiRect.left + dist; ty = uiRect.top - gap; 
-                } else {
-                    dist -= uiRect.width;
-                    if (dist < uiRect.height) { // RIGHT
-                        tx = uiRect.right + gap; ty = uiRect.top + dist; 
-                    } else {
-                        dist -= uiRect.height;
-                        if (dist < uiRect.width) { // BOTTOM
-                            tx = uiRect.right - dist; ty = uiRect.bottom + gap; 
-                        } else { // LEFT
-                            dist -= uiRect.width; tx = uiRect.left - gap; ty = uiRect.bottom - dist; 
-                        }
+                if (dOnP < uiRect.width) { tx = uiRect.left + dOnP; ty = uiRect.top - gap; }
+                else {
+                    dOnP -= uiRect.width;
+                    if (dOnP < uiRect.height) { tx = uiRect.right + gap; ty = uiRect.top + dOnP; }
+                    else {
+                        dOnP -= uiRect.height;
+                        if (dOnP < uiRect.width) { tx = uiRect.right - dOnP; ty = uiRect.bottom + gap; }
+                        else { dOnP -= uiRect.width; tx = uiRect.left - gap; ty = uiRect.bottom - dOnP; }
                     }
                 }
 
-                // Smooth drift
-                const floatTime = t * 0.3 + i * 0.1;
-                tx += Math.sin(floatTime) * 12; ty += Math.cos(floatTime * 0.7) * 12;
+                const floatT = t * 0.3 + i * 0.1;
+                tx += Math.sin(floatT) * 12; ty += Math.cos(floatT * 0.7) * 12;
 
-                // Safe depth 0.25 (clear of camera near plane 0.1)
-                _diff.set((tx / window.innerWidth) * 2 - 1, -(ty / window.innerHeight) * 2 + 1, 0.25).unproject(camera);
-                _position.lerp(_diff, 0.05); _velocity.set(0, 0, 0); 
+                const vHAtDepth = 2 * Math.tan((75 * Math.PI/180)/2) * 80;
+                const vWAtDepth = vHAtDepth * (window.innerWidth / window.innerHeight);
+                _diff.set( ((tx/window.innerWidth)*2-1) * (vWAtDepth/2), (-(ty/window.innerHeight)*2+1) * (vHAtDepth/2), 100);
                 
+                _position.lerp(_diff, 0.05); _velocity.set(0, 0, 0); 
                 _lookAt.set(((uiRect.left + uiRect.right)*0.5/window.innerWidth)*2-1, -((uiRect.top + uiRect.bottom)*0.5/window.innerHeight)*2+1, 0.5).unproject(camera);
                 _dummy.position.copy(_position); _dummy.lookAt(_lookAt);
                 
@@ -486,7 +368,6 @@
                     if (i === j || deathTimers[j] > 0) continue;
                     const dx = _position.x - positions[j*3], dy = _position.y - positions[j*3+1], dz = _position.z - positions[j*3+2];
                     const dSq = dx*dx+dy*dy+dz*dz;
-                    
                     if (dSq < PROTECTED_RANGE_SQ && dSq > 0.01) { _sepF.x += dx; _sepF.y += dy; _sepF.z += dz; sC++; }
                     if (dSq < VISUAL_RANGE_SQ && dSq > 0.01) {
                         _cohF.x += positions[j*3]; _cohF.y += positions[j*3+1]; _cohF.z += positions[j*3+2]; cC++;
@@ -506,13 +387,16 @@
                 }
 
                 const wOff = t * 0.05 + i * 0.1;
-                _newAccel.add(_scratchV1.set(Math.sin(wOff) * 0.01, Math.cos(wOff * 0.8) * 0.01, Math.sin(wOff * 0.4) * 0.008));
+                _newAccel.add(_scratchV1.set(Math.sin(wOff) * 0.005, Math.cos(wOff * 0.8) * 0.005, Math.sin(wOff * 0.4) * 0.003));
                 _newAccel.clampLength(0, 0.25);
-                
-                // Acceleration smoothing
-                _acceleration.lerp(_newAccel, 0.1);
+                _acceleration.lerp(_newAccel, 0.05); // Ultra-smooth low-pass filter
                 
                 _velocity.add(_acceleration).clampLength(0.1, maxSpeeds[i]);
+                
+                const turnZ = 0.25;
+                if (_position.z < 20) _velocity.z += turnZ;
+                if (_position.z > 150) _velocity.z -= turnZ * 2; // Rigid boundary before camera
+
                 _position.add(_velocity);
                 _dummy.position.copy(_position);
                 if (_velocity.lengthSq() > 0.0001) _dummy.lookAt(_lookAt.copy(_position).add(_velocity));
@@ -532,8 +416,7 @@
             const h = attr.array as Float32Array;
             for (let i = 0; i < boidCount; i++) {
                 if (deathTimers[i] > 0) continue; 
-                const bIdx = i * 3;
-                const tOff = i * TRAIL_LENGTH * 3;
+                const bIdx = i * 3; const tOff = i * TRAIL_LENGTH * 3;
                 h.copyWithin(tOff + 3, tOff, tOff + (TRAIL_LENGTH - 1) * 3);
                 h[tOff] = positions[bIdx]; h[tOff+1] = positions[bIdx+1]; h[tOff+2] = positions[bIdx+2];
             }
