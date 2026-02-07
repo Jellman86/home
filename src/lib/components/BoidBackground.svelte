@@ -204,6 +204,8 @@
         if (trails) (trails.material as THREE.LineBasicMaterial).color.set(color);
     });
 
+    let frameStartTime = 0;
+    let lastFrameTime = 0;
     let avgFrameTime = 0;
     function animate() {
         frameStartTime = performance.now(); frameId = requestAnimationFrame(animate);
