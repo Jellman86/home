@@ -36,19 +36,41 @@
         const data: any = {
             timestamp: new Date().toISOString(),
             userAgent: navigator.userAgent,
+            fps,
             boidCount,
             themeColor: color,
             isTerminal,
             recruitmentLevel,
+            lastInteractionTime,
+            timeSinceInteraction: performance.now() - lastInteractionTime,
+            uiRect: uiRect ? {
+                top: uiRect.top,
+                bottom: uiRect.bottom,
+                left: uiRect.left,
+                right: uiRect.right,
+                width: uiRect.width,
+                height: uiRect.height
+            } : null,
             renderer: {
                 pixelRatio: renderer.getPixelRatio(),
                 outputColorSpace: renderer.outputColorSpace,
                 toneMapping: renderer.toneMapping
             },
+            scene: {
+                fog: scene.fog ? {
+                    type: (scene.fog as any).isFogExp2 ? 'FogExp2' : 'Fog',
+                    color: (scene.fog as any).color.getHexString(),
+                    density: (scene.fog as any).density || null,
+                    near: (scene.fog as any).near || null,
+                    far: (scene.fog as any).far || null
+                } : null
+            },
             camera: {
                 position: camera.position.toArray(),
                 rotation: camera.rotation.toArray(),
-                zoom: camera.zoom
+                zoom: camera.zoom,
+                near: camera.near,
+                far: camera.far
             }
         };
 
@@ -56,14 +78,17 @@
             data.instancedMesh = {
                 visible: mesh.visible,
                 frustumCulled: mesh.frustumCulled,
+                count: mesh.count,
                 material: {
                     type: mesh.material.type,
                     color: mesh.material.color.getHexString(),
                     emissive: (mesh.material as THREE.MeshPhongMaterial).emissive?.getHexString(),
+                    emissiveIntensity: (mesh.material as THREE.MeshPhongMaterial).emissiveIntensity,
                     vertexColors: mesh.material.vertexColors,
                     transparent: mesh.material.transparent,
                     opacity: mesh.material.opacity,
-                    wireframe: mesh.material.wireframe
+                    wireframe: mesh.material.wireframe,
+                    shininess: (mesh.material as THREE.MeshPhongMaterial).shininess
                 }
             };
 
@@ -72,6 +97,7 @@
                 data.instanceColorBuffer = {
                     count: colorAttr.count,
                     itemSize: colorAttr.itemSize,
+                    usage: colorAttr.usage,
                     firstFive: [
                         [colorAttr.getX(0), colorAttr.getY(0), colorAttr.getZ(0)],
                         [colorAttr.getX(1), colorAttr.getY(1), colorAttr.getZ(1)],
