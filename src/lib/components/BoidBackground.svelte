@@ -128,9 +128,7 @@
                     vertexColors: mesh.material.vertexColors,
                     transparent: mesh.material.transparent,
                     opacity: mesh.material.opacity,
-                    wireframe: (mesh.material as any).wireframe,
-                    roughness: (mesh.material as any).roughness,
-                    metalness: (mesh.material as any).metalness
+                    wireframe: (mesh.material as any).wireframe
                 }
             };
 
@@ -307,12 +305,10 @@
         birdGeo.rotateX(Math.PI / 2);
         birdGeo.computeVertexNormals();
         
-        const material = new THREE.MeshStandardMaterial({ 
+        const material = new THREE.MeshLambertMaterial({ 
             color: 0xffffff, 
             transparent: true, 
             opacity: 0.95, 
-            roughness: 0.5,
-            metalness: 0.2,
             emissive: 0x000000
         });
         mesh = new THREE.InstancedMesh(birdGeo, material, boidCount);
@@ -326,7 +322,7 @@
         const predatorGeo = new THREE.ConeGeometry(2.2, 7.5, 6);
         predatorGeo.rotateX(Math.PI / 2);
         predatorGeo.computeVertexNormals();
-        const predatorMat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.3, metalness: 0.7 });
+        const predatorMat = new THREE.MeshLambertMaterial({ color: 0xffffff });
         predator = new THREE.Mesh(predatorGeo, predatorMat);
         predator.visible = false;
         scene.add(predator);
@@ -350,6 +346,11 @@
             mesh.setMatrixAt(i, _dummy.matrix);
         }
         if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
+
+        // Initialize predator near a random boid
+        const startIdx = Math.floor(Math.random() * boidCount) * 3;
+        _predPos.set(positions[startIdx], positions[startIdx+1], positions[startIdx+2]);
+        _predVel.set(velocities[startIdx], velocities[startIdx+1], velocities[startIdx+2]).setLength(PREDATOR_SPEED);
 
         // TRAILS
         const trailHistory = new Float32Array(boidCount * TRAIL_LENGTH * 3);
@@ -381,13 +382,11 @@
 
     $effect(() => {
         if (!mesh) return;
-        const mat = mesh.material as THREE.MeshStandardMaterial;
+        const mat = mesh.material as THREE.MeshLambertMaterial;
         mat.color.set(0xffffff); 
         mat.wireframe = wireframe;
-        mat.roughness = isTerminal ? 0.3 : 0.5;
-        mat.metalness = isTerminal ? 0.6 : 0.1;
         mat.emissive.set(color);
-        mat.emissiveIntensity = isTerminal ? 0.8 : 0.2;
+        mat.emissiveIntensity = isTerminal ? 1.0 : 0.3;
         
         if (ambientLight) ambientLight.intensity = isTerminal ? 0.8 : 1.0;
         if (pointLight) pointLight.intensity = isTerminal ? 5.0 : 2.0;
@@ -398,12 +397,10 @@
 
         if (trails) { (trails.material as THREE.LineBasicMaterial).color.set(color); trails.visible = showTrails; }
         if (predator) { 
-            const pMat = predator.material as THREE.MeshStandardMaterial;
+            const pMat = predator.material as THREE.MeshLambertMaterial;
             pMat.color.set(0xffffff);
             pMat.emissive.set(predatorColor);
             pMat.emissiveIntensity = 1.0;
-            pMat.roughness = 0.2;
-            pMat.metalness = 0.8;
             predator.visible = true; 
         }
         if (predTrailLine) { (predTrailLine.material as THREE.LineBasicMaterial).color.set(predatorColor); predTrailLine.visible = showTrails; }
@@ -468,13 +465,12 @@
 
             if (isObserver && uiRect) {
                 const angle = (i * 137.5) * (Math.PI / 180); 
-                const ring = (i % 6); const margin = 140 + ring * 80; 
+                const ring = (i % 6); const margin = 40 + ring * 60; 
                 let tsx = (uiRect.left + uiRect.right) * 0.5 + Math.cos(angle) * (uiRect.width * 0.5 + margin);
                 let tsy = (uiRect.top + uiRect.bottom) * 0.5 + Math.sin(angle) * (uiRect.height * 0.5 + margin);
                 
-                // STABLE WORLD Z: Move significantly closer but not behind camera
-                // NDC 0.5 unprojets to a safe distance (~100 world units)
-                _diff.set((tsx / window.innerWidth) * 2 - 1, -(tsy / window.innerHeight) * 2 + 1, 0.5).unproject(camera);
+                // STABLE WORLD Z: Move significantly closer to camera
+                _diff.set((tsx / window.innerWidth) * 2 - 1, -(tsy / window.innerHeight) * 2 + 1, 0.1).unproject(camera);
                 
                 _position.lerp(_diff, 0.03); _velocity.set(0, 0, 0); 
                 _lookAt.set(((uiRect.left + uiRect.right)*0.5/window.innerWidth)*2-1, -((uiRect.top + uiRect.bottom)*0.5/window.innerHeight)*2+1, 0.5).unproject(camera);
@@ -562,6 +558,16 @@
         const predict = _lookAt.set(positions[tIdx] + velocities[tIdx] * PREDATOR_PREDICT_T, positions[tIdx+1] + velocities[tIdx+1] * PREDATOR_PREDICT_T, positions[tIdx+2] + velocities[tIdx+2] * PREDATOR_PREDICT_T);
         const steer = _diff.copy(predict).sub(_predPos).setLength(PREDATOR_SPEED).sub(_predVel).clampLength(0, PREDATOR_MAX_STEER);
         _predVel.add(steer).clampLength(PREDATOR_MIN_SPEED, PREDATOR_SPEED);
+
+        // Predator boundaries
+        const pTurn = 0.08;
+        if (_predPos.x < -BOUNDARY_SIZE) _predVel.x += pTurn;
+        if (_predPos.x > BOUNDARY_SIZE) _predVel.x -= pTurn;
+        if (_predPos.y < -BOUNDARY_SIZE) _predVel.y += pTurn;
+        if (_predPos.y > BOUNDARY_SIZE) _predVel.y -= pTurn;
+        if (_predPos.z < 20) _predVel.z += pTurn;
+        if (_predPos.z > BOUNDARY_SIZE + 20) _predVel.z -= pTurn;
+
         _predPos.add(_predVel);
         if (predator) { predator.position.copy(_predPos); predator.lookAt(_lookAt.copy(_predPos).add(_predVel)); }
 
