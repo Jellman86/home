@@ -32,38 +32,77 @@
 
     let debugMode = $state(false);
 
-    export function runDiagnostics() {
-        console.log('--- BOID DIAGNOSTICS ---');
-        console.log('Boid Count:', boidCount);
-        console.log('Theme Color:', color);
-        console.log('Is Terminal:', isTerminal);
-        
+    export function getDiagnosticsData(): string {
+        const data: any = {
+            timestamp: new Date().toISOString(),
+            userAgent: navigator.userAgent,
+            boidCount,
+            themeColor: color,
+            isTerminal,
+            recruitmentLevel,
+            renderer: {
+                pixelRatio: renderer.getPixelRatio(),
+                outputColorSpace: renderer.outputColorSpace,
+                toneMapping: renderer.toneMapping
+            },
+            camera: {
+                position: camera.position.toArray(),
+                rotation: camera.rotation.toArray(),
+                zoom: camera.zoom
+            }
+        };
+
         if (mesh) {
-            console.log('InstancedMesh:', mesh);
-            console.log('Material:', mesh.material);
-            console.log('Material Color:', mesh.material.color.getHexString());
-            console.log('Vertex Colors:', mesh.material.vertexColors);
-            
+            data.instancedMesh = {
+                visible: mesh.visible,
+                frustumCulled: mesh.frustumCulled,
+                material: {
+                    type: mesh.material.type,
+                    color: mesh.material.color.getHexString(),
+                    emissive: (mesh.material as THREE.MeshPhongMaterial).emissive?.getHexString(),
+                    vertexColors: mesh.material.vertexColors,
+                    transparent: mesh.material.transparent,
+                    opacity: mesh.material.opacity,
+                    wireframe: mesh.material.wireframe
+                }
+            };
+
             const colorAttr = mesh.geometry.getAttribute('instanceColor');
-            console.log('Instance Color Attribute:', colorAttr);
             if (colorAttr) {
-                console.log('First Boid Color (RGB):', 
-                    colorAttr.getX(0).toFixed(2), 
-                    colorAttr.getY(0).toFixed(2), 
-                    colorAttr.getZ(0).toFixed(2)
-                );
+                data.instanceColorBuffer = {
+                    count: colorAttr.count,
+                    itemSize: colorAttr.itemSize,
+                    firstFive: [
+                        [colorAttr.getX(0), colorAttr.getY(0), colorAttr.getZ(0)],
+                        [colorAttr.getX(1), colorAttr.getY(1), colorAttr.getZ(1)],
+                        [colorAttr.getX(2), colorAttr.getY(2), colorAttr.getZ(2)],
+                        [colorAttr.getX(3), colorAttr.getY(3), colorAttr.getZ(3)],
+                        [colorAttr.getX(4), colorAttr.getY(4), colorAttr.getZ(4)]
+                    ]
+                };
             }
         }
 
-        if (scene) {
-            console.log('Scene Lights:');
-            scene.traverse(obj => {
-                if (obj instanceof THREE.Light) {
-                    console.log(`- ${obj.type}: Intensity ${obj.intensity}, Position`, obj.position);
-                }
-            });
-        }
-        
+        const lights: any[] = [];
+        scene.traverse(obj => {
+            if (obj instanceof THREE.Light) {
+                lights.push({
+                    type: obj.type,
+                    intensity: obj.intensity,
+                    color: obj.color.getHexString(),
+                    position: obj.position.toArray()
+                });
+            }
+        });
+        data.lights = lights;
+
+        return JSON.stringify(data, null, 2);
+    }
+
+    export function runDiagnostics() {
+        const report = getDiagnosticsData();
+        console.log('--- COMPREHENSIVE BOID DIAGNOSTICS ---');
+        console.log(report);
         debugMode = !debugMode;
         console.log('Debug Mode Toggled:', debugMode);
         console.log('------------------------');
