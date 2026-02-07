@@ -219,6 +219,16 @@
     let target = new THREE.Vector3();
     let uiRect: DOMRect | null = null;
     
+    // PERFORMANCE: Spatial Partitioning & Scratch Vectors
+    const GRID_SIZE = 40;
+    const grid: number[][] = [];
+    const _scratchV1 = new THREE.Vector3();
+    const _scratchV2 = new THREE.Vector3();
+    const _scratchV3 = new THREE.Vector3();
+    const _alignF = new THREE.Vector3();
+    const _cohF = new THREE.Vector3();
+    const _sepF = new THREE.Vector3();
+
     // BOID PARAMETERS
     const BOUNDARY_SIZE = 120;
     const NEIGHBOR_COUNT = 7; 
@@ -451,6 +461,25 @@
         if (isTerminal && timeSinceInteraction < 2000) { recruitmentLevel = Math.min(1, recruitmentLevel + 0.0005); } 
         else { recruitmentLevel = Math.max(0, recruitmentLevel - 0.008); }
 
+        // Update UI Rect dynamically for drag tracking
+        if (isTerminal && recruitmentLevel > 0) {
+            uiRect = (document.querySelector('main') as HTMLElement | null)?.getBoundingClientRect() || null;
+        }
+
+        // PERFORMANCE: Build Spatial Grid
+        const gridCells = Math.ceil((BOUNDARY_SIZE * 2.5) / GRID_SIZE);
+        const gridOffset = BOUNDARY_SIZE * 1.25;
+        grid.length = 0;
+        for (let i = 0; i < boidCount; i++) {
+            const idx = i * 3;
+            const gx = Math.floor((positions[idx] + gridOffset) / GRID_SIZE);
+            const gy = Math.floor((positions[idx+1] + gridOffset) / GRID_SIZE);
+            const gz = Math.floor((positions[idx+2] + gridOffset) / GRID_SIZE);
+            const cellKey = gx + gy * gridCells + gz * gridCells * gridCells;
+            if (!grid[cellKey]) grid[cellKey] = [];
+            grid[cellKey].push(i);
+        }
+
         const maxObs = boidCount * 0.20;
         const intFactor = recruitmentLevel * (interactionActive ? Math.pow(Math.max(0, 1 - (timeSinceInteraction / 60000)), 0.5) : 0);
         _baseCol.set(color);
@@ -465,12 +494,13 @@
 
             if (isObserver && uiRect) {
                 const angle = (i * 137.5) * (Math.PI / 180); 
-                const ring = (i % 6); const margin = 40 + ring * 60; 
+                // Increased margin to stay "outside" terminal window
+                const ring = (i % 5); const margin = 80 + ring * 50; 
                 let tsx = (uiRect.left + uiRect.right) * 0.5 + Math.cos(angle) * (uiRect.width * 0.5 + margin);
                 let tsy = (uiRect.top + uiRect.bottom) * 0.5 + Math.sin(angle) * (uiRect.height * 0.5 + margin);
                 
-                // STABLE WORLD Z: Move significantly closer to camera
-                _diff.set((tsx / window.innerWidth) * 2 - 1, -(tsy / window.innerHeight) * 2 + 1, 0.1).unproject(camera);
+                // Positioned slightly closer but consistent to avoid clipping behind terminal
+                _diff.set((tsx / window.innerWidth) * 2 - 1, -(tsy / window.innerHeight) * 2 + 1, 0.2).unproject(camera);
                 
                 _position.lerp(_diff, 0.03); _velocity.set(0, 0, 0); 
                 _lookAt.set(((uiRect.left + uiRect.right)*0.5/window.innerWidth)*2-1, -((uiRect.top + uiRect.bottom)*0.5/window.innerHeight)*2+1, 0.5).unproject(camera);
@@ -484,21 +514,39 @@
                 const sVar = 0.3 + (Math.sin(i * 0.7) * 0.15); 
                 _dummy.scale.set(sVar, sVar, sVar);
             } else {
-                let alignF = new THREE.Vector3(), cohF = new THREE.Vector3(), sepF = new THREE.Vector3();
+                _alignF.set(0, 0, 0); _cohF.set(0, 0, 0); _sepF.set(0, 0, 0);
                 let aC = 0, cC = 0, sC = 0;
-                for (let j = 0; j < boidCount; j++) {
-                    const oIdx = j * 3; if (oIdx === idx) continue;
-                    const dx = _position.x - positions[oIdx], dy = _position.y - positions[oIdx + 1], dz = _position.z - positions[oIdx + 2];
-                    const dSq = dx*dx+dy*dy+dz*dz;
-                    if (dSq < PROTECTED_RANGE * PROTECTED_RANGE && dSq > 0.01) { sepF.x += dx; sepF.y += dy; sepF.z += dz; sC++; }
-                    if (dSq < VISUAL_RANGE * VISUAL_RANGE && dSq > 0.01) {
-                        cohF.x += positions[oIdx]; cohF.y += positions[oIdx+1]; cohF.z += positions[oIdx+2]; cC++;
-                        alignF.x += velocities[oIdx]; alignF.y += velocities[oIdx+1]; alignF.z += velocities[oIdx+2]; aC++;
+
+                // PERFORMANCE: Check grid neighbors instead of every boid
+                const gx = Math.floor((_position.x + gridOffset) / GRID_SIZE);
+                const gy = Math.floor((_position.y + gridOffset) / GRID_SIZE);
+                const gz = Math.floor((_position.z + gridOffset) / GRID_SIZE);
+
+                for (let ox = -1; ox <= 1; ox++) {
+                    for (let oy = -1; oy <= 1; oy++) {
+                        for (let oz = -1; oz <= 1; oz++) {
+                            const ck = (gx+ox) + (gy+oy) * gridCells + (gz+oz) * gridCells * gridCells;
+                            const cell = grid[ck];
+                            if (!cell) continue;
+                            for (let n = 0; n < cell.length; n++) {
+                                const j = cell[n];
+                                if (i === j) continue;
+                                const oIdx = j * 3;
+                                const dx = _position.x - positions[oIdx], dy = _position.y - positions[oIdx + 1], dz = _position.z - positions[oIdx + 2];
+                                const dSq = dx*dx+dy*dy+dz*dz;
+                                if (dSq < PROTECTED_RANGE * PROTECTED_RANGE && dSq > 0.01) { _sepF.x += dx; _sepF.y += dy; _sepF.z += dz; sC++; }
+                                else if (dSq < VISUAL_RANGE * VISUAL_RANGE) {
+                                    _cohF.x += positions[oIdx]; _cohF.y += positions[oIdx+1]; _cohF.z += positions[oIdx+2]; cC++;
+                                    _alignF.x += velocities[oIdx]; _alignF.y += velocities[oIdx+1]; _alignF.z += velocities[oIdx+2]; aC++;
+                                }
+                            }
+                        }
                     }
                 }
-                if (sC > 0) _acceleration.add(sepF.normalize().multiplyScalar(SEPARATION_WEIGHT * 0.12));
-                if (cC > 0) _acceleration.add(cohF.divideScalar(cC).sub(_position).normalize().multiplyScalar(COHESION_WEIGHT * 0.01));
-                if (aC > 0) _acceleration.add(alignF.divideScalar(aC).normalize().sub(_velocity).multiplyScalar(ALIGNMENT_WEIGHT * 0.06));
+
+                if (sC > 0) _acceleration.add(_sepF.normalize().multiplyScalar(SEPARATION_WEIGHT * 0.12));
+                if (cC > 0) _acceleration.add(_cohF.divideScalar(cC).sub(_position).normalize().multiplyScalar(COHESION_WEIGHT * 0.01));
+                if (aC > 0) _acceleration.add(_alignF.divideScalar(aC).normalize().sub(_velocity).multiplyScalar(ALIGNMENT_WEIGHT * 0.06));
 
                 // Stay within boundaries
                 const turn = 0.05;
@@ -509,8 +557,13 @@
                 if (_position.z < 20) _acceleration.z += turn;
                 if (_position.z > BOUNDARY_SIZE + 20) _acceleration.z -= turn;
 
-                if (_position.distanceToSquared(target) < 4000) _acceleration.add(_diff.copy(_position).sub(target).normalize().multiplyScalar(MOUSE_REPULSION_WEIGHT * 0.035));
-                _acceleration.add(_diff.set(Math.sin(_position.y*0.015+t*0.6)*0.008, Math.cos(_position.x*0.012+t*0.5)*0.008, Math.sin((_position.x+_position.y)*0.01+t*0.4)*0.006));
+                if (_position.distanceToSquared(target) < 4000) {
+                    _scratchV1.copy(_position).sub(target).normalize().multiplyScalar(MOUSE_REPULSION_WEIGHT * 0.035);
+                    _acceleration.add(_scratchV1);
+                }
+                
+                _scratchV1.set(Math.sin(_position.y*0.015+t*0.6)*0.008, Math.cos(_position.x*0.012+t*0.5)*0.008, Math.sin((_position.x+_position.y)*0.01+t*0.4)*0.006);
+                _acceleration.add(_scratchV1);
                 _acceleration.clampLength(0, 0.05);
                 _velocity.add(_acceleration).clampLength(0.05, SPEED_LIMIT * 0.8);
                 _position.add(_velocity);
