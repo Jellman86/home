@@ -11,7 +11,10 @@ Applied a concrete fix to the instanced flock pipeline:
 - Recomputed cone normals after rotation to ensure lighting reacts correctly.
 - Added a subtle emissive fallback tied to the theme color to prevent total blackout even if lighting/vertex colors fail.
 
-**Next step:** Verify in terminal mode that boids are colored and illuminated (no black silhouettes).
+**Follow-up attempt:** Added sRGB output + tone mapping and converted boid colors to linear space.  
+**Assumption per request:** Issue still reproducible after these changes.
+
+**Next step:** Verify in terminal mode that boids are colored and illuminated (no black silhouettes). If still black, consider isolating vertex colors with a debug material or removing lighting entirely for instanced boids.
 
 ### Root Cause Analysis (Revised)
 1.  **InstancedMesh Normals**: `ConeGeometry` may require explicit normal computation or a specific orientation to react correctly to lights when instanced.

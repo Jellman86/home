@@ -19,6 +19,7 @@ All notable changes to this project will be documented in this file.
 - **Interaction Triggers**: Fixed a bug where boids would loom on initial page load; they now only react to active typing.
 - **Boredom Decay**: Implemented a significantly faster boredom decay (4x) for more responsive rejoining transitions.
 - **Instanced Boid Color Rendering**: Bound `instanceColor` to geometry, recomputed normals, and added subtle emissive fallback to prevent black silhouettes.
+- **Boid Color Space Pass**: Enabled sRGB output + tone mapping and converted boid colors to linear space for lighting consistency.
 
 ### Improved
 - **Code Stability**: Complete rewrite of the animation loop to remove logic duplications and optimize performance.

@@ -23,6 +23,7 @@ This is the heavy lifter. It manages:
 - **Interactivity**: Responding to mouse movement and "Interaction Points" from the foreground.
 - **Optimization**: Uses `InstancedMesh` with `MeshPhongMaterial` to render 300-800 boids with 3D shading and specular highlights in a single draw call.
 - **Instanced Colors**: The `instanceColor` attribute must be bound to the geometry for per-boid coloring; normals should be recomputed after geometry rotation to ensure lighting works.
+- **Color Space**: Renderer output uses sRGB + tone mapping; boid instance colors are converted to linear space before upload.
 
 ### 2. The Theme System
 Located in `src/lib/components/themes/`, these components define the "personality" of the site:

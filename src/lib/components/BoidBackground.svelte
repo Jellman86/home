@@ -133,6 +133,8 @@
         renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
         renderer.setSize(window.innerWidth, window.innerHeight);
         renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+        renderer.outputColorSpace = THREE.SRGBColorSpace;
+        renderer.toneMapping = THREE.ACESFilmicToneMapping;
 
         // LIGHTS
         ambientLight = new THREE.AmbientLight(0xffffff, 0.8);
@@ -179,7 +181,7 @@
         positions = new Float32Array(boidCount * 3);
         velocities = new Float32Array(boidCount * 3);
         scales = new Float32Array(boidCount);
-        const baseColor = new THREE.Color(color);
+        const baseColor = new THREE.Color(color).convertSRGBToLinear();
         for (let i = 0; i < boidCount; i++) {
             _position.set((Math.random()-0.5)*200, (Math.random()-0.5)*200, 20+Math.random()*100);
             _velocity.set((Math.random()-0.5), (Math.random()-0.5), 1).normalize().multiplyScalar(SPEED_LIMIT*2);
@@ -229,7 +231,7 @@
         mat.color.set(0xffffff);
         mat.wireframe = wireframe;
         mat.shininess = isTerminal ? 100 : 30;
-        mat.emissive.set(color);
+        mat.emissive.set(color).convertSRGBToLinear();
         mat.emissiveIntensity = isTerminal ? 0.28 : 0.18;
         
         if (ambientLight) ambientLight.intensity = isTerminal ? 0.6 : 0.8;
@@ -281,7 +283,7 @@
 
         const maxObs = boidCount * 0.20;
         const intFactor = recruitmentLevel * (interactionActive ? Math.pow(Math.max(0, 1 - (timeSinceInteraction / 60000)), 0.5) : 0);
-        _baseCol.set(color);
+        _baseCol.set(color).convertSRGBToLinear();
 
         for (let i = 0; i < boidCount; i++) {
             const idx = i * 3;
