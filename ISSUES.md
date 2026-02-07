@@ -1,9 +1,12 @@
 # Known Issues & Bug Tracking
 
-## 🟡 [PENDING VERIFICATION] Observer Color Charge Invisibility
+## ✅ [RESOLVED] Observer Color Charge Invisibility
 
-### Status Update (BUILD 44677ce)
-The boids have been upgraded to `MeshPhongMaterial` with a dynamic lighting system. This change addresses the "black wall" effect and provides a physical light source to illuminate the color shifts. Verification is needed to confirm if the white lerp is now clearly visible.
+### Resolution (BUILD 6047ab8)
+The issue has been resolved by:
+1.  **Locking Material Color to White**: Prevents multiplication that was darkening vertex colors.
+2.  **Triple-Light System**: Introduced a `DirectionalLight` and `PointLight` to ensure physical illumination of all 3D boids.
+3.  **Code Sanitization**: Removed Svelte proxy interference in the animation loop by pre-calculating non-reactive color variables.
 
 ### Description
 When boids enter the "Observer" state (looming around the terminal), they are intended to turn bright white/yellow to signal active scrutiny. However, in the current build, they remain their base color or appear dark/black during this transition.

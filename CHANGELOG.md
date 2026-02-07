@@ -5,7 +5,8 @@ All notable changes to this project will be documented in this file.
 ## [Unreleased]
 
 ### Added
-- **3D Shaded Entities**: Upgraded boids from flat icons to lit 3D objects using `MeshPhongMaterial`.
+- **3D Shaded Entities**: Upgraded boids and predator from flat icons to lit 3D objects using `MeshPhongMaterial`.
+- **Triple-Light System**: Implemented `AmbientLight`, `PointLight` (Sentience Flashlight), and `DirectionalLight` (Camera Follow) for comprehensive 3D illumination.
 - **Dynamic Flashlight**: Implemented a `PointLight` that tracks the user's typing point, providing real-time 3D highlights on the looming swarm.
 - **Observer Effect**: Implemented "Voyeur" boids that break away from the main flock when the user interacts with the terminal.
 - **Stationary Looming**: Observers now calculate fixed stations around the UI perimeter and remain still to focus on the user.
@@ -14,10 +15,12 @@ All notable changes to this project will be documented in this file.
 - **Avatar Avoidance**: Specific logic to ensure boids do not obstruct the user's avatar area.
 
 ### Fixed
+- **Color Invisibility**: Resolved a critical bug where material color multiplication was making boids appear black; locked material to white for pure vertex color mixing.
 - **Boid Syntax Errors**: Resolved multiple syntax errors in the animation loop that were causing build failures.
 - **Interaction Triggers**: Fixed a bug where boids would loom on initial page load; they now only react to active typing.
-- **Boredom Decay**: Adjusted recruitment and departure rates for more organic transitions.
+- **Boredom Decay**: Implemented a significantly faster boredom decay (4x) for more responsive rejoining transitions.
 
 ### Improved
+- **Code Stability**: Complete rewrite of the animation loop to remove logic duplications and optimize performance.
 - **Species Variation**: Introduced non-uniform sizing for boids to better reflect natural biological diversity.
 - **Vite Configuration**: Enhanced `vite.config.ts` to support dynamic environment constants.

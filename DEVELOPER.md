@@ -18,7 +18,7 @@ The site is built as a **SvelteKit** single-page application (SPA) optimized for
 ### 1. The Background Layer (`BoidBackground.svelte`)
 This is the heavy lifter. It manages:
 - **WebGL Lifecycle**: Initializing the Scene, Camera, and Renderer.
-- **Lighting System**: Uses a global `AmbientLight` for base visibility and a dynamic `PointLight` that acts as a "sentience flashlight," tracking the typing cursor or mouse.
+- **Lighting System**: Uses a global `AmbientLight` for base visibility, a dynamic `PointLight` that acts as a "sentience flashlight," and a `DirectionalLight` following the camera position to ensure no 3D boid is ever in total darkness.
 - **Simulation Loop**: Running the Boid flocking and Predator pursuit algorithms.
 - **Interactivity**: Responding to mouse movement and "Interaction Points" from the foreground.
 - **Optimization**: Uses `InstancedMesh` with `MeshPhongMaterial` to render 300-800 boids with 3D shading and specular highlights in a single draw call.
@@ -60,7 +60,7 @@ The predator uses **Reynolds Steering** to hunt the flock:
 
 ### 3. The Observer Effect (Looming)
 When the user types, boids transition from the "Flock" state to the "Observer" state:
-- **Recruitment Logic**: A `recruitmentLevel` variable increases while typing and decays when idle. This controls how many boids break away.
+- **Recruitment Logic**: A `recruitmentLevel` variable increases slowly while typing (~25s to full assembly) and decays rapidly when idle (boredom effect), causing boids to rejoin the flock within seconds of inactivity.
 - **Fibonacci Stationing**: Observers are distributed around the UI using a **Fibonacci Spiral** pattern. This ensures even spacing and prevents boids from clumping in a single spot.
 - **Screen-to-World Mapping**:
     - Target positions are calculated in screen-space (relative to the Terminal window).
