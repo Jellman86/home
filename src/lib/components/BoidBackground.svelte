@@ -559,11 +559,6 @@
                 // --- STANDARD BOID LOGIC (MOVING) ---
                 let alignF = new THREE.Vector3(), cohF = new THREE.Vector3(), sepF = new THREE.Vector3();
                 let aC = 0, cC = 0, sC = 0;
-                // ... (rest of standard logic remains same)
-
-                // --- STANDARD BOID LOGIC (MOVING) ---
-                let alignF = new THREE.Vector3(), cohF = new THREE.Vector3(), sepF = new THREE.Vector3();
-                let aC = 0, cC = 0, sC = 0;
 
                 const nearestDist = new Float32Array(NEIGHBOR_COUNT);
                 const nearestIdx = new Int32Array(NEIGHBOR_COUNT);
