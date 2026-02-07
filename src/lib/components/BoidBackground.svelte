@@ -184,7 +184,7 @@
     const PREDATOR_MIN_SPEED = 1.8;
     const PREDATOR_MAX_STEER = 0.4;
     const PREDATOR_PREDICT_T = 3;
-    const EAT_RADIUS_SQ = 100; // Large kill zone for tangible results
+    const EAT_RADIUS_SQ = 100; 
     
     let SPEED_LIMIT = $derived(2.8);
     let VISUAL_RANGE = $derived(50); 
@@ -241,7 +241,6 @@
         renderer.outputColorSpace = THREE.SRGBColorSpace;
         renderer.toneMapping = THREE.ACESFilmicToneMapping;
 
-        // LIGHTS
         ambientLight = new THREE.AmbientLight(0xffffff, 1.0); 
         scene.add(ambientLight);
         pointLight = new THREE.PointLight(0xffffff, 5.0, 1000);
@@ -251,7 +250,6 @@
         dirLight.position.set(0, 0, 400);
         scene.add(dirLight);
 
-        // BG
         const bgGeo = new THREE.PlaneGeometry(2, 2);
         bgMesh = new THREE.Mesh(bgGeo, new THREE.ShaderMaterial({
             uniforms: { time: { value: 0 }, dayPhase: { value: 0.25 }, tension: { value: 0 } },
@@ -260,8 +258,7 @@
         bgMesh.renderOrder = -1;
         if (useSkybox) scene.add(bgMesh);
 
-        // BOIDS
-        const birdGeo = new THREE.ConeGeometry(0.8, 3.5, 4); // Slightly larger
+        const birdGeo = new THREE.ConeGeometry(0.8, 3.5, 4);
         birdGeo.rotateX(Math.PI / 2);
         birdGeo.computeVertexNormals();
         
@@ -275,7 +272,6 @@
         mesh.geometry.setAttribute('instanceColor', mesh.instanceColor); 
         scene.add(mesh);
 
-        // PREDATOR
         const predatorGeo = new THREE.ConeGeometry(4.5, 15.0, 6);
         predatorGeo.rotateX(Math.PI / 2);
         predatorGeo.computeVertexNormals();
@@ -284,7 +280,6 @@
         predator.visible = true;
         scene.add(predator);
 
-        // DATA
         positions = new Float32Array(boidCount * 3);
         velocities = new Float32Array(boidCount * 3);
         scales = new Float32Array(boidCount);
@@ -310,7 +305,6 @@
         _predPos.set(positions[startIdx], positions[startIdx+1], positions[startIdx+2]);
         _predVel.set(velocities[startIdx], velocities[startIdx+1], velocities[startIdx+2]).setLength(PREDATOR_SPEED);
 
-        // TRAILS
         const trailHistory = new Float32Array(boidCount * TRAIL_LENGTH * 3);
         const trailGeo = new THREE.BufferGeometry();
         for (let i = 0; i < boidCount; i++) {
@@ -443,49 +437,28 @@
             const isObserver = intFactor > 0.02 && (i < maxObs * intFactor);
 
             if (isObserver && uiRect) {
-                // RECTANGULAR PERIMETER DISTRIBUTION
-                // Map the linear index 'i' to a position along the rectangle's perimeter
                 const perimeter = 2 * (uiRect.width + uiRect.height);
-                const step = perimeter / Math.min(boidCount * 0.2, 50); // Distribute roughly 50 boids
+                const step = perimeter / Math.min(boidCount * 0.2, 50);
                 let dist = (i * step) % perimeter;
-                
-                // Gap from the window edge (approx 100px = "a centimeter" visual feel)
-                const gap = 120 + (i % 3) * 40; 
+                const gap = 150 + (i % 3) * 50; 
 
                 let tx = 0, ty = 0;
-
-                // Walk the perimeter: Top -> Right -> Bottom -> Left
-                if (dist < uiRect.width) { // TOP
-                    tx = uiRect.left + dist;
-                    ty = uiRect.top - gap;
-                } else {
+                if (dist < uiRect.width) { tx = uiRect.left + dist; ty = uiRect.top - gap; }
+                else {
                     dist -= uiRect.width;
-                    if (dist < uiRect.height) { // RIGHT
-                        tx = uiRect.right + gap;
-                        ty = uiRect.top + dist;
-                    } else {
+                    if (dist < uiRect.height) { tx = uiRect.right + gap; ty = uiRect.top + dist; }
+                    else {
                         dist -= uiRect.height;
-                        if (dist < uiRect.width) { // BOTTOM
-                            tx = uiRect.right - dist;
-                            ty = uiRect.bottom + gap;
-                        } else { // LEFT
-                            dist -= uiRect.width;
-                            tx = uiRect.left - gap;
-                            ty = uiRect.bottom - dist;
-                        }
+                        if (dist < uiRect.width) { tx = uiRect.right - dist; ty = uiRect.bottom + gap; }
+                        else { dist -= uiRect.width; tx = uiRect.left - gap; ty = uiRect.bottom - dist; }
                     }
                 }
 
-                // Add smooth organic float (Low frequency, high amplitude)
-                const floatTime = t * 0.5 + i * 0.2;
-                tx += Math.sin(floatTime) * 15;
-                ty += Math.cos(floatTime * 0.8) * 15;
+                const floatTime = t * 0.4 + i * 0.2;
+                tx += Math.sin(floatTime) * 15; ty += Math.cos(floatTime * 0.8) * 15;
 
-                _diff.set((tx / window.innerWidth) * 2 - 1, -(ty / window.innerHeight) * 2 + 1, 0.25).unproject(camera);
-                
-                // Ultra-smooth lerp for "floating" feel
-                _position.lerp(_diff, 0.03); 
-                _velocity.set(0, 0, 0); 
+                _diff.set((tx / window.innerWidth) * 2 - 1, -(ty / window.innerHeight) * 2 + 1, 0.1).unproject(camera);
+                _position.lerp(_diff, 0.04); _velocity.set(0, 0, 0); 
                 
                 _lookAt.set(((uiRect.left + uiRect.right)*0.5/window.innerWidth)*2-1, -((uiRect.top + uiRect.bottom)*0.5/window.innerHeight)*2+1, 0.5).unproject(camera);
                 _dummy.position.copy(_position); _dummy.lookAt(_lookAt);
@@ -515,7 +488,6 @@
                 if (cC > 0) _newAccel.add(_cohF.divideScalar(cC).sub(_position).normalize().multiplyScalar(COHESION_WEIGHT * 0.015));
                 if (aC > 0) _newAccel.add(_alignF.divideScalar(aC).normalize().sub(_velocity).multiplyScalar(ALIGNMENT_WEIGHT * 0.05));
 
-                // Predator Avoidance & Eaten Trigger
                 const dxP = _position.x - _predPos.x, dyP = _position.y - _predPos.y, dzP = _position.z - _predPos.z;
                 const dSqP = dxP*dxP + dyP*dyP + dzP*dzP;
                 if (dSqP < 3000) { 
@@ -523,12 +495,9 @@
                     if (dSqP < EAT_RADIUS_SQ) deathTimers[i] = 1.0; 
                 }
 
-                // Smooth Wander (Ultra-low frequency)
                 const wOff = t * 0.05 + i * 0.1;
                 _newAccel.add(_scratchV1.set(Math.sin(wOff) * 0.01, Math.cos(wOff * 0.8) * 0.01, Math.sin(wOff * 0.4) * 0.008));
                 _newAccel.clampLength(0, 0.2);
-                
-                // SMOOTHING: Low-pass filter on acceleration
                 _acceleration.lerp(_newAccel, 0.1);
                 
                 _velocity.add(_acceleration).clampLength(0.1, maxSpeeds[i]);
