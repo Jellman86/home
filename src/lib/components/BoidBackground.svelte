@@ -249,9 +249,9 @@
     let SPEED_LIMIT = $derived(0.8);
     let VISUAL_RANGE = $derived(45); 
     let PROTECTED_RANGE = $derived(12);
-    let SEPARATION_WEIGHT = $derived(4.5); // High priority: maintain personal space
-    let ALIGNMENT_WEIGHT = $derived(1.5); // Low priority: don't move in lockstep
-    let COHESION_WEIGHT = $derived(2.5); // Moderate priority: stay together in groups
+    let SEPARATION_WEIGHT = $derived(4.5); 
+    let ALIGNMENT_WEIGHT = $derived(1.5); 
+    let COHESION_WEIGHT = $derived(2.5); 
     const MOUSE_REPULSION_WEIGHT = 12.0;
 
     const VISUAL_RANGE_SQ = 45 * 45;
@@ -541,12 +541,12 @@
                     }
                 }
 
-                if (sC > 0 && _sepF.lengthSq() > 0.001) _acceleration.add(_sepF.normalize().multiplyScalar(SEPARATION_WEIGHT * 0.12));
-                if (cC > 0) _acceleration.add(_cohF.divideScalar(cC).sub(_position).normalize().multiplyScalar(COHESION_WEIGHT * 0.01));
-                if (aC > 0) _acceleration.add(_alignF.divideScalar(aC).normalize().sub(_velocity).multiplyScalar(ALIGNMENT_WEIGHT * 0.06));
+                if (sC > 0 && _sepF.lengthSq() > 0.001) _acceleration.add(_sepF.normalize().multiplyScalar(SEPARATION_WEIGHT * 0.15));
+                if (cC > 0) _acceleration.add(_cohF.divideScalar(cC).sub(_position).normalize().multiplyScalar(COHESION_WEIGHT * 0.015));
+                if (aC > 0) _acceleration.add(_alignF.divideScalar(aC).normalize().sub(_velocity).multiplyScalar(ALIGNMENT_WEIGHT * 0.05));
 
                 // Stay within boundaries
-                const turn = 0.05;
+                const turn = 0.06;
                 if (_position.x < -BOUNDARY_SIZE) _acceleration.x += turn;
                 if (_position.x > BOUNDARY_SIZE) _acceleration.x -= turn;
                 if (_position.y < -BOUNDARY_SIZE) _acceleration.y += turn;
@@ -557,13 +557,19 @@
                 const dxT = _position.x - target.x, dyT = _position.y - target.y, dzT = _position.z - target.z;
                 const dSqToTarget = dxT*dxT + dyT*dyT + dzT*dzT;
                 if (dSqToTarget < MOUSE_REPULSION_SQ) {
-                    _scratchV1.set(dxT, dyT, dzT).normalize().multiplyScalar(MOUSE_REPULSION_WEIGHT * 0.035);
+                    _scratchV1.set(dxT, dyT, dzT).normalize().multiplyScalar(MOUSE_REPULSION_WEIGHT * 0.045);
                     _acceleration.add(_scratchV1);
                 }
                 
-                _scratchV1.set(Math.sin(_position.y*0.015+t*0.6+i*0.1)*0.01, Math.cos(_position.x*0.012+t*0.5+i*0.2)*0.01, Math.sin((_position.x+_position.y)*0.01+t*0.4+i*0.3)*0.008);
+                // Personality: individual decision noise
+                _scratchV1.set(
+                    Math.sin(_position.y*0.015 + t*0.6 + i*0.1) * 0.012, 
+                    Math.cos(_position.x*0.012 + t*0.5 + i*0.2) * 0.012, 
+                    Math.sin((_position.x+_position.y)*0.01 + t*0.4 + i*0.3) * 0.01
+                );
                 _acceleration.add(_scratchV1);
-                _acceleration.clampLength(0, 0.05);
+                _acceleration.clampLength(0, 0.08);
+                
                 _velocity.add(_acceleration).clampLength(0.05, maxSpeeds[i]);
                 _position.add(_velocity);
                 _dummy.position.copy(_position);
@@ -578,12 +584,6 @@
         }
         mesh.instanceColor!.needsUpdate = true;
         mesh.instanceMatrix.needsUpdate = true;
-            positions[idx] = _position.x; positions[idx+1] = _position.y; positions[idx+2] = _position.z;
-            velocities[idx] = _velocity.x; velocities[idx+1] = _velocity.y; velocities[idx+2] = _velocity.z;
-            _dummy.updateMatrix(); mesh.setMatrixAt(i, _dummy.matrix);
-        }
-        mesh.instanceColor!.needsUpdate = true;
-        mesh.instanceMatrix.needsUpdate = true;
 
         // Update Trails
         if (showTrails && trails) {
@@ -592,7 +592,6 @@
             for (let i = 0; i < boidCount; i++) {
                 const bIdx = i * 3;
                 const tOff = i * TRAIL_LENGTH * 3;
-                // PERFORMANCE: Use fast copyWithin instead of manual shifting
                 h.copyWithin(tOff + 3, tOff, tOff + (TRAIL_LENGTH - 1) * 3);
                 h[tOff] = positions[bIdx]; h[tOff+1] = positions[bIdx+1]; h[tOff+2] = positions[bIdx+2];
             }
@@ -609,8 +608,13 @@
         if (predTargetIdx < 0 || now > predTargetUntil) { predTargetIdx = Math.floor(Math.random() * boidCount); predTargetUntil = now + 5000; }
         const tIdx = predTargetIdx * 3;
         const predict = _lookAt.set(positions[tIdx] + velocities[tIdx] * PREDATOR_PREDICT_T, positions[tIdx+1] + velocities[tIdx+1] * PREDATOR_PREDICT_T, positions[tIdx+2] + velocities[tIdx+2] * PREDATOR_PREDICT_T);
-        const steer = _diff.copy(predict).sub(_predPos).setLength(PREDATOR_SPEED).sub(_predVel).clampLength(0, PREDATOR_MAX_STEER);
-        _predVel.add(steer).clampLength(PREDATOR_MIN_SPEED, PREDATOR_SPEED);
+        
+        // Safety check for predator steer
+        _diff.copy(predict).sub(_predPos);
+        if (_diff.lengthSq() > 0.001) {
+            const steer = _scratchV1.copy(_diff).setLength(PREDATOR_SPEED).sub(_predVel).clampLength(0, PREDATOR_MAX_STEER);
+            _predVel.add(steer).clampLength(PREDATOR_MIN_SPEED, PREDATOR_SPEED);
+        }
 
         // Predator boundaries
         const pTurn = 0.08;
@@ -622,7 +626,10 @@
         if (_predPos.z > BOUNDARY_SIZE + 20) _predVel.z -= pTurn;
 
         _predPos.add(_predVel);
-        if (predator) { predator.position.copy(_predPos); predator.lookAt(_lookAt.copy(_predPos).add(_predVel)); }
+        if (predator) { 
+            predator.position.copy(_predPos); 
+            if (_predVel.lengthSq() > 0.001) predator.lookAt(_lookAt.copy(_predPos).add(_predVel)); 
+        }
 
         if (mesh && debugMode) {
             if (!debugMaterial) debugMaterial = new THREE.MeshNormalMaterial();
