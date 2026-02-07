@@ -244,16 +244,16 @@
     const PREDATOR_PREDICT_T = 18;
     
     let SPEED_LIMIT = $derived(0.8);
-    let VISUAL_RANGE = $derived(36); 
-    let PROTECTED_RANGE = $derived(9);
-    let SEPARATION_WEIGHT = $derived(2.3); 
-    let ALIGNMENT_WEIGHT = $derived(4.5); 
-    let COHESION_WEIGHT = $derived(0.9); 
-    const MOUSE_REPULSION_WEIGHT = 8.0;
+    let VISUAL_RANGE = $derived(45); 
+    let PROTECTED_RANGE = $derived(8);
+    let SEPARATION_WEIGHT = $derived(2.5); 
+    let ALIGNMENT_WEIGHT = $derived(4.0); 
+    let COHESION_WEIGHT = $derived(1.5); 
+    const MOUSE_REPULSION_WEIGHT = 12.0;
 
-    const VISUAL_RANGE_SQ = 36 * 36;
-    const PROTECTED_RANGE_SQ = 9 * 9;
-    const MOUSE_REPULSION_SQ = 4000;
+    const VISUAL_RANGE_SQ = 45 * 45;
+    const PROTECTED_RANGE_SQ = 8 * 8;
+    const MOUSE_REPULSION_SQ = 4500;
 
     const bgVertexShader = `
         varying vec2 vUv;
@@ -605,9 +605,10 @@
                 if (pz < 20) _acceleration.z += turn;
                 if (pz > BOUNDARY_SIZE + 20) _acceleration.z -= turn;
 
-                const dSqToTarget = px*px + py*py + pz*pz; // Approximation for center-target
+                const dxT = px - target.x, dyT = py - target.y, dzT = pz - target.z;
+                const dSqToTarget = dxT*dxT + dyT*dyT + dzT*dzT;
                 if (dSqToTarget < MOUSE_REPULSION_SQ) {
-                    _scratchV1.set(px, py, pz).normalize().multiplyScalar(MOUSE_REPULSION_WEIGHT * 0.035);
+                    _scratchV1.set(dxT, dyT, dzT).normalize().multiplyScalar(MOUSE_REPULSION_WEIGHT * 0.045);
                     _acceleration.add(_scratchV1);
                 }
                 
