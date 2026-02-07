@@ -32,11 +32,24 @@
 
     let debugMode = $state(false);
 
+    let frameStartTime = 0;
+    let lastFrameTime = 0;
+    let avgFrameTime = 0;
+
     export function getDiagnosticsData(): string {
         const data: any = {
             timestamp: new Date().toISOString(),
             userAgent: navigator.userAgent,
-            fps,
+            performance: {
+                fps,
+                avgFrameProcessingTime: avgFrameTime.toFixed(3) + 'ms',
+                memory: (performance as any).memory ? {
+                    usedJSHeapSize: Math.round((performance as any).memory.usedJSHeapSize / 1024 / 1024) + 'MB',
+                    totalJSHeapSize: Math.round((performance as any).memory.totalJSHeapSize / 1024 / 1024) + 'MB',
+                    jsHeapSizeLimit: Math.round((performance as any).memory.jsHeapSizeLimit / 1024 / 1024) + 'MB'
+                } : 'Not available (non-Chrome)',
+                navigation: performance.getEntriesByType('navigation')[0] || 'N/A'
+            },
             boidCount,
             themeColor: color,
             isTerminal,
@@ -396,10 +409,16 @@
     const _whiteCol = new THREE.Color(0xffffff);
 
     function animate() {
+        frameStartTime = performance.now();
         frameId = requestAnimationFrame(animate);
         const now = performance.now();
         frameCount++;
-        if (now - lastTime >= 1000) { fps = frameCount; frameCount = 0; lastTime = now; }
+        if (now - lastTime >= 1000) { 
+            fps = frameCount; 
+            frameCount = 0; 
+            lastTime = now; 
+            avgFrameTime = lastFrameTime; // Sample the last frame time as average for simplicity
+        }
         const t = now * 0.001;
         
         if (bgMesh) {
@@ -512,6 +531,7 @@
         } else {
             renderer.render(scene, camera);
         }
+        lastFrameTime = performance.now() - frameStartTime;
     }
 
     onMount(() => {
