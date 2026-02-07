@@ -32,13 +32,10 @@
 
     let debugMode = $state(false);
 
-    let frameStartTime = 0;
-    let lastFrameTime = 0;
-    let avgFrameTime = 0;
-
     export function getDiagnosticsData(): string {
         const data: any = {
             timestamp: new Date().toISOString(),
+            buildHash: typeof __GIT_HASH__ !== 'undefined' ? __GIT_HASH__ : 'unknown',
             userAgent: navigator.userAgent,
             performance: {
                 fps,
@@ -278,13 +275,15 @@
         renderer.toneMapping = THREE.ACESFilmicToneMapping;
 
         // LIGHTS
-        ambientLight = new THREE.AmbientLight(0xffffff, 0.8);
+        ambientLight = new THREE.AmbientLight(0xffffff, 1.0); // Full ambient
         scene.add(ambientLight);
-        pointLight = new THREE.PointLight(0xffffff, 2.0, 600);
-        pointLight.position.set(0, 50, 120);
+        
+        pointLight = new THREE.PointLight(0xffffff, 5.0, 1000);
+        pointLight.position.set(0, 0, 300); // Between camera and scene
         scene.add(pointLight);
-        dirLight = new THREE.DirectionalLight(0xffffff, 1.0);
-        dirLight.position.set(0, 0, 200);
+        
+        dirLight = new THREE.DirectionalLight(0xffffff, 2.0);
+        dirLight.position.set(0, 0, 400);
         scene.add(dirLight);
 
         // BG
@@ -299,28 +298,27 @@
         // BOIDS
         const birdGeo = new THREE.ConeGeometry(0.6, 2.5, 4);
         birdGeo.rotateX(Math.PI / 2);
-        birdGeo.computeVertexNormals(); // Ensure normals are ready for lighting
+        birdGeo.computeVertexNormals();
         
         const material = new THREE.MeshPhongMaterial({ 
             color: 0xffffff, 
             transparent: true, 
             opacity: 0.95, 
             vertexColors: true, 
-            shininess: 50,
+            shininess: 30,
             emissive: 0x000000
         });
         mesh = new THREE.InstancedMesh(birdGeo, material, boidCount);
         mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
         mesh.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(boidCount * 3), 3);
         mesh.instanceColor.setUsage(THREE.DynamicDrawUsage);
-        mesh.geometry.setAttribute('instanceColor', mesh.instanceColor); // Critical bind
         scene.add(mesh);
 
         // PREDATOR
         const predatorGeo = new THREE.ConeGeometry(2.2, 7.5, 6);
         predatorGeo.rotateX(Math.PI / 2);
         predatorGeo.computeVertexNormals();
-        const predatorMat = new THREE.MeshPhongMaterial({ color: 0x000000, shininess: 80, emissive: 0xffffff });
+        const predatorMat = new THREE.MeshPhongMaterial({ color: 0xffffff, shininess: 80 });
         predator = new THREE.Mesh(predatorGeo, predatorMat);
         predator.visible = false;
         scene.add(predator);
@@ -331,13 +329,12 @@
         scales = new Float32Array(boidCount);
         const baseColor = new THREE.Color(color);
         for (let i = 0; i < boidCount; i++) {
-            _position.set((Math.random()-0.5)*200, (Math.random()-0.5)*200, 20+Math.random()*100);
+            _position.set((Math.random()-0.5)*250, (Math.random()-0.5)*250, 20+Math.random()*100);
             _velocity.set((Math.random()-0.5), (Math.random()-0.5), 1).normalize().multiplyScalar(SPEED_LIMIT*2);
             positions[i*3]=_position.x; positions[i*3+1]=_position.y; positions[i*3+2]=_position.z;
             velocities[i*3]=_velocity.x; velocities[i*3+1]=_velocity.y; velocities[i*3+2]=_velocity.z;
             scales[i] = 0.75 + Math.random() * 0.55;
             
-            // Initial boids use slightly dimmed theme color
             _tempColor.copy(baseColor).multiplyScalar(0.8);
             mesh.setColorAt(i, _tempColor);
             
@@ -385,11 +382,11 @@
         
         // Boost emissive for a true 'digital glow' feel
         mat.emissive.set(color);
-        mat.emissiveIntensity = isTerminal ? 0.6 : 0.2;
+        mat.emissiveIntensity = isTerminal ? 0.8 : 0.2;
         
-        if (ambientLight) ambientLight.intensity = isTerminal ? 0.6 : 0.8;
-        if (pointLight) pointLight.intensity = isTerminal ? 4.0 : 1.5;
-        if (dirLight) dirLight.intensity = isTerminal ? 1.5 : 1.0;
+        if (ambientLight) ambientLight.intensity = isTerminal ? 0.8 : 1.0;
+        if (pointLight) pointLight.intensity = isTerminal ? 5.0 : 2.0;
+        if (dirLight) dirLight.intensity = isTerminal ? 2.0 : 1.5;
 
         if (useSkybox) { if (bgMesh && !scene.children.includes(bgMesh)) scene.add(bgMesh); }
         else { if (bgMesh && scene.children.includes(bgMesh)) scene.remove(bgMesh); }
@@ -409,6 +406,10 @@
     let predTargetUntil = 0;
     const _baseCol = new THREE.Color();
     const _whiteCol = new THREE.Color(0xffffff);
+
+    let frameStartTime = 0;
+    let lastFrameTime = 0;
+    let avgFrameTime = 0;
 
     function animate() {
         frameStartTime = performance.now();
@@ -432,24 +433,20 @@
 
         if (pointLight) {
             if (isTerminal && typingPoint) {
-                // Focus light on the boids stationing plane
-                _diff.set((typingPoint.x/window.innerWidth)*2-1, -(typingPoint.y/window.innerHeight)*2+1, 0.7).unproject(camera);
+                // Focus light on the boids stationing plane (closer NDC)
+                _diff.set((typingPoint.x/window.innerWidth)*2-1, -(typingPoint.y/window.innerHeight)*2+1, 0.2).unproject(camera);
                 pointLight.position.lerp(_diff, 0.1);
-            } else { pointLight.position.set(mouse.x*100, mouse.y*100, 120); }
+            } else { pointLight.position.set(mouse.x*100, mouse.y*100, 150); }
         }
-        if (dirLight) dirLight.position.copy(camera.position);
+        if (dirLight) dirLight.position.set(camera.position.x, camera.position.y, 300);
 
         target.set((mouse.x * window.innerWidth) / 20, -(mouse.y * window.innerHeight) / 20, 0);
 
         const timeSinceInteraction = now - lastInteractionTime;
         const interactionActive = isTerminal && timeSinceInteraction < 60000;
         
-        // RECRUITMENT & BOREDOM: Ultra-snappy boredom decay
-        if (isTerminal && timeSinceInteraction < 2000) {
-            recruitmentLevel = Math.min(1, recruitmentLevel + 0.0003); 
-        } else {
-            recruitmentLevel = Math.max(0, recruitmentLevel - 0.006); // Extremely fast departure
-        }
+        if (isTerminal && timeSinceInteraction < 2000) { recruitmentLevel = Math.min(1, recruitmentLevel + 0.0005); } 
+        else { recruitmentLevel = Math.max(0, recruitmentLevel - 0.008); }
 
         const maxObs = boidCount * 0.20;
         const intFactor = recruitmentLevel * (interactionActive ? Math.pow(Math.max(0, 1 - (timeSinceInteraction / 60000)), 0.5) : 0);
@@ -470,9 +467,9 @@
                 let tsx = (uiRect.left + uiRect.right) * 0.5 + Math.cos(angle) * (uiRect.width * 0.5 + margin);
                 let tsy = (uiRect.top + uiRect.bottom) * 0.5 + Math.sin(angle) * (uiRect.height * 0.5 + margin);
                 
-                // Move them slightly further back into the light's sweet spot
-                let ndcZ = 0.7 + (ring * 0.02); 
-                if (tsx > (uiRect.right - uiRect.width * 0.45)) { ndcZ = 0.85; tsx += 120; }
+                // NDC depth 0.1 is much closer to camera, avoiding fog entirely
+                let ndcZ = 0.1 + (ring * 0.02); 
+                if (tsx > (uiRect.right - uiRect.width * 0.45)) { ndcZ = 0.3; tsx += 120; }
                 
                 _diff.set((tsx / window.innerWidth) * 2 - 1, -(tsy / window.innerHeight) * 2 + 1, ndcZ).unproject(camera);
                 _position.lerp(_diff, 0.03); _velocity.set(0, 0, 0); 
@@ -485,7 +482,7 @@
                 _tempColor.multiplyScalar(pulse);
                 mesh.setColorAt(i, _tempColor);
                 const sVar = 0.3 + (Math.sin(i * 0.7) * 0.15); 
-                const dScale = 1.0 - (ndcZ - 0.7) * 2.0; 
+                const dScale = 1.0 - (ndcZ - 0.1) * 2.0; 
                 _dummy.scale.set(sVar * dScale, sVar * dScale, sVar * dScale);
             } else {
                 let alignF = new THREE.Vector3(), cohF = new THREE.Vector3(), sepF = new THREE.Vector3();
@@ -518,8 +515,8 @@
             velocities[idx] = _velocity.x; velocities[idx+1] = _velocity.y; velocities[idx+2] = _velocity.z;
             _dummy.updateMatrix(); mesh.setMatrixAt(i, _dummy.matrix);
         }
+        mesh.instanceColor.needsUpdate = true;
         mesh.instanceMatrix.needsUpdate = true;
-        if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
 
         if (predTargetIdx < 0 || now > predTargetUntil) { predTargetIdx = Math.floor(Math.random() * boidCount); predTargetUntil = now + 5000; }
         const tIdx = predTargetIdx * 3;
@@ -529,7 +526,6 @@
         _predPos.add(_predVel);
         if (predator) { predator.position.copy(_predPos); predator.lookAt(_lookAt.copy(_predPos).add(_predVel)); }
 
-        // --- DEBUG OVERRIDE ---
         if (mesh && debugMode) {
             const debugMat = new THREE.MeshNormalMaterial();
             const originalMat = mesh.material;
