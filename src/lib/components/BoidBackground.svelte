@@ -479,6 +479,16 @@
         // Final observer count factor
         const interactionFactor = recruitmentLevel * (interactionActive ? Math.pow(Math.max(0, 1 - (timeSinceInteraction / 60000)), 0.5) : 0);
 
+        for (let i = 0; i < boidCount; i++) {
+            const idx = i * 3;
+            _position.set(positions[idx], positions[idx + 1], positions[idx + 2]);
+            _velocity.set(velocities[idx], velocities[idx + 1], velocities[idx + 2]);
+            _acceleration.set(0, 0, 0);
+
+            // Determine if this boid is an observer
+            const jitter = (Math.sin(i * 0.1) * 0.05);
+            const isObserver = interactionFactor > 0.02 && (i / boidCount) < (interactionFactor + jitter);
+
             if (isObserver && uiRect) {
                 // --- STATIONARY OBSERVER LOGIC ---
                 const angle = (i / boidCount) * Math.PI * 2;
