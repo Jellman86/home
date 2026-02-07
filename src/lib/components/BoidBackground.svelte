@@ -239,25 +239,25 @@
     // BOID PARAMETERS
     const BOUNDARY_SIZE = 120;
     const NEIGHBOR_COUNT = 7; 
-    const TARGET_SPEED = 1.2;
-    const SPEED_FORCE = 0.035;
+    const TARGET_SPEED = 1.3;
+    const SPEED_FORCE = 0.04;
     const PREDATOR_RADIUS = 55;
-    const PREDATOR_SPEED = 2.2; 
-    const PREDATOR_MIN_SPEED = 1.2;
-    const PREDATOR_MAX_STEER = 0.22;
+    const PREDATOR_SPEED = 2.4; 
+    const PREDATOR_MIN_SPEED = 1.3;
+    const PREDATOR_MAX_STEER = 0.25;
     const PREDATOR_PREDICT_T = 4;
-    const EAT_RADIUS_SQ = 36; // ~6 world units
+    const EAT_RADIUS_SQ = 49; // ~7 world units
     
-    let SPEED_LIMIT = $derived(1.4);
+    let SPEED_LIMIT = $derived(1.6);
     let VISUAL_RANGE = $derived(45); 
-    let PROTECTED_RANGE = $derived(15);
-    let SEPARATION_WEIGHT = $derived(5.0); 
-    let ALIGNMENT_WEIGHT = $derived(2.0); 
-    let COHESION_WEIGHT = $derived(3.0); 
+    let PROTECTED_RANGE = $derived(12);
+    let SEPARATION_WEIGHT = $derived(5.5); 
+    let ALIGNMENT_WEIGHT = $derived(2.5); 
+    let COHESION_WEIGHT = $derived(3.5); 
     const MOUSE_REPULSION_WEIGHT = 15.0;
 
     const VISUAL_RANGE_SQ = 45 * 45;
-    const PROTECTED_RANGE_SQ = 15 * 15;
+    const PROTECTED_RANGE_SQ = 12 * 12;
     const MOUSE_REPULSION_SQ = 6000;
 
     const bgVertexShader = `
@@ -522,27 +522,27 @@
 
             if (isObserver && uiRect) {
                 const angle = (i * 137.5) * (Math.PI / 180); 
-                const margin = 350 + (i % 4) * 100; 
+                const margin = 120 + (i % 4) * 60; 
                 
-                const timeOff = t * (0.5 + (i % 5) * 0.1) + i;
+                const timeOff = t * (0.2 + (i % 5) * 0.05) + i;
                 let tsx = (uiRect.left + uiRect.right) * 0.5 + Math.cos(angle) * (uiRect.width * 0.5 + margin) + Math.sin(timeOff) * 15;
                 let tsy = (uiRect.top + uiRect.bottom) * 0.5 + Math.sin(angle) * (uiRect.height * 0.5 + margin) + Math.cos(timeOff) * 15;
                 
-                // Stricter Avoidance
-                if (tsx > uiRect.left - 60 && tsx < uiRect.right + 60 && tsy > uiRect.top - 60 && tsy < uiRect.bottom + 60) {
+                // Force outside terminal area (Observer Avoidance)
+                if (tsx > uiRect.left - 40 && tsx < uiRect.right + 40 && tsy > uiRect.top - 40 && tsy < uiRect.bottom + 40) {
                     const dx = tsx - (uiRect.left + uiRect.right) * 0.5;
                     const dy = tsy - (uiRect.top + uiRect.bottom) * 0.5;
-                    if (Math.abs(dx) > Math.abs(dy)) tsx = dx > 0 ? uiRect.right + 120 : uiRect.left - 120;
-                    else tsy = dy > 0 ? uiRect.bottom + 120 : uiRect.top - 120;
+                    if (Math.abs(dx) > Math.abs(dy)) tsx = dx > 0 ? uiRect.right + 80 : uiRect.left - 80;
+                    else tsy = dy > 0 ? uiRect.bottom + 80 : uiRect.top - 80;
                 }
 
-                _diff.set((tsx / window.innerWidth) * 2 - 1, -(tsy / window.innerHeight) * 2 + 1, 0.05).unproject(camera);
+                _diff.set((tsx / window.innerWidth) * 2 - 1, -(tsy / window.innerHeight) * 2 + 1, 0.2).unproject(camera);
                 _position.lerp(_diff, 0.06); _velocity.set(0, 0, 0); 
                 
                 _lookAt.set(((uiRect.left + uiRect.right)*0.5/window.innerWidth)*2-1, -((uiRect.top + uiRect.bottom)*0.5/window.innerHeight)*2+1, 0.5).unproject(camera);
                 _dummy.position.copy(_position); _dummy.lookAt(_lookAt);
                 
-                const pulse = 1.0 + Math.sin(t * (3.0 + recruitmentLevel * 4.0) + i) * (0.1 + recruitmentLevel * 0.2);
+                const pulse = 1.0 + Math.sin(t * (2.0 + recruitmentLevel * 2.0) + i) * (0.05 + recruitmentLevel * 0.1);
                 _tempColor.copy(_baseCol);
                 if (recruitmentLevel > 0.2) _tempColor.lerp(_whiteCol, Math.min((recruitmentLevel-0.2)*1.5, 0.95));
                 _tempColor.multiplyScalar(pulse);
@@ -571,23 +571,10 @@
                 // Predator avoidance & Kill logic
                 const dxP = _position.x - _predPos.x, dyP = _position.y - _predPos.y, dzP = _position.z - _predPos.z;
                 const dSqP = dxP*dxP + dyP*dyP + dzP*dzP;
-                if (dSqP < 2500) { 
+                if (dSqP < 3000) { 
                     _acceleration.add(_scratchV1.set(dxP, dyP, dzP).normalize().multiplyScalar(0.4));
                     if (dSqP < EAT_RADIUS_SQ) {
                         deathTimers[i] = 1.0; // Start eating effect
-                    }
-                }
-
-                // SCREEN BOUNDS AVOIDANCE (Strict Clipping Fix)
-                if (uiRect) {
-                    _scratchV2.copy(_position).project(camera);
-                    const tx = (_scratchV2.x + 1) * window.innerWidth * 0.5;
-                    const ty = (-_scratchV2.y + 1) * window.innerHeight * 0.5;
-                    if (tx > uiRect.left - 100 && tx < uiRect.right + 100 && ty > uiRect.top - 100 && ty < uiRect.bottom + 100) {
-                        const midX = (uiRect.left + uiRect.right) * 0.5;
-                        const midY = (uiRect.top + uiRect.bottom) * 0.5;
-                        _scratchV1.set(_position.x - (midX/window.innerWidth - 0.5)*500, _position.y - (0.5 - midY/window.innerHeight)*500, 0).normalize().multiplyScalar(0.6);
-                        _acceleration.add(_scratchV1);
                     }
                 }
 
@@ -607,8 +594,8 @@
                     _acceleration.add(_scratchV1);
                 }
                 
-                // SMOOTH personality wander (low frequency)
-                const wOff = t * 0.2 + i * 0.1;
+                // Personality wander (low frequency)
+                const wOff = t * 0.1 + i * 0.1;
                 _scratchV1.set(Math.sin(wOff) * 0.01, Math.cos(wOff * 0.8) * 0.01, Math.sin(wOff * 0.4) * 0.008);
                 _acceleration.add(_scratchV1);
                 _acceleration.clampLength(0, 0.12);
@@ -633,7 +620,7 @@
             const attr = trails.geometry.getAttribute('position') as THREE.BufferAttribute;
             const h = attr.array as Float32Array;
             for (let i = 0; i < boidCount; i++) {
-                if (deathTimers[i] > 0) continue; // Don't update trails for dying boids
+                if (deathTimers[i] > 0) continue; 
                 const bIdx = i * 3;
                 const tOff = i * TRAIL_LENGTH * 3;
                 h.copyWithin(tOff + 3, tOff, tOff + (TRAIL_LENGTH - 1) * 3);
