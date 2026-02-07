@@ -47,6 +47,10 @@
 
     let bgMesh: THREE.Mesh;
     let birdGeo: THREE.BufferGeometry;
+    let mainMaterial: THREE.MeshPhongMaterial; // Upgraded from Basic
+    let ambientLight: THREE.AmbientLight;
+    let pointLight: THREE.PointLight;
+    
     let trailGeo: THREE.BufferGeometry;
     let trailHistory: Float32Array;
     let predTrailGeo: THREE.BufferGeometry;
@@ -222,6 +226,14 @@
         renderer.setSize(window.innerWidth, window.innerHeight);
         renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 
+        // --- LIGHTING SYSTEM ---
+        ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+        scene.add(ambientLight);
+
+        pointLight = new THREE.PointLight(0xffffff, 1.5, 500);
+        pointLight.position.set(0, 50, 100);
+        scene.add(pointLight);
+
         // Unified Background Mesh
         const bgGeo = new THREE.PlaneGeometry(2, 2);
         bgMesh = new THREE.Mesh(bgGeo, new THREE.ShaderMaterial({
@@ -243,14 +255,16 @@
         birdGeo = new THREE.ConeGeometry(0.6, 2.5, 4);
         birdGeo.rotateX(Math.PI / 2);
 
-        const material = new THREE.MeshBasicMaterial({ 
+        mainMaterial = new THREE.MeshPhongMaterial({ 
             color: new THREE.Color(0xffffff), 
             transparent: true, 
             opacity: 0.95, 
             vertexColors: true,
+            shininess: 60,
+            specular: new THREE.Color(0x444444),
             wireframe: wireframe 
         });
-        mesh = new THREE.InstancedMesh(birdGeo, material, boidCount);
+        mesh = new THREE.InstancedMesh(birdGeo, mainMaterial, boidCount);
         mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
         mesh.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(boidCount * 3), 3);
         scene.add(mesh);
@@ -386,11 +400,16 @@
                 (scene.fog as THREE.FogExp2).density = 0.0020;
             }
 
-            // Update Boid Color
-            const material = mesh.material as THREE.MeshBasicMaterial;
-            material.color.set(0xffffff); // Keep white for vertex color mixing
-            material.opacity = 0.95;
-            material.wireframe = wireframe;
+            // Update Lighting & Material for 3D Shading
+            if (ambientLight) ambientLight.intensity = isTerminal ? 0.4 : 0.7;
+            if (pointLight) pointLight.intensity = isTerminal ? 2.5 : 1.0;
+
+            if (mesh) {
+                const mat = mesh.material as THREE.MeshPhongMaterial;
+                mat.color.set(0xffffff); // Keep white for vertex color mixing
+                mat.wireframe = wireframe;
+                mat.shininess = isTerminal ? 100 : 30; // Shinier in terminal
+            }
 
             // Update Trail Color/Visibility
             if (trails) {
@@ -442,6 +461,26 @@
             material.uniforms.time.value = t;
             material.uniforms.dayPhase.value = (t * 0.004 + 0.25) % 1.0; // start at midday
             material.uniforms.tension.value = recruitmentLevel;
+        }
+
+        // Update PointLight to create dynamic 3D highlights
+        if (pointLight) {
+            if (isTerminal && typingPoint) {
+                // Flashlight follows typing
+                _diff.set(
+                    (typingPoint.x / window.innerWidth) * 2 - 1,
+                    -(typingPoint.y / window.innerHeight) * 2 + 1,
+                    0.5
+                ).unproject(camera);
+                pointLight.position.lerp(_diff, 0.1);
+            } else {
+                // Flashlight follows mouse target
+                pointLight.position.set(
+                    (mouse.x * 100),
+                    (mouse.y * 100),
+                    120
+                );
+            }
         }
 
         target.set((mouse.x * window.innerWidth) / 20, -(mouse.y * window.innerHeight) / 20, 0);
