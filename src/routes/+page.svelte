@@ -49,6 +49,7 @@
     
     let fps = $state(0);
     const gitHash = __GIT_HASH__; 
+    let boidBackground = $state<any>(null);
 
     // Derived theme properties
     let ActiveComponent = $derived(themes[currentTheme].component);
@@ -124,6 +125,7 @@
     <!-- WebGL Background Layer -->
     {#key boidCount}
         <BoidBackground 
+            bind:this={boidBackground}
             {boidCount} 
             color={boidColor} 
             {backgroundColor} 
@@ -170,6 +172,18 @@
         </button>
 
         <div class="flex items-stretch gap-2">
+            <!-- Diagnostics Toggle -->
+            <button 
+                class="flex items-center justify-center px-3 border {statsColors} backdrop-blur-md transition-all active:scale-95 hover:bg-black/5"
+                onclick={() => boidBackground?.runDiagnostics()}
+                title="Run Diagnostics"
+                aria-label="Run Diagnostics"
+            >
+                <svg class="w-4 h-4 pointer-events-none" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+            </button>
+
             <!-- Trails Toggle -->
             <button 
                 class="flex items-center justify-center px-3 border {statsColors} backdrop-blur-md transition-all active:scale-95 hover:bg-black/5"

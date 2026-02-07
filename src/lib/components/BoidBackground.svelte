@@ -30,6 +30,45 @@
         typingPoint = null
     }: Props = $props();
 
+    let debugMode = $state(false);
+
+    export function runDiagnostics() {
+        console.log('--- BOID DIAGNOSTICS ---');
+        console.log('Boid Count:', boidCount);
+        console.log('Theme Color:', color);
+        console.log('Is Terminal:', isTerminal);
+        
+        if (mesh) {
+            console.log('InstancedMesh:', mesh);
+            console.log('Material:', mesh.material);
+            console.log('Material Color:', mesh.material.color.getHexString());
+            console.log('Vertex Colors:', mesh.material.vertexColors);
+            
+            const colorAttr = mesh.geometry.getAttribute('instanceColor');
+            console.log('Instance Color Attribute:', colorAttr);
+            if (colorAttr) {
+                console.log('First Boid Color (RGB):', 
+                    colorAttr.getX(0).toFixed(2), 
+                    colorAttr.getY(0).toFixed(2), 
+                    colorAttr.getZ(0).toFixed(2)
+                );
+            }
+        }
+
+        if (scene) {
+            console.log('Scene Lights:');
+            scene.traverse(obj => {
+                if (obj instanceof THREE.Light) {
+                    console.log(`- ${obj.type}: Intensity ${obj.intensity}, Position`, obj.position);
+                }
+            });
+        }
+        
+        debugMode = !debugMode;
+        console.log('Debug Mode Toggled:', debugMode);
+        console.log('------------------------');
+    }
+
     let container: HTMLDivElement;
     let canvas: HTMLCanvasElement;
     
@@ -353,7 +392,18 @@
         _predVel.add(steer).clampLength(PREDATOR_MIN_SPEED, PREDATOR_SPEED);
         _predPos.add(_predVel);
         if (predator) { predator.position.copy(_predPos); predator.lookAt(_lookAt.copy(_predPos).add(_predVel)); }
-        renderer.render(scene, camera);
+
+        // --- DEBUG OVERRIDE ---
+        if (mesh && debugMode) {
+            const debugMat = new THREE.MeshNormalMaterial();
+            const originalMat = mesh.material;
+            mesh.material = debugMat;
+            renderer.render(scene, camera);
+            mesh.material = originalMat;
+            debugMat.dispose();
+        } else {
+            renderer.render(scene, camera);
+        }
     }
 
     onMount(() => {
