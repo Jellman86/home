@@ -65,6 +65,11 @@
                 pixelRatio: renderer.getPixelRatio(),
                 outputColorSpace: renderer.outputColorSpace,
                 toneMapping: renderer.toneMapping,
+                capabilities: {
+                    maxAnisotropy: renderer.capabilities.getMaxAnisotropy(),
+                    maxPrecision: renderer.capabilities.precision,
+                    isWebGL2: renderer.capabilities.isWebGL2
+                },
                 info: {
                     geometries: renderer.info.memory.geometries,
                     textures: renderer.info.memory.textures,
@@ -113,16 +118,18 @@
                 frustumCulled: mesh.frustumCulled,
                 count: mesh.count,
                 instanceMatrixSample: matrixSample,
+                matrixWorld: mesh.matrixWorld.elements,
+                geometryAttributes: Object.keys(mesh.geometry.attributes),
                 material: {
                     type: mesh.material.type,
                     color: mesh.material.color.getHexString(),
-                    emissive: (mesh.material as THREE.MeshPhongMaterial).emissive?.getHexString(),
-                    emissiveIntensity: (mesh.material as THREE.MeshPhongMaterial).emissiveIntensity,
+                    emissive: (mesh.material as any).emissive?.getHexString(),
+                    emissiveIntensity: (mesh.material as any).emissiveIntensity,
                     vertexColors: mesh.material.vertexColors,
                     transparent: mesh.material.transparent,
                     opacity: mesh.material.opacity,
                     wireframe: mesh.material.wireframe,
-                    shininess: (mesh.material as THREE.MeshPhongMaterial).shininess
+                    shininess: (mesh.material as any).shininess || null
                 }
             };
 
@@ -275,13 +282,11 @@
         renderer.toneMapping = THREE.ACESFilmicToneMapping;
 
         // LIGHTS
-        ambientLight = new THREE.AmbientLight(0xffffff, 1.0); // Full ambient
+        ambientLight = new THREE.AmbientLight(0xffffff, 1.0); 
         scene.add(ambientLight);
-        
         pointLight = new THREE.PointLight(0xffffff, 5.0, 1000);
-        pointLight.position.set(0, 0, 300); // Between camera and scene
+        pointLight.position.set(0, 0, 300); 
         scene.add(pointLight);
-        
         dirLight = new THREE.DirectionalLight(0xffffff, 2.0);
         dirLight.position.set(0, 0, 400);
         scene.add(dirLight);
@@ -312,6 +317,7 @@
         mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
         mesh.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(boidCount * 3), 3);
         mesh.instanceColor.setUsage(THREE.DynamicDrawUsage);
+        mesh.geometry.setAttribute('instanceColor', mesh.instanceColor); 
         scene.add(mesh);
 
         // PREDATOR
@@ -334,10 +340,8 @@
             positions[i*3]=_position.x; positions[i*3+1]=_position.y; positions[i*3+2]=_position.z;
             velocities[i*3]=_velocity.x; velocities[i*3+1]=_velocity.y; velocities[i*3+2]=_velocity.z;
             scales[i] = 0.75 + Math.random() * 0.55;
-            
             _tempColor.copy(baseColor).multiplyScalar(0.8);
             mesh.setColorAt(i, _tempColor);
-            
             _dummy.position.copy(_position);
             _dummy.scale.set(scales[i], scales[i], scales[i]);
             _dummy.updateMatrix();
@@ -345,7 +349,7 @@
         }
         if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
 
-        // TRAILS (Pre-init)
+        // TRAILS
         const trailHistory = new Float32Array(boidCount * TRAIL_LENGTH * 3);
         const trailGeo = new THREE.BufferGeometry();
         for (let i = 0; i < boidCount; i++) {
@@ -376,11 +380,9 @@
     $effect(() => {
         if (!mesh) return;
         const mat = mesh.material as THREE.MeshPhongMaterial;
-        mat.color.set(0xffffff); // CRITICAL: Must be white for vertex colors to work
+        mat.color.set(0xffffff); 
         mat.wireframe = wireframe;
         mat.shininess = isTerminal ? 100 : 30;
-        
-        // Boost emissive for a true 'digital glow' feel
         mat.emissive.set(color);
         mat.emissiveIntensity = isTerminal ? 0.8 : 0.2;
         
@@ -433,8 +435,7 @@
 
         if (pointLight) {
             if (isTerminal && typingPoint) {
-                // Focus light on the boids stationing plane (closer NDC)
-                _diff.set((typingPoint.x/window.innerWidth)*2-1, -(typingPoint.y/window.innerHeight)*2+1, 0.2).unproject(camera);
+                _diff.set((typingPoint.x/window.innerWidth)*2-1, -(typingPoint.y/window.innerHeight)*2+1, 0.5).unproject(camera);
                 pointLight.position.lerp(_diff, 0.1);
             } else { pointLight.position.set(mouse.x*100, mouse.y*100, 150); }
         }
@@ -461,17 +462,15 @@
             const isObserver = intFactor > 0.02 && (i < maxObs * intFactor);
 
             if (isObserver && uiRect) {
-                // STATIONARY OBSERVER
                 const angle = (i * 137.5) * (Math.PI / 180); 
                 const ring = (i % 6); const margin = 140 + ring * 80; 
                 let tsx = (uiRect.left + uiRect.right) * 0.5 + Math.cos(angle) * (uiRect.width * 0.5 + margin);
                 let tsy = (uiRect.top + uiRect.bottom) * 0.5 + Math.sin(angle) * (uiRect.height * 0.5 + margin);
                 
-                // NDC depth 0.1 is much closer to camera, avoiding fog entirely
-                let ndcZ = 0.1 + (ring * 0.02); 
-                if (tsx > (uiRect.right - uiRect.width * 0.45)) { ndcZ = 0.3; tsx += 120; }
+                // STABLE WORLD Z: Move significantly closer but not behind camera
+                // NDC 0.5 unprojets to a safe distance (~100 world units)
+                _diff.set((tsx / window.innerWidth) * 2 - 1, -(tsy / window.innerHeight) * 2 + 1, 0.5).unproject(camera);
                 
-                _diff.set((tsx / window.innerWidth) * 2 - 1, -(tsy / window.innerHeight) * 2 + 1, ndcZ).unproject(camera);
                 _position.lerp(_diff, 0.03); _velocity.set(0, 0, 0); 
                 _lookAt.set(((uiRect.left + uiRect.right)*0.5/window.innerWidth)*2-1, -((uiRect.top + uiRect.bottom)*0.5/window.innerHeight)*2+1, 0.5).unproject(camera);
                 _dummy.position.copy(_position); _dummy.lookAt(_lookAt);
@@ -482,8 +481,7 @@
                 _tempColor.multiplyScalar(pulse);
                 mesh.setColorAt(i, _tempColor);
                 const sVar = 0.3 + (Math.sin(i * 0.7) * 0.15); 
-                const dScale = 1.0 - (ndcZ - 0.1) * 2.0; 
-                _dummy.scale.set(sVar * dScale, sVar * dScale, sVar * dScale);
+                _dummy.scale.set(sVar, sVar, sVar);
             } else {
                 let alignF = new THREE.Vector3(), cohF = new THREE.Vector3(), sepF = new THREE.Vector3();
                 let aC = 0, cC = 0, sC = 0;
