@@ -7,6 +7,7 @@ It is a high-performance, interactive experience built with modern web technolog
 ## ✨ Features
 
 *   **3D Boid Simulation**: A custom-built Boid flocking simulation using `Three.js` and `InstancedMesh`.
+    *   **Observer Effect**: Boids break away from the flock and surround the terminal window when interaction is detected. They remain stationary and rotate to watch the user type, creating a sense of digital scrutiny.
     *   **Predator Logic**: A predator entity that hunts the flock with smooth steering behaviors (Reynolds Steering).
     *   **Trails System**: Visual trail rendering for boids and the predator to visualize flow dynamics.
     *   **Optimized Performance**: Capable of rendering hundreds of agents at 60FPS.
