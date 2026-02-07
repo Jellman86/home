@@ -40,6 +40,34 @@ The `animate()` function runs ~60 times per second. To maintain performance:
 - **Avoid `new`**: Never instantiate objects like `THREE.Vector3` or `THREE.Color` inside the `for` loop. Use pre-allocated "dummy" objects (prefixed with `_`).
 - **Buffer Management**: Only set `needsUpdate = true` once per frame after all instances are updated.
 
+## 🧠 Simulation Algorithms
+
+The background simulation is a custom implementation of several classic and novel steering behaviors.
+
+### 1. Standard Boid Flocking (Prey)
+Uses Craig Reynolds' Boids algorithm with a topological neighbor optimization:
+- **Separation**: Avoids crowding by steering away from neighbors within `PROTECTED_RANGE`.
+- **Alignment**: Steers towards the average heading of neighbors within `VISUAL_RANGE`.
+- **Cohesion**: Steers towards the average position (center of mass) of neighbors.
+- **Topological Neighbors**: Instead of checking every boid, each agent only considers its nearest `NEIGHBOR_COUNT` (default: 7) neighbors. This mimics real-world starlings and improves performance.
+
+### 2. Predator Pursuit
+The predator uses **Reynolds Steering** to hunt the flock:
+- **Prediction**: It doesn't aim for where a boid is, but where it will be, using `PREDATOR_PREDICT_T` to calculate a future interception point.
+- **Steering**: `Steer = DesiredVelocity - CurrentVelocity`. This creates a natural, physical turn radius instead of instant snapping.
+- **Target Switching**: The predator selects a random target and pursues it until it either "kills" it (reaches `PREDATOR_KILL_RADIUS`) or a timer expires.
+
+### 3. The Observer Effect (Looming)
+When the user types, boids transition from the "Flock" state to the "Observer" state:
+- **Recruitment Logic**: A `recruitmentLevel` variable increases while typing and decays when idle. This controls how many boids break away.
+- **Fibonacci Stationing**: Observers are distributed around the UI using a **Fibonacci Spiral** pattern. This ensures even spacing and prevents boids from clumping in a single spot.
+- **Screen-to-World Mapping**:
+    - Target positions are calculated in screen-space (relative to the Terminal window).
+    - These are converted to **Normalized Device Coordinates (NDC)**.
+    - Finally, they are `unprojected` using the camera to find their absolute 3D position in the WebGL scene.
+- **3D Depth Layering**: Observers are assigned to 6 distinct depth planes (`ndcZ`), creating a voluminous surrounding effect rather than a flat ring.
+- **Gaze Focus**: Once stationary, boids use `Object3D.lookAt` to point their "heads" (the tip of the cone geometry) at the precise 3D point corresponding to the user's typing cursor.
+
 ## ⚠️ Things to Avoid
 
 1.  **Direct DOM Manipulation**: Avoid using `document.getElementById`. Use Svelte's `bind:this` for the canvas and container.
