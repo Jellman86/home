@@ -532,8 +532,18 @@
                 _dummy.position.copy(_position);
                 _dummy.lookAt(_lookAt);
                 
-                const pulse = 0.85 + Math.sin(t * 3.0 + i * 0.2) * (0.05 + recruitmentLevel * 0.15);
-                _tempColor.copy(new THREE.Color(color)).multiplyScalar(pulse);
+                // --- Sentience Communication: Chromatic Charge ---
+                // Higher recruitment = brighter, more focused color pulse
+                const observationPulse = 0.85 + Math.sin(t * (3.0 + recruitmentLevel * 4.0) + i * 0.2) * (0.05 + recruitmentLevel * 0.2);
+                
+                _tempColor.copy(new THREE.Color(color));
+                // Charge up to white/bright version as they focus
+                if (recruitmentLevel > 0.4) {
+                    const chargeFactor = (recruitmentLevel - 0.4) * 1.5;
+                    _tempColor.lerp(new THREE.Color('#ffffff'), Math.min(chargeFactor, 0.8));
+                }
+                
+                _tempColor.multiplyScalar(observationPulse);
                 mesh.setColorAt(i, _tempColor);
                 
                 // Varied sizing within a nominal range (species variation)
