@@ -122,14 +122,15 @@
                 geometryAttributes: Object.keys(mesh.geometry.attributes),
                 material: {
                     type: mesh.material.type,
-                    color: mesh.material.color.getHexString(),
+                    color: (mesh.material as any).color.getHexString(),
                     emissive: (mesh.material as any).emissive?.getHexString(),
                     emissiveIntensity: (mesh.material as any).emissiveIntensity,
                     vertexColors: mesh.material.vertexColors,
                     transparent: mesh.material.transparent,
                     opacity: mesh.material.opacity,
-                    wireframe: mesh.material.wireframe,
-                    shininess: (mesh.material as any).shininess || null
+                    wireframe: (mesh.material as any).wireframe,
+                    roughness: (mesh.material as any).roughness,
+                    metalness: (mesh.material as any).metalness
                 }
             };
 
@@ -187,6 +188,7 @@
     let trails: THREE.LineSegments;
     let predTrailLine: THREE.Line;
     let frameId: number;
+    let debugMaterial: THREE.MeshNormalMaterial | null = null;
 
     let bgMesh: THREE.Mesh;
     let ambientLight: THREE.AmbientLight;
@@ -305,12 +307,12 @@
         birdGeo.rotateX(Math.PI / 2);
         birdGeo.computeVertexNormals();
         
-        const material = new THREE.MeshPhongMaterial({ 
+        const material = new THREE.MeshStandardMaterial({ 
             color: 0xffffff, 
             transparent: true, 
             opacity: 0.95, 
-            vertexColors: true, 
-            shininess: 30,
+            roughness: 0.5,
+            metalness: 0.2,
             emissive: 0x000000
         });
         mesh = new THREE.InstancedMesh(birdGeo, material, boidCount);
@@ -324,7 +326,7 @@
         const predatorGeo = new THREE.ConeGeometry(2.2, 7.5, 6);
         predatorGeo.rotateX(Math.PI / 2);
         predatorGeo.computeVertexNormals();
-        const predatorMat = new THREE.MeshPhongMaterial({ color: 0xffffff, shininess: 80 });
+        const predatorMat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.3, metalness: 0.7 });
         predator = new THREE.Mesh(predatorGeo, predatorMat);
         predator.visible = false;
         scene.add(predator);
@@ -379,10 +381,11 @@
 
     $effect(() => {
         if (!mesh) return;
-        const mat = mesh.material as THREE.MeshPhongMaterial;
+        const mat = mesh.material as THREE.MeshStandardMaterial;
         mat.color.set(0xffffff); 
         mat.wireframe = wireframe;
-        mat.shininess = isTerminal ? 100 : 30;
+        mat.roughness = isTerminal ? 0.3 : 0.5;
+        mat.metalness = isTerminal ? 0.6 : 0.1;
         mat.emissive.set(color);
         mat.emissiveIntensity = isTerminal ? 0.8 : 0.2;
         
@@ -395,10 +398,12 @@
 
         if (trails) { (trails.material as THREE.LineBasicMaterial).color.set(color); trails.visible = showTrails; }
         if (predator) { 
-            const pMat = predator.material as THREE.MeshPhongMaterial;
+            const pMat = predator.material as THREE.MeshStandardMaterial;
             pMat.color.set(0xffffff);
             pMat.emissive.set(predatorColor);
             pMat.emissiveIntensity = 1.0;
+            pMat.roughness = 0.2;
+            pMat.metalness = 0.8;
             predator.visible = true; 
         }
         if (predTrailLine) { (predTrailLine.material as THREE.LineBasicMaterial).color.set(predatorColor); predTrailLine.visible = showTrails; }
@@ -498,6 +503,16 @@
                 if (sC > 0) _acceleration.add(sepF.normalize().multiplyScalar(SEPARATION_WEIGHT * 0.12));
                 if (cC > 0) _acceleration.add(cohF.divideScalar(cC).sub(_position).normalize().multiplyScalar(COHESION_WEIGHT * 0.01));
                 if (aC > 0) _acceleration.add(alignF.divideScalar(aC).normalize().sub(_velocity).multiplyScalar(ALIGNMENT_WEIGHT * 0.06));
+
+                // Stay within boundaries
+                const turn = 0.05;
+                if (_position.x < -BOUNDARY_SIZE) _acceleration.x += turn;
+                if (_position.x > BOUNDARY_SIZE) _acceleration.x -= turn;
+                if (_position.y < -BOUNDARY_SIZE) _acceleration.y += turn;
+                if (_position.y > BOUNDARY_SIZE) _acceleration.y -= turn;
+                if (_position.z < 20) _acceleration.z += turn;
+                if (_position.z > BOUNDARY_SIZE + 20) _acceleration.z -= turn;
+
                 if (_position.distanceToSquared(target) < 4000) _acceleration.add(_diff.copy(_position).sub(target).normalize().multiplyScalar(MOUSE_REPULSION_WEIGHT * 0.035));
                 _acceleration.add(_diff.set(Math.sin(_position.y*0.015+t*0.6)*0.008, Math.cos(_position.x*0.012+t*0.5)*0.008, Math.sin((_position.x+_position.y)*0.01+t*0.4)*0.006));
                 _acceleration.clampLength(0, 0.05);
@@ -516,6 +531,32 @@
         mesh.instanceColor.needsUpdate = true;
         mesh.instanceMatrix.needsUpdate = true;
 
+        // Update Trails
+        if (showTrails && trails) {
+            const attr = trails.geometry.getAttribute('position') as THREE.BufferAttribute;
+            const h = attr.array as Float32Array;
+            for (let i = 0; i < boidCount; i++) {
+                const bIdx = i * 3;
+                const tOff = i * TRAIL_LENGTH * 3;
+                for (let t = TRAIL_LENGTH - 1; t > 0; t--) {
+                    const to = tOff + t * 3, fr = tOff + (t - 1) * 3;
+                    h[to] = h[fr]; h[to+1] = h[fr+1]; h[to+2] = h[fr+2];
+                }
+                h[tOff] = positions[bIdx]; h[tOff+1] = positions[bIdx+1]; h[tOff+2] = positions[bIdx+2];
+            }
+            attr.needsUpdate = true;
+        }
+        if (showTrails && predTrailLine) {
+            const attr = predTrailLine.geometry.getAttribute('position') as THREE.BufferAttribute;
+            const h = attr.array as Float32Array;
+            for (let t = PRED_TRAIL_LENGTH - 1; t > 0; t--) {
+                const to = t * 3, fr = (t - 1) * 3;
+                h[to] = h[fr]; h[to+1] = h[fr+1]; h[to+2] = h[fr+2];
+            }
+            h[0] = _predPos.x; h[1] = _predPos.y; h[2] = _predPos.z;
+            attr.needsUpdate = true;
+        }
+
         if (predTargetIdx < 0 || now > predTargetUntil) { predTargetIdx = Math.floor(Math.random() * boidCount); predTargetUntil = now + 5000; }
         const tIdx = predTargetIdx * 3;
         const predict = _lookAt.set(positions[tIdx] + velocities[tIdx] * PREDATOR_PREDICT_T, positions[tIdx+1] + velocities[tIdx+1] * PREDATOR_PREDICT_T, positions[tIdx+2] + velocities[tIdx+2] * PREDATOR_PREDICT_T);
@@ -525,12 +566,11 @@
         if (predator) { predator.position.copy(_predPos); predator.lookAt(_lookAt.copy(_predPos).add(_predVel)); }
 
         if (mesh && debugMode) {
-            const debugMat = new THREE.MeshNormalMaterial();
+            if (!debugMaterial) debugMaterial = new THREE.MeshNormalMaterial();
             const originalMat = mesh.material;
-            mesh.material = debugMat;
+            mesh.material = debugMaterial;
             renderer.render(scene, camera);
             mesh.material = originalMat;
-            debugMat.dispose();
         } else {
             renderer.render(scene, camera);
         }
@@ -548,7 +588,7 @@
         window.addEventListener('mousemove', (e) => { mouse.x = (e.clientX/window.innerWidth)*2-1; mouse.y = -(e.clientY/window.innerHeight)*2+1; });
     });
 
-    onDestroy(() => { if (typeof window !== 'undefined') { if (frameId) cancelAnimationFrame(frameId); if (renderer) renderer.dispose(); } });
+    onDestroy(() => { if (typeof window !== 'undefined') { if (frameId) cancelAnimationFrame(frameId); if (renderer) renderer.dispose(); if (debugMaterial) debugMaterial.dispose(); } });
 </script>
 
 <div bind:this={container} class="fixed inset-0 w-full h-full z-0">
