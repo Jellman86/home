@@ -35,6 +35,7 @@
     let debugMode = $state(false);
 
     export function getDiagnosticsData(): string {
+        // NOTE: Keep this reasonably cheap; it's called on demand via UI.
         const data: any = {
             timestamp: new Date().toISOString(),
             buildHash: gitHash,
@@ -106,6 +107,66 @@
                 far: camera.far
             }
         };
+
+        // Screen-space samples to debug "boids behind the terminal" reports.
+        // This helps validate whether boids are actually projecting into the UI rect.
+        try {
+            if (uiRect && camera && positions && velocities) {
+                const now = performance.now();
+                const t = now * 0.001;
+                const timeSinceInteraction = now - lastInteractionTime;
+                const interactionActive = isTerminal && timeSinceInteraction < 60000;
+                const maxObs = boidCount * (isTerminal ? 0.55 : 0.20);
+                const intFactor = recruitmentLevel * (interactionActive ? Math.pow(Math.max(0, 1 - (timeSinceInteraction / 60000)), 0.5) : 0);
+                const obsLimit = maxObs * intFactor;
+                const left = uiRect.left - UI_AVOID_MARGIN_PX;
+                const right = uiRect.right + UI_AVOID_MARGIN_PX;
+                const top = uiRect.top - UI_AVOID_MARGIN_PX;
+                const bottom = uiRect.bottom + UI_AVOID_MARGIN_PX;
+                const cx = (uiRect.left + uiRect.right) * 0.5;
+                const cy = (uiRect.top + uiRect.bottom) * 0.5;
+
+                const samples: any[] = [];
+                const sampleN = Math.min(8, boidCount);
+                for (let i = 0; i < sampleN; i++) {
+                    const idx = i * 3;
+                    const world = { x: positions[idx], y: positions[idx + 1], z: positions[idx + 2] };
+                    const ndc = new THREE.Vector3(world.x, world.y, world.z).project(camera);
+                    const sx = (ndc.x * 0.5 + 0.5) * window.innerWidth;
+                    const sy = (-ndc.y * 0.5 + 0.5) * window.innerHeight;
+                    const insideExpanded = sx > left && sx < right && sy > top && sy < bottom;
+
+                    // What observer mode *wants* to do for this i.
+                    const isObserver = intFactor > 0.02 && (i < obsLimit);
+                    const angle = (i * 137.5) * (Math.PI / 180);
+                    const margin = 120 + (i % 4) * 60;
+                    const timeOff = t * (0.2 + (i % 5) * 0.05) + i;
+                    const tsx = cx + Math.cos(angle) * (uiRect.width * 0.5 + margin) + Math.sin(timeOff) * 15;
+                    const tsy = cy + Math.sin(angle) * (uiRect.height * 0.5 + margin) + Math.cos(timeOff) * 15;
+                    const targetInside = tsx > left && tsx < right && tsy > top && tsy < bottom;
+
+                    samples.push({
+                        i,
+                        isObserver,
+                        world,
+                        ndc: { x: ndc.x, y: ndc.y, z: ndc.z },
+                        screen: { x: Math.round(sx * 10) / 10, y: Math.round(sy * 10) / 10 },
+                        insideExpanded,
+                        observerTarget: { x: Math.round(tsx * 10) / 10, y: Math.round(tsy * 10) / 10, insideExpanded: targetInside },
+                        v: { x: velocities[idx], y: velocities[idx + 1], z: velocities[idx + 2] }
+                    });
+                }
+
+                data.debug = {
+                    uiAvoidMarginPx: UI_AVOID_MARGIN_PX,
+                    observerLimit: obsLimit,
+                    interactionActive,
+                    samples
+                };
+            }
+        } catch (e) {
+            data.debug = { error: String(e) };
+        }
 
         if (mesh) {
             const mat = Array.isArray(mesh.material) ? mesh.material[0] : mesh.material;
@@ -229,8 +290,10 @@
     let lastUIRectUpdateAt = 0;
     let uiWorldBounds: { minX: number; maxX: number; minY: number; maxY: number } | null = null;
     const UI_AVOID_MARGIN_PX = 18;
+    const OBSERVER_SCREEN_PADDING_PX = 48; // extra padding so observer geometry doesn't clip into the UI
+    const OBSERVER_DISTANCE_FROM_CAMERA = 140; // controls observer apparent size/stability (lower = larger/closer)
 
-    function keepOutsideUIRectScreenSpace() {
+    function keepOutsideUIRectScreenSpace(extraPaddingPx = 0) {
         // Hard constraint: if a boid projects inside the UI card rect, shove it outside.
         // This avoids "boids behind the terminal" regardless of boid Z depth.
         if (!isTerminal || !uiRect) return;
@@ -239,10 +302,11 @@
         const sx = (ndc.x * 0.5 + 0.5) * window.innerWidth;
         const sy = (-ndc.y * 0.5 + 0.5) * window.innerHeight;
 
-        const left = uiRect.left - UI_AVOID_MARGIN_PX;
-        const right = uiRect.right + UI_AVOID_MARGIN_PX;
-        const top = uiRect.top - UI_AVOID_MARGIN_PX;
-        const bottom = uiRect.bottom + UI_AVOID_MARGIN_PX;
+        const pad = UI_AVOID_MARGIN_PX + extraPaddingPx;
+        const left = uiRect.left - pad;
+        const right = uiRect.right + pad;
+        const top = uiRect.top - pad;
+        const bottom = uiRect.bottom + pad;
 
         if (!(sx > left && sx < right && sy > top && sy < bottom)) return;
 
