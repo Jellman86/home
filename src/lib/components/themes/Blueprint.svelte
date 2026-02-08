@@ -215,7 +215,7 @@
                         {#each data.links as link, i}
                             <div class="relative group flex border {colors.border} {variant === 'dark' ? 'bg-blue-950/30 hover:bg-blue-900/40' : 'bg-blue-50/50 hover:bg-blue-100/80'} transition-all overflow-hidden">
                                 <!-- Main Link Area -->
-                                <a href={link.url} target="_blank" class="flex-1 flex items-center gap-3 p-3 z-10 outline-none focus:bg-blue-500/10 transition-colors">
+                                <a href={link.url} target="_blank" rel="noopener noreferrer" class="flex-1 flex items-center gap-3 p-3 z-10 outline-none focus:bg-blue-500/10 transition-colors">
                                     <div class="absolute inset-0 {colors.highlight} opacity-0 group-hover:opacity-5 translate-x-[-100%] group-hover:translate-x-0 transition-transform duration-300 pointer-events-none"></div>
                                     <span class="{colors.accent} font-bold text-xs">0{i+1}</span>
                                     <span class="flex-1 uppercase tracking-wider text-xs font-bold {colors.text}">{link.label}</span>
@@ -229,7 +229,8 @@
                                 {#if link.demoUrl}
                                     <a 
                                         href={link.demoUrl} 
-                                        target="_blank" 
+                                        target="_blank"
+                                        rel="noopener noreferrer"
                                         class="flex items-center justify-center px-3 border-l {colors.border} hover:{colors.highlight} hover:text-white transition-colors z-20"
                                         title="View Live Demo"
                                     >

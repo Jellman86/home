@@ -108,6 +108,7 @@
         };
 
         if (mesh) {
+            const mat = Array.isArray(mesh.material) ? mesh.material[0] : mesh.material;
             const matrixSample: number[][] = [];
             const _tempMatrix = new THREE.Matrix4();
             for (let i = 0; i < Math.min(3, boidCount); i++) {
@@ -123,14 +124,14 @@
                 matrixWorld: mesh.matrixWorld.elements,
                 geometryAttributes: Object.keys(mesh.geometry.attributes),
                 material: {
-                    type: mesh.material.type,
-                    color: (mesh.material as any).color.getHexString(),
-                    emissive: (mesh.material as any).emissive?.getHexString(),
-                    emissiveIntensity: (mesh.material as any).emissiveIntensity,
-                    vertexColors: mesh.material.vertexColors,
-                    transparent: mesh.material.transparent,
-                    opacity: mesh.material.opacity,
-                    wireframe: (mesh.material as any).wireframe
+                    type: mat.type,
+                    color: (mat as any).color?.getHexString?.(),
+                    emissive: (mat as any).emissive?.getHexString?.(),
+                    emissiveIntensity: (mat as any).emissiveIntensity,
+                    vertexColors: (mat as any).vertexColors,
+                    transparent: (mat as any).transparent,
+                    opacity: (mat as any).opacity,
+                    wireframe: (mat as any).wireframe
                 }
             };
 
@@ -139,7 +140,6 @@
                 data.instanceColorBuffer = {
                     count: colorAttr.count,
                     itemSize: colorAttr.itemSize,
-                    usage: colorAttr.usage,
                     firstFive: [
                         [colorAttr.getX(0), colorAttr.getY(0), colorAttr.getZ(0)],
                         [colorAttr.getX(1), colorAttr.getY(1), colorAttr.getZ(1)],
@@ -676,14 +676,34 @@
         init(); animate();
         const updateUIRect = () => { uiRect = (document.querySelector('main') as HTMLElement | null)?.getBoundingClientRect() || null; };
         updateUIRect();
-        window.addEventListener('resize', () => { 
-            if (camera && renderer) { camera.aspect = window.innerWidth / window.innerHeight; camera.updateProjectionMatrix(); renderer.setSize(window.innerWidth, window.innerHeight); }
+        const onResize = () => {
+            if (camera && renderer) {
+                camera.aspect = window.innerWidth / window.innerHeight;
+                camera.updateProjectionMatrix();
+                renderer.setSize(window.innerWidth, window.innerHeight);
+            }
             updateUIRect();
+        };
+        const onMouseMove = (e: MouseEvent) => {
+            mouse.x = (e.clientX / window.innerWidth) * 2 - 1;
+            mouse.y = -(e.clientY / window.innerHeight) * 2 + 1;
+        };
+        window.addEventListener('resize', onResize);
+        window.addEventListener('mousemove', onMouseMove);
+
+        onDestroy(() => {
+            window.removeEventListener('resize', onResize);
+            window.removeEventListener('mousemove', onMouseMove);
         });
-        window.addEventListener('mousemove', (e) => { mouse.x = (e.clientX/window.innerWidth)*2-1; mouse.y = -(e.clientY/window.innerHeight)*2+1; });
     });
 
-    onDestroy(() => { if (typeof window !== 'undefined') { if (frameId) cancelAnimationFrame(frameId); if (renderer) renderer.dispose(); if (debugMaterial) debugMaterial.dispose(); } });
+    onDestroy(() => {
+        if (typeof window !== 'undefined') {
+            if (frameId) cancelAnimationFrame(frameId);
+            if (renderer) renderer.dispose();
+            if (debugMaterial) debugMaterial.dispose();
+        }
+    });
 </script>
 
 <div bind:this={container} class="fixed inset-0 w-full h-full z-0">

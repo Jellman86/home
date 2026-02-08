@@ -12,8 +12,8 @@
 
     // Terminal Logic
     let commandInput = $state("");
-    let inputRef: HTMLInputElement;
-    let terminalContentRef: HTMLDivElement;
+    let inputRef = $state<HTMLInputElement | null>(null);
+    let terminalContentRef = $state<HTMLDivElement | null>(null);
 
     // Trigger interaction when typing
     $effect(() => {
@@ -46,9 +46,11 @@
 
     // Encrypted CV Data (AES-256-GCM)
     // Generated offline. Contains URL to OneDrive.
-    const ENC_IV = "f1b639dfa5614a52973f8bdf";
-    const ENC_DATA = "debdb8a12d355a9dbece5d6b2bef4ad7426c2f284793309b063ad60eac30d6d82256721b8e992a318a1f21afd34ea47c9fd75865d8f64021546b43d0056de0f83a4464aad070b248ce1556be95551338f462ed7148834f7e6bebd7031dab9a263bf23b89";
-    const WEBHOOK_ENC = "debdb8a12d355a9debc35c7e6af05d994533626449987ccb4536cb1aac30d8d67c0b395590e34849f74a48cf952dfa1b99b72935b1883b5e55565cd41165d8d33e0056f9bf758c5fe86e439fb34a6038f811e76328e6164b9ad61e15b61ef7a4b8f464d80b230f21b7055b83a2742e049fb670c73e6b711a85e62defac5150115f5595e5351e274e1f722cfb";
+    // SECURITY: AES-GCM requires a unique IV per ciphertext for the same key.
+    const ENC_IV_CV = "b128fe2d2f757430b6b08394";
+    const ENC_DATA = "a4d1d27c821bb760bc2a4e15c9729585d70cb2ff497d23a49493513ca6aa78c40f40ad92e89e948e0344f2b04471c3cc68e9d24b87bb29fb42e64785366d89ddea6c6a490a2d413dc4a5af0ba46310d1e0c27e6391226dbb4f400d3763bfc83efaab966f";
+    const ENC_IV_WEBHOOK = "4eaf9ef9611e50d0bc342988";
+    const WEBHOOK_ENC = "52a9dd9e991be450f5f683fbee7ddd98834026ffbf30410dfc23c775c54fff1ff35877c6f7ba49e3b10c1d47bd07714f0788329cfe48897767b5ff9d0c472721c9ba35295b402594f5ee3477a4f1aeb4c43659941d704f554ab3cc1455c82944781afbfa46ad84145faf2dfc6862e7965ac4b243245c29305b74767adfb53035f72a6194abe3b9bdfcd6e8fb";
 
     function hexToBytes(hex: string) {
         const bytes = new Uint8Array(hex.length / 2);
@@ -67,7 +69,7 @@
         const text = await file.text();
         const keyHex = text.trim();
 
-        if (keyHex.length !== 64) {
+        if (!/^[0-9a-fA-F]{64}$/.test(keyHex)) {
             logBuffer = [...logBuffer, "ERROR: Invalid key length.", "Integrity check failed."];
             decryptionStatus = 'fail';
             setTimeout(() => decryptionStatus = 'idle', 3000);
@@ -87,7 +89,7 @@
 
         try {
             const keyBytes = hexToBytes(keyHex);
-            const ivBytes = hexToBytes(ENC_IV);
+            const ivBytes = hexToBytes(ENC_IV_CV);
             const dataBytes = hexToBytes(ENC_DATA);
 
             const key = await window.crypto.subtle.importKey(
@@ -107,12 +109,11 @@
             logBuffer = [...logBuffer, "Decryption successful.", "Payload extracted."];
             decryptionStatus = 'success';
             
-            // Add to history
-            history = [...history, { 
-                cmd: './access_token.pem', 
-                output: 'Access Granted: Encrypted payload decrypted successfully.', 
-                type: 'text' 
-            }];
+            pushHistory({
+                cmd: './access_token.pem',
+                output: 'Access Granted: Encrypted payload decrypted successfully.',
+                type: 'text'
+            });
 
         } catch (e) {
             console.error(e);
@@ -146,7 +147,12 @@
         { cmd: '', output: 'Welcome to Pownet OS. Type "help" for a list of commands.', type: 'text' }
     ]);
 
-    let fileInputRef: HTMLInputElement;
+    let fileInputRef = $state<HTMLInputElement | null>(null);
+
+    const HISTORY_LIMIT = 200;
+    function pushHistory(entry: { cmd: string; output: any; type?: 'text' | 'component' }) {
+        history = [...history, entry].slice(-HISTORY_LIMIT);
+    }
 
     function handleFileSelect(e: Event) {
         const target = e.target as HTMLInputElement;
@@ -175,7 +181,7 @@
 
     function handleMouseUp() {
         isDragging = false;
-        if (!isMinimized && inputRef) inputRef.focus();
+        if (!isMinimized) inputRef?.focus();
     }
 
     function toggleMinimize() {
@@ -208,7 +214,7 @@
         } else if (e.key === 'Enter') {
             const cmd = commandInput.trim();
             if (!cmd) {
-                history = [...history, { cmd: "", output: "", type: 'text' }];
+                pushHistory({ cmd: "", output: "", type: 'text' });
                 commandInput = "";
                 return;
             }
@@ -250,7 +256,7 @@
                 case './upload-file.sh':
                 case '.\\upload-file.sh':
                 case 'upload-file.sh':
-                    fileInputRef.click();
+                    fileInputRef?.click();
                     output = "Opening secure file picker...";
                     break;
                 case './send-message.sh':
@@ -264,7 +270,7 @@
                             output = "Usage: ./send-message.sh \"Your message here\"";
                         } else {
                             try {
-                                const ivBytes = hexToBytes(ENC_IV);
+                                const ivBytes = hexToBytes(ENC_IV_WEBHOOK);
                                 const webhookBytes = hexToBytes(WEBHOOK_ENC);
                                 const decrypted = await window.crypto.subtle.decrypt(
                                     { name: "AES-GCM", iv: ivBytes },
@@ -355,15 +361,18 @@
                     output = `zsh: command not found: ${mainCmd}`;
             }
 
-            history = [...history, { cmd, output, type }];
+            pushHistory({ cmd, output, type });
             commandInput = "";
             
             await tick();
-            if (terminalContentRef) {
-                terminalContentRef.scrollTop = terminalContentRef.scrollHeight;
-            }
+            if (terminalContentRef) terminalContentRef.scrollTop = terminalContentRef.scrollHeight;
         }
     }
+
+    // Focus the prompt once after mount (avoids `autofocus` a11y warning).
+    $effect(() => {
+        if (!isMinimized) queueMicrotask(() => inputRef?.focus());
+    });
 </script>
 
 <svelte:window onmousemove={handleMouseMove} onmouseup={handleMouseUp} />
@@ -403,7 +412,7 @@
                         <h2 class="text-3xl font-bold text-green-500 tracking-widest">ACCESS GRANTED</h2>
                         <div class="p-4 border border-green-500/30 bg-green-500/10 rounded">
                             <p class="text-xs text-green-400 mb-2 uppercase">Secure Payload:</p>
-                            <a href={decryptedLink} target="_blank" class="text-xl font-bold text-white underline decoration-green-500 underline-offset-4 hover:text-green-400 transition-colors">
+                            <a href={decryptedLink} target="_blank" rel="noopener noreferrer" class="text-xl font-bold text-white underline decoration-green-500 underline-offset-4 hover:text-green-400 transition-colors">
                                 View Curriculum Vitae
                             </a>
                         </div>
@@ -481,11 +490,11 @@
                                 <div class="flex flex-col gap-1">
                                     {#each item.output as link}
                                         <div class="flex flex-col">
-                                            <a href={link.url} target="_blank" class="text-[#729fcf] hover:underline w-fit flex items-center gap-2">
+                                            <a href={link.url} target="_blank" rel="noopener noreferrer" class="text-[#729fcf] hover:underline w-fit flex items-center gap-2">
                                                 {link.label} <span class="text-gray-500 text-xs">-> {link.url}</span>
                                             </a>
                                             {#if link.demoUrl}
-                                                <a href={link.demoUrl} target="_blank" class="text-[#8ae234] hover:underline w-fit flex items-center gap-2 ml-4">
+                                                <a href={link.demoUrl} target="_blank" rel="noopener noreferrer" class="text-[#8ae234] hover:underline w-fit flex items-center gap-2 ml-4">
                                                     ↳ {link.label}_Demo <span class="text-gray-500 text-xs">-> {link.demoUrl}</span>
                                                 </a>
                                             {/if}
@@ -512,7 +521,6 @@
                         class="w-full bg-transparent border-none outline-none text-white font-mono p-0 m-0 cursor-text"
                         autocomplete="off" 
                         spellcheck="false"
-                        autofocus
                     />
                     <!-- Hidden File Input for ./upload-file.sh -->
                     <input 
@@ -533,11 +541,8 @@
     .scrollbar-thin::-webkit-scrollbar { width: 8px; }
     .scrollbar-thin::-webkit-scrollbar-track { background: transparent; }
     .scrollbar-thin::-webkit-scrollbar-thumb { background-color: #444; border-radius: 4px; border: 2px solid #000; }
-    .animate-twinkle {
-        animation: twinkle 3s ease-in-out infinite;
-    }
-    @keyframes progress {
-        0% { transform: translateX(-100%); }
-        100% { transform: translateX(400%); }
-    }
-</style>
+	    @keyframes progress {
+	        0% { transform: translateX(-100%); }
+	        100% { transform: translateX(400%); }
+	    }
+	</style>

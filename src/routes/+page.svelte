@@ -36,7 +36,19 @@
             count: 300,
             variant: 'dark'
         }
-    };
+    } as const satisfies Record<
+        string,
+        {
+            component: any;
+            name: string;
+            bg: string;
+            boids: string;
+            predator: string;
+            wireframe: boolean;
+            count: number;
+            variant: 'light' | 'dark';
+        }
+    >;
 
     type ThemeKey = keyof typeof themes;
     // Removed themeOrder constant as we are using direct switching logic now
