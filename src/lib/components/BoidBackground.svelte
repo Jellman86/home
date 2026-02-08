@@ -682,7 +682,6 @@
                         .set(((uiRect.left + uiRect.right) * 0.5 / window.innerWidth) * 2 - 1, -((uiRect.top + uiRect.bottom) * 0.5 / window.innerHeight) * 2 + 1, 0.5)
                         .unproject(camera);
                 }
-                _dummy.position.copy(_position); _dummy.lookAt(_lookAt);
                 
                 const pulse = 1.0 + Math.sin(t * (2.0 + recruitmentLevel * 2.0) + i) * (0.05 + recruitmentLevel * 0.1);
                 _tempColor.copy(_baseCol);
@@ -693,6 +692,10 @@
 
                 // Terminal-only: observers must stay outside the terminal card (they "watch" from the edges).
                 if (isTerminal && uiRect) keepOutsideUIRectScreenSpace();
+
+                // keepOutsideUIRectScreenSpace() can modify _position, so apply it before building the instance matrix.
+                _dummy.position.copy(_position);
+                _dummy.lookAt(_lookAt);
             } else {
                 _alignF.set(0, 0, 0); _cohF.set(0, 0, 0); _sepF.set(0, 0, 0);
                 let aC = 0, cC = 0, sC = 0;
