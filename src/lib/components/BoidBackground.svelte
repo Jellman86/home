@@ -228,6 +228,7 @@
     let uiTargetElement: HTMLElement | null = null;
     let lastUIRectUpdateAt = 0;
     let uiWorldBounds: { minX: number; maxX: number; minY: number; maxY: number } | null = null;
+    const UI_AVOID_MARGIN_PX = 18;
     
     // PERFORMANCE: Spatial Partitioning & Scratch Vectors
     const GRID_SIZE = 40;
@@ -670,18 +671,35 @@
                 if (cC > 0) _acceleration.add(_cohF.divideScalar(cC).sub(_position).normalize().multiplyScalar(COHESION_WEIGHT * 0.015));
                 if (aC > 0) _acceleration.add(_alignF.divideScalar(aC).normalize().sub(_velocity).multiplyScalar(ALIGNMENT_WEIGHT * 0.05));
 
-                // Terminal-only: keep boids out of the terminal card so they appear "watching" from outside.
-                if (isTerminal && uiWorldBounds) {
-                    const margin = 10;
-                    if (
-                        _position.x > uiWorldBounds.minX - margin &&
-                        _position.x < uiWorldBounds.maxX + margin &&
-                        _position.y > uiWorldBounds.minY - margin &&
-                        _position.y < uiWorldBounds.maxY + margin
-                    ) {
-                        const cx = (uiWorldBounds.minX + uiWorldBounds.maxX) * 0.5;
-                        const cy = (uiWorldBounds.minY + uiWorldBounds.maxY) * 0.5;
-                        _acceleration.add(_scratchV2.set(_position.x - cx, _position.y - cy, 0).normalize().multiplyScalar(0.12));
+                // Terminal-only: keep boids out of the terminal card in SCREEN SPACE.
+                // World-space bounds at a single depth are not reliable because boids fly at varying z.
+                if (isTerminal && uiRect) {
+                    const ndc = _scratchV2.copy(_position).project(camera);
+                    const sx = (ndc.x * 0.5 + 0.5) * window.innerWidth;
+                    const sy = (-ndc.y * 0.5 + 0.5) * window.innerHeight;
+                    const left = uiRect.left - UI_AVOID_MARGIN_PX;
+                    const right = uiRect.right + UI_AVOID_MARGIN_PX;
+                    const top = uiRect.top - UI_AVOID_MARGIN_PX;
+                    const bottom = uiRect.bottom + UI_AVOID_MARGIN_PX;
+
+                    if (sx > left && sx < right && sy > top && sy < bottom) {
+                        const cx = (left + right) * 0.5;
+                        const cy = (top + bottom) * 0.5;
+                        // Push towards the nearest edge (so they quickly "pop" outside visually).
+                        const dx = sx - cx;
+                        const dy = sy - cy;
+                        let tx = sx;
+                        let ty = sy;
+                        if (Math.abs(dx) > Math.abs(dy)) {
+                            tx = dx > 0 ? right + 22 : left - 22;
+                        } else {
+                            ty = dy > 0 ? bottom + 22 : top - 22;
+                        }
+
+                        const tNdcX = (tx / window.innerWidth) * 2 - 1;
+                        const tNdcY = -((ty / window.innerHeight) * 2 - 1);
+                        const targetWorld = _scratchV3.set(tNdcX, tNdcY, ndc.z).unproject(camera);
+                        _acceleration.add(targetWorld.sub(_position).clampLength(0, 0.18));
                     }
                 }
 
