@@ -187,6 +187,8 @@
     let predator = $state<THREE.Mesh | null>(null);
     let trails: THREE.LineSegments;
     let predTrailLine: THREE.Line;
+    let trailHistory: Float32Array | null = null;
+    let predTrailHistory: Float32Array | null = null;
     let frameId: number;
     let debugMaterial: THREE.MeshNormalMaterial | null = null;
 
@@ -223,6 +225,9 @@
     let target = new THREE.Vector3();
     let uiRect: DOMRect | null = null;
     let mainElement: HTMLElement | null = null;
+    let uiTargetElement: HTMLElement | null = null;
+    let lastUIRectUpdateAt = 0;
+    let uiWorldBounds: { minX: number; maxX: number; minY: number; maxY: number } | null = null;
     
     // PERFORMANCE: Spatial Partitioning & Scratch Vectors
     const GRID_SIZE = 40;
@@ -362,6 +367,7 @@
         gridHeaders = new Int32Array(totalCells);
         boidNext = new Int32Array(boidCount);
         mainElement = document.querySelector('main');
+        uiTargetElement = (document.getElementById('boid-target') as HTMLElement | null) ?? mainElement;
 
         const baseColor = new THREE.Color(color);
         for (let i = 0; i < boidCount; i++) {
@@ -386,7 +392,7 @@
         _predVel.set(velocities[startIdx], velocities[startIdx+1], velocities[startIdx+2]).setLength(PREDATOR_SPEED);
 
         // TRAILS
-        const trailHistory = new Float32Array(boidCount * TRAIL_LENGTH * 3);
+        trailHistory = new Float32Array(boidCount * TRAIL_LENGTH * 3);
         const trailGeo = new THREE.BufferGeometry();
         for (let i = 0; i < boidCount; i++) {
             for (let t = 0; t < TRAIL_LENGTH; t++) {
@@ -407,10 +413,61 @@
         scene.add(trails);
 
         const predTrailGeo = new THREE.BufferGeometry();
-        predTrailGeo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(PRED_TRAIL_LENGTH * 3), 3));
+        predTrailHistory = new Float32Array(PRED_TRAIL_LENGTH * 3);
+        predTrailGeo.setAttribute('position', new THREE.BufferAttribute(predTrailHistory, 3));
         predTrailLine = new THREE.Line(predTrailGeo, new THREE.LineBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.5 }));
         predTrailLine.visible = showTrails;
         scene.add(predTrailLine);
+    }
+
+    function resetTrailHistory() {
+        if (!trailHistory || !trails) return;
+        // Reset all trail segments to the current boid positions so disabling/enabling doesn't leave "ghost" streaks.
+        for (let i = 0; i < boidCount; i++) {
+            const b = i * 3;
+            const x = positions[b];
+            const y = positions[b + 1];
+            const z = positions[b + 2];
+            const tOff = i * TRAIL_LENGTH * 3;
+            for (let t = 0; t < TRAIL_LENGTH; t++) {
+                const o = tOff + t * 3;
+                trailHistory[o] = x;
+                trailHistory[o + 1] = y;
+                trailHistory[o + 2] = z;
+            }
+        }
+        (trails.geometry.getAttribute('position') as THREE.BufferAttribute).needsUpdate = true;
+    }
+
+    function resetPredTrailHistory() {
+        if (!predTrailHistory || !predTrailLine) return;
+        for (let t = 0; t < PRED_TRAIL_LENGTH; t++) {
+            const o = t * 3;
+            predTrailHistory[o] = _predPos.x;
+            predTrailHistory[o + 1] = _predPos.y;
+            predTrailHistory[o + 2] = _predPos.z;
+        }
+        (predTrailLine.geometry.getAttribute('position') as THREE.BufferAttribute).needsUpdate = true;
+    }
+
+    function updateUIBounds(now: number) {
+        // Layout reads are expensive; throttle.
+        if (!uiTargetElement || now - lastUIRectUpdateAt < 200) return;
+        lastUIRectUpdateAt = now;
+
+        uiRect = uiTargetElement.getBoundingClientRect();
+        if (!camera) return;
+
+        // Convert UI rect corners to approximate world XY bounds at a stable depth.
+        const z = 0.2;
+        const p1 = _scratchV1.set((uiRect.left / window.innerWidth) * 2 - 1, -(uiRect.top / window.innerHeight) * 2 + 1, z).unproject(camera);
+        const p2 = _scratchV2.set((uiRect.right / window.innerWidth) * 2 - 1, -(uiRect.bottom / window.innerHeight) * 2 + 1, z).unproject(camera);
+        uiWorldBounds = {
+            minX: Math.min(p1.x, p2.x),
+            maxX: Math.max(p1.x, p2.x),
+            minY: Math.min(p1.y, p2.y),
+            maxY: Math.max(p1.y, p2.y),
+        };
     }
 
     $effect(() => {
@@ -428,7 +485,14 @@
         if (useSkybox) { if (bgMesh && !scene.children.includes(bgMesh)) scene.add(bgMesh); }
         else { if (bgMesh && scene.children.includes(bgMesh)) scene.remove(bgMesh); }
 
-        if (trails) { (trails.material as THREE.LineBasicMaterial).color.set(color); trails.visible = showTrails; }
+        if (trails) {
+            const tMat = trails.material as THREE.LineBasicMaterial;
+            tMat.color.set(color);
+            // Blueprint mode benefits from slightly stronger trails (wireframe + grid can wash them out).
+            // Terminal mode should keep trails a bit subtler to avoid visual "burn-in" feeling.
+            tMat.opacity = isTerminal ? 0.28 : 0.55;
+            trails.visible = showTrails;
+        }
         if (predator) { 
             const pMat = predator.material as THREE.MeshLambertMaterial;
             pMat.color.set(0xffffff);
@@ -436,7 +500,23 @@
             pMat.emissiveIntensity = 1.0;
             predator.visible = true; 
         }
-        if (predTrailLine) { (predTrailLine.material as THREE.LineBasicMaterial).color.set(predatorColor); predTrailLine.visible = showTrails; }
+        if (predTrailLine) {
+            const pMat = predTrailLine.material as THREE.LineBasicMaterial;
+            pMat.color.set(predatorColor);
+            pMat.opacity = isTerminal ? 0.35 : 0.55;
+            predTrailLine.visible = showTrails;
+        }
+    });
+
+    $effect(() => {
+        // Make trails toggling feel deterministic.
+        if (!trails || !predTrailLine) return;
+        trails.visible = showTrails;
+        predTrailLine.visible = showTrails;
+        if (!showTrails) {
+            resetTrailHistory();
+            resetPredTrailHistory();
+        }
     });
 
     let predTargetIdx = -1;
@@ -460,6 +540,16 @@
             avgFrameTime = lastFrameTime;
         }
         const t = now * 0.001;
+
+        // Keep the UI bounds updated so Terminal observer mode stays outside the card.
+        // (Also fixes cases where the initial bounds accidentally used <main> instead of the terminal card.)
+        if (isTerminal) {
+            // Avoid repeated DOM queries; only refresh if missing/disconnected.
+            if (!uiTargetElement || !uiTargetElement.isConnected) {
+                uiTargetElement = (document.getElementById('boid-target') as HTMLElement | null) ?? uiTargetElement;
+            }
+            updateUIBounds(now);
+        }
         
         if (bgMesh) {
             const m = bgMesh.material as THREE.ShaderMaterial;
@@ -484,13 +574,15 @@
         if (isTerminal && timeSinceInteraction < 2000) { recruitmentLevel = Math.min(1, recruitmentLevel + 0.0005); } 
         else { recruitmentLevel = Math.max(0, recruitmentLevel - 0.008); }
 
-        // Update UI Rect dynamically for drag tracking
-        if (recruitmentLevel > 0) {
-            const el = document.getElementById('boid-target');
-            if (el) uiRect = el.getBoundingClientRect();
+        // Update UI rect dynamically (throttled) for drag tracking.
+        if (recruitmentLevel > 0 && !isTerminal) {
+            if (!uiTargetElement || !uiTargetElement.isConnected) {
+                uiTargetElement = (document.getElementById('boid-target') as HTMLElement | null) ?? uiTargetElement;
+            }
+            updateUIBounds(now);
         }
 
-        const maxObs = boidCount * 0.20;
+        const maxObs = boidCount * (isTerminal ? 0.55 : 0.20);
         const intFactor = recruitmentLevel * (interactionActive ? Math.pow(Math.max(0, 1 - (timeSinceInteraction / 60000)), 0.5) : 0);
         _baseCol.set(color);
 
@@ -537,9 +629,19 @@
                 }
 
                 _diff.set((tsx / window.innerWidth) * 2 - 1, -(tsy / window.innerHeight) * 2 + 1, 0.2).unproject(camera);
-                _position.lerp(_diff, 0.06); _velocity.set(0, 0, 0); 
-                
-                _lookAt.set(((uiRect.left + uiRect.right)*0.5/window.innerWidth)*2-1, -((uiRect.top + uiRect.bottom)*0.5/window.innerHeight)*2+1, 0.5).unproject(camera);
+                _position.lerp(_diff, 0.06);
+                _velocity.set(0, 0, 0);
+
+                // In Terminal mode, have observers watch the prompt area, not the card center.
+                if (isTerminal && typingPoint) {
+                    _lookAt
+                        .set((typingPoint.x / window.innerWidth) * 2 - 1, -(typingPoint.y / window.innerHeight) * 2 + 1, 0.5)
+                        .unproject(camera);
+                } else {
+                    _lookAt
+                        .set(((uiRect.left + uiRect.right) * 0.5 / window.innerWidth) * 2 - 1, -((uiRect.top + uiRect.bottom) * 0.5 / window.innerHeight) * 2 + 1, 0.5)
+                        .unproject(camera);
+                }
                 _dummy.position.copy(_position); _dummy.lookAt(_lookAt);
                 
                 const pulse = 1.0 + Math.sin(t * (2.0 + recruitmentLevel * 2.0) + i) * (0.05 + recruitmentLevel * 0.1);
@@ -567,6 +669,21 @@
                 if (sC > 0 && _sepF.lengthSq() > 0.001) _acceleration.add(_sepF.normalize().multiplyScalar(SEPARATION_WEIGHT * 0.15));
                 if (cC > 0) _acceleration.add(_cohF.divideScalar(cC).sub(_position).normalize().multiplyScalar(COHESION_WEIGHT * 0.015));
                 if (aC > 0) _acceleration.add(_alignF.divideScalar(aC).normalize().sub(_velocity).multiplyScalar(ALIGNMENT_WEIGHT * 0.05));
+
+                // Terminal-only: keep boids out of the terminal card so they appear "watching" from outside.
+                if (isTerminal && uiWorldBounds) {
+                    const margin = 10;
+                    if (
+                        _position.x > uiWorldBounds.minX - margin &&
+                        _position.x < uiWorldBounds.maxX + margin &&
+                        _position.y > uiWorldBounds.minY - margin &&
+                        _position.y < uiWorldBounds.maxY + margin
+                    ) {
+                        const cx = (uiWorldBounds.minX + uiWorldBounds.maxX) * 0.5;
+                        const cy = (uiWorldBounds.minY + uiWorldBounds.maxY) * 0.5;
+                        _acceleration.add(_scratchV2.set(_position.x - cx, _position.y - cy, 0).normalize().multiplyScalar(0.12));
+                    }
+                }
 
                 // Predator avoidance & Kill logic
                 const dxP = _position.x - _predPos.x, dyP = _position.y - _predPos.y, dzP = _position.z - _predPos.z;
@@ -674,15 +791,20 @@
 
     onMount(() => {
         init(); animate();
-        const updateUIRect = () => { uiRect = (document.querySelector('main') as HTMLElement | null)?.getBoundingClientRect() || null; };
-        updateUIRect();
+        uiTargetElement = (document.getElementById('boid-target') as HTMLElement | null) ?? (document.querySelector('main') as HTMLElement | null);
+        if (uiTargetElement) {
+            uiRect = uiTargetElement.getBoundingClientRect();
+            updateUIBounds(performance.now());
+        }
         const onResize = () => {
             if (camera && renderer) {
                 camera.aspect = window.innerWidth / window.innerHeight;
                 camera.updateProjectionMatrix();
                 renderer.setSize(window.innerWidth, window.innerHeight);
             }
-            updateUIRect();
+            uiTargetElement = (document.getElementById('boid-target') as HTMLElement | null) ?? uiTargetElement;
+            if (uiTargetElement) uiRect = uiTargetElement.getBoundingClientRect();
+            updateUIBounds(performance.now());
         };
         const onMouseMove = (e: MouseEvent) => {
             mouse.x = (e.clientX / window.innerWidth) * 2 - 1;
