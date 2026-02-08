@@ -690,6 +690,9 @@
                 _tempColor.multiplyScalar(pulse);
                 mesh.setColorAt(i, _tempColor);
                 _dummy.scale.set(scales[i], scales[i], scales[i]);
+
+                // Terminal-only: observers must stay outside the terminal card (they "watch" from the edges).
+                if (isTerminal && uiRect) keepOutsideUIRectScreenSpace();
             } else {
                 _alignF.set(0, 0, 0); _cohF.set(0, 0, 0); _sepF.set(0, 0, 0);
                 let aC = 0, cC = 0, sC = 0;
@@ -709,9 +712,6 @@
                 if (sC > 0 && _sepF.lengthSq() > 0.001) _acceleration.add(_sepF.normalize().multiplyScalar(SEPARATION_WEIGHT * 0.15));
                 if (cC > 0) _acceleration.add(_cohF.divideScalar(cC).sub(_position).normalize().multiplyScalar(COHESION_WEIGHT * 0.015));
                 if (aC > 0) _acceleration.add(_alignF.divideScalar(aC).normalize().sub(_velocity).multiplyScalar(ALIGNMENT_WEIGHT * 0.05));
-
-                // Terminal-only: keep boids out of the terminal card (soft push, then hard constraint below).
-                if (isTerminal && uiRect) keepOutsideUIRectScreenSpace();
 
                 // Predator avoidance & Kill logic
                 const dxP = _position.x - _predPos.x, dyP = _position.y - _predPos.y, dzP = _position.z - _predPos.z;
@@ -748,18 +748,12 @@
                 _velocity.add(_acceleration).clampLength(0.1, maxSpeeds[i]);
                 _position.add(_velocity);
 
-                // Enforce the terminal "no-fly zone" after integration so it can't be bypassed by momentum.
-                if (isTerminal && uiRect) keepOutsideUIRectScreenSpace();
-
                 _dummy.position.copy(_position);
                 if (_velocity.lengthSq() > 0.0001) _dummy.lookAt(_lookAt.copy(_position).add(_velocity));
                 _dummy.scale.set(scales[i], scales[i], scales[i]);
                 _tempColor.copy(_baseCol).multiplyScalar(0.7 + (scales[i]-0.7)*0.5);
                 mesh.setColorAt(i, _tempColor);
             }
-
-            // Also enforce for observer-mode (which doesn't run the integration path).
-            if (isTerminal && uiRect) keepOutsideUIRectScreenSpace();
 
             positions[idx] = _position.x; positions[idx+1] = _position.y; positions[idx+2] = _position.z;
             velocities[idx] = _velocity.x; velocities[idx+1] = _velocity.y; velocities[idx+2] = _velocity.z;
