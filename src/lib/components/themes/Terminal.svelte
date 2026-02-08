@@ -380,7 +380,7 @@
 <div class="flex items-center justify-center min-h-screen p-4 font-mono text-gray-300 overflow-hidden" in:fade={{ duration: 200 }}>
     <div 
         id="boid-target"
-        class="relative w-full max-w-4xl bg-black/90 backdrop-blur-md rounded-lg shadow-2xl overflow-hidden border border-white/10 pointer-events-auto flex flex-col"
+        class="relative w-full max-w-4xl bg-black rounded-lg shadow-2xl overflow-hidden border border-white/10 pointer-events-auto flex flex-col"
         style="transform: translate({position.x}px, {position.y}px); transition: transform {isDragging ? '0s' : '0.1s'}, height 0.3s; height: {isMinimized ? 'auto' : '600px'}; box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.8);"
         ondragover={handleDragOver}
         ondragleave={handleDragLeave}

@@ -229,6 +229,45 @@
     let lastUIRectUpdateAt = 0;
     let uiWorldBounds: { minX: number; maxX: number; minY: number; maxY: number } | null = null;
     const UI_AVOID_MARGIN_PX = 18;
+
+    function keepOutsideUIRectScreenSpace() {
+        // Hard constraint: if a boid projects inside the UI card rect, shove it outside.
+        // This avoids "boids behind the terminal" regardless of boid Z depth.
+        if (!isTerminal || !uiRect) return;
+
+        const ndc = _scratchV2.copy(_position).project(camera);
+        const sx = (ndc.x * 0.5 + 0.5) * window.innerWidth;
+        const sy = (-ndc.y * 0.5 + 0.5) * window.innerHeight;
+
+        const left = uiRect.left - UI_AVOID_MARGIN_PX;
+        const right = uiRect.right + UI_AVOID_MARGIN_PX;
+        const top = uiRect.top - UI_AVOID_MARGIN_PX;
+        const bottom = uiRect.bottom + UI_AVOID_MARGIN_PX;
+
+        if (!(sx > left && sx < right && sy > top && sy < bottom)) return;
+
+        const cx = (left + right) * 0.5;
+        const cy = (top + bottom) * 0.5;
+        const dx = sx - cx;
+        const dy = sy - cy;
+
+        // Push towards the nearest edge, with a small overshoot so it looks clearly "outside".
+        let tx = sx;
+        let ty = sy;
+        if (Math.abs(dx) > Math.abs(dy)) {
+            tx = dx > 0 ? right + 28 : left - 28;
+        } else {
+            ty = dy > 0 ? bottom + 28 : top - 28;
+        }
+
+        const tNdcX = (tx / window.innerWidth) * 2 - 1;
+        const tNdcY = -((ty / window.innerHeight) * 2 - 1);
+        const targetWorld = _scratchV3.set(tNdcX, tNdcY, ndc.z).unproject(camera);
+
+        // Snap most of the way out immediately, and damp velocity so we don't re-enter next frame.
+        _position.lerp(targetWorld, 0.85);
+        _velocity.multiplyScalar(0.25);
+    }
     
     // PERFORMANCE: Spatial Partitioning & Scratch Vectors
     const GRID_SIZE = 40;
@@ -671,37 +710,8 @@
                 if (cC > 0) _acceleration.add(_cohF.divideScalar(cC).sub(_position).normalize().multiplyScalar(COHESION_WEIGHT * 0.015));
                 if (aC > 0) _acceleration.add(_alignF.divideScalar(aC).normalize().sub(_velocity).multiplyScalar(ALIGNMENT_WEIGHT * 0.05));
 
-                // Terminal-only: keep boids out of the terminal card in SCREEN SPACE.
-                // World-space bounds at a single depth are not reliable because boids fly at varying z.
-                if (isTerminal && uiRect) {
-                    const ndc = _scratchV2.copy(_position).project(camera);
-                    const sx = (ndc.x * 0.5 + 0.5) * window.innerWidth;
-                    const sy = (-ndc.y * 0.5 + 0.5) * window.innerHeight;
-                    const left = uiRect.left - UI_AVOID_MARGIN_PX;
-                    const right = uiRect.right + UI_AVOID_MARGIN_PX;
-                    const top = uiRect.top - UI_AVOID_MARGIN_PX;
-                    const bottom = uiRect.bottom + UI_AVOID_MARGIN_PX;
-
-                    if (sx > left && sx < right && sy > top && sy < bottom) {
-                        const cx = (left + right) * 0.5;
-                        const cy = (top + bottom) * 0.5;
-                        // Push towards the nearest edge (so they quickly "pop" outside visually).
-                        const dx = sx - cx;
-                        const dy = sy - cy;
-                        let tx = sx;
-                        let ty = sy;
-                        if (Math.abs(dx) > Math.abs(dy)) {
-                            tx = dx > 0 ? right + 22 : left - 22;
-                        } else {
-                            ty = dy > 0 ? bottom + 22 : top - 22;
-                        }
-
-                        const tNdcX = (tx / window.innerWidth) * 2 - 1;
-                        const tNdcY = -((ty / window.innerHeight) * 2 - 1);
-                        const targetWorld = _scratchV3.set(tNdcX, tNdcY, ndc.z).unproject(camera);
-                        _acceleration.add(targetWorld.sub(_position).clampLength(0, 0.18));
-                    }
-                }
+                // Terminal-only: keep boids out of the terminal card (soft push, then hard constraint below).
+                if (isTerminal && uiRect) keepOutsideUIRectScreenSpace();
 
                 // Predator avoidance & Kill logic
                 const dxP = _position.x - _predPos.x, dyP = _position.y - _predPos.y, dzP = _position.z - _predPos.z;
@@ -737,12 +747,20 @@
                 
                 _velocity.add(_acceleration).clampLength(0.1, maxSpeeds[i]);
                 _position.add(_velocity);
+
+                // Enforce the terminal "no-fly zone" after integration so it can't be bypassed by momentum.
+                if (isTerminal && uiRect) keepOutsideUIRectScreenSpace();
+
                 _dummy.position.copy(_position);
                 if (_velocity.lengthSq() > 0.0001) _dummy.lookAt(_lookAt.copy(_position).add(_velocity));
                 _dummy.scale.set(scales[i], scales[i], scales[i]);
                 _tempColor.copy(_baseCol).multiplyScalar(0.7 + (scales[i]-0.7)*0.5);
                 mesh.setColorAt(i, _tempColor);
             }
+
+            // Also enforce for observer-mode (which doesn't run the integration path).
+            if (isTerminal && uiRect) keepOutsideUIRectScreenSpace();
+
             positions[idx] = _position.x; positions[idx+1] = _position.y; positions[idx+2] = _position.z;
             velocities[idx] = _velocity.x; velocities[idx+1] = _velocity.y; velocities[idx+2] = _velocity.z;
             _dummy.updateMatrix(); mesh.setMatrixAt(i, _dummy.matrix);
