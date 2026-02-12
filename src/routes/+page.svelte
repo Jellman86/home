@@ -64,13 +64,14 @@
     let fps = $state(0);
     const gitHash = __GIT_HASH__; 
     let boidBackground = $state<any>(null);
+    let blueprintSkyCycleActive = $derived((currentTheme === 'blueprint' || currentTheme === 'blueprint_light') && blueprintSkyCycleMode);
 
     // Derived theme properties
     let ActiveComponent = $derived(themes[currentTheme].component);
-    let backgroundColor = $derived(themes[currentTheme].bg);
+    let backgroundColor = $derived(blueprintSkyCycleActive ? 'transparent' : themes[currentTheme].bg);
     let boidColor = $derived(themes[currentTheme].boids);
     let predatorColor = $derived(themes[currentTheme].predator);
-    let useSkybox = $derived((currentTheme === 'blueprint' || currentTheme === 'blueprint_light') && blueprintSkyCycleMode); 
+    let useSkybox = $derived(blueprintSkyCycleActive); 
     let isWireframe = $derived(themes[currentTheme].wireframe);
     let boidCount = $derived(themes[currentTheme].count);
     let variant = $derived(themes[currentTheme].variant);
@@ -186,7 +187,7 @@
             data={portfolioData}
             {variant}
             bind:showTrails={showTrails}
-            skyCycleMode={blueprintSkyCycleMode}
+            skyCycleMode={blueprintSkyCycleActive}
             toggleSkyCycle={toggleBlueprintSkyCycle}
             toggleTheme={toggleLightDark}
             onInteraction={handleInteraction}

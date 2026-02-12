@@ -443,7 +443,7 @@
             skyResult *= (1.0 - tension * 0.75);
             float night = 1.0 - sun;
             float starNoise = hash(uv * vec2(1800.0, 1000.0));
-            float stars = step(0.997, starNoise) * night;
+            float stars = step(0.994, starNoise) * night;
             skyResult += stars * vec3(1.0, 1.0, 1.2) * (0.6 + night);
             gl_FragColor = vec4(skyResult, 1.0);
         }
@@ -1057,7 +1057,8 @@
         if (bgMesh) {
             const m = bgMesh.material as THREE.ShaderMaterial;
             m.uniforms.time.value = t;
-            m.uniforms.dayPhase.value = (t * 0.004 + 0.25) % 1.0;
+            const dayNightSpeed = useSkybox && !isTerminal ? 0.028 : 0.004;
+            m.uniforms.dayPhase.value = (t * dayNightSpeed + 0.25) % 1.0;
         }
 
         if (pointLight) {
