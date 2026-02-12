@@ -21,7 +21,7 @@
             name: 'Blueprint Light', 
             bg: '#eff6ff', // blue-50
             boids: '#1e3a8a', // blue-900
-            predator: '#f87171', // red-400 (pastel red)
+            predator: '#fca5a5', // red-300 pastel
             wireframe: true, 
             count: 400,
             variant: 'light'

@@ -299,7 +299,7 @@
     let uiWorldBounds: { minX: number; maxX: number; minY: number; maxY: number } | null = null;
     const UI_AVOID_MARGIN_PX = 18;
     const OBSERVER_SCREEN_PADDING_PX = 72; // extra padding so observer geometry doesn't clip into the UI
-    const OBSERVER_DISTANCE_FROM_CAMERA = 140; // stable observer depth plane from camera to avoid "rush to lens"
+    const OBSERVER_DISTANCE_FROM_CAMERA = 118; // closer looming distance for observers
     const ORIENTATION_SMOOTHING = 0.24;
 
     function applyUIAvoidanceForce(extraPaddingPx = 0) {
@@ -767,7 +767,7 @@
             if (isObserver && uiRect) {
                 const targetScreen = computeObserverScreenTarget(i, t);
                 const depthLayer = ((i % 5) - 2) * 6;
-                const targetDistance = OBSERVER_DISTANCE_FROM_CAMERA + depthLayer;
+                const targetDistance = (OBSERVER_DISTANCE_FROM_CAMERA - intFactor * 16) + depthLayer;
                 const targetWorld = screenToWorldAtDistance(targetScreen.x, targetScreen.y, targetDistance, _scratchV3);
                 _predDesiredDir.copy(targetWorld).sub(_position);
                 const dist = _predDesiredDir.length();
@@ -961,15 +961,9 @@
             } else {
                 const isObserver = intFactor > 0.02 && (i < maxObs * intFactor);
                 if (isObserver && uiRect) {
-                    if (isTerminal && typingPoint) {
-                        _lookAt
-                            .set((typingPoint.x / window.innerWidth) * 2 - 1, -(typingPoint.y / window.innerHeight) * 2 + 1, 0.5)
-                            .unproject(camera);
-                    } else {
-                        _lookAt
-                            .set(((uiRect.left + uiRect.right) * 0.5 / window.innerWidth) * 2 - 1, -((uiRect.top + uiRect.bottom) * 0.5 / window.innerHeight) * 2 + 1, 0.5)
-                            .unproject(camera);
-                    }
+                    _lookAt
+                        .set(((uiRect.left + uiRect.right) * 0.5 / window.innerWidth) * 2 - 1, -((uiRect.top + uiRect.bottom) * 0.5 / window.innerHeight) * 2 + 1, 0.5)
+                        .unproject(camera);
                     const pulse = 1.0 + Math.sin(t * (2.0 + recruitmentLevel * 2.0) + i) * (0.05 + recruitmentLevel * 0.1);
                     _tempColor.copy(_baseCol);
                     if (recruitmentLevel > 0.2) _tempColor.lerp(_whiteCol, Math.min((recruitmentLevel - 0.2) * 1.5, 0.95));
