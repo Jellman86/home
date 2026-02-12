@@ -299,7 +299,7 @@
     let uiWorldBounds: { minX: number; maxX: number; minY: number; maxY: number } | null = null;
     const UI_AVOID_MARGIN_PX = 18;
     const OBSERVER_SCREEN_PADDING_PX = 72; // extra padding so observer geometry doesn't clip into the UI
-    const OBSERVER_DISTANCE_FROM_CAMERA = 118; // closer looming distance for observers
+    const OBSERVER_DISTANCE_FROM_CAMERA = 59; // 50% closer looming distance for observers
     const ORIENTATION_SMOOTHING = 0.24;
 
     function applyUIAvoidanceForce(extraPaddingPx = 0) {
