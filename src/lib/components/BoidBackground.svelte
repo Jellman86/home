@@ -303,6 +303,7 @@
     const OBSERVER_SCREEN_PADDING_PX = 96; // extra padding so observer geometry doesn't clip into the UI
     const OBSERVER_DISTANCE_FROM_CAMERA = 30; // 50% closer again for stronger looming
     const ORIENTATION_SMOOTHING = 0.24;
+    const SKY_DAY_PREY_COLOR = '#5b6473';
     const SKY_DAY_PREDATOR_COLOR = '#3f434b';
     const BLOOD_RED_PREDATOR_COLOR = '#b30000';
     const SKY_DAY_THRESHOLD = 0.58;
@@ -702,13 +703,36 @@
         (predTrailLine.geometry.getAttribute('position') as THREE.BufferAttribute).needsUpdate = true;
     }
 
+    function getSkyCyclePhaseState() {
+        const blueprintMode = wireframe && !isTerminal;
+        const skyCycleMode = blueprintMode && useSkybox;
+        const skyCycleDay = skyCycleMode && skySunLevel > SKY_DAY_THRESHOLD;
+        return { blueprintMode, skyCycleMode, skyCycleDay };
+    }
+
+    function getPreyTone() {
+        const { skyCycleDay } = getSkyCyclePhaseState();
+        return skyCycleDay ? SKY_DAY_PREY_COLOR : color;
+    }
+
+    function applyPreyAppearance() {
+        if (!mesh) return;
+        const mat = mesh.material as THREE.MeshLambertMaterial;
+        mat.emissive.set(getPreyTone());
+        mat.emissiveIntensity = isTerminal ? 1.0 : 0.3;
+        if (trails) {
+            const tMat = trails.material as THREE.LineBasicMaterial;
+            tMat.color.set(getPreyTone());
+            tMat.opacity = isTerminal ? 0.28 : 0.55;
+            trails.visible = showTrails;
+        }
+    }
+
     function getPredatorAppearance() {
         const bgCol = new THREE.Color(backgroundColor);
         const bgLuma = 0.2126 * bgCol.r + 0.7152 * bgCol.g + 0.0722 * bgCol.b;
         const lightMode = bgLuma > 0.6;
-        const blueprintMode = wireframe && !isTerminal;
-        const skyCycleMode = blueprintMode && useSkybox;
-        const skyCycleDay = skyCycleMode && skySunLevel > SKY_DAY_THRESHOLD;
+        const { blueprintMode, skyCycleMode, skyCycleDay } = getSkyCyclePhaseState();
         const forceBloodRed = blueprintMode && lightMode && !skyCycleMode;
 
         if (skyCycleDay) {
@@ -1085,7 +1109,7 @@
     function updateBoidInstances(t: number, intFactor: number, dtNorm: number, typingRampFactor: number) {
         const maxObs = boidCount * (isTerminal ? 0.55 : 0.20);
         const alpha = 1 - Math.pow(1 - ORIENTATION_SMOOTHING, Math.max(0.5, dtNorm));
-        _baseCol.set(color);
+        _baseCol.set(getPreyTone());
 
         for (let i = 0; i < boidCount; i++) {
             const idx = i * 3;
@@ -1173,6 +1197,7 @@
             m.uniforms.dayPhase.value = (t * dayNightSpeed + 0.25) % 1.0;
             skySunLevel = Math.max(0, Math.min(1, Math.sin(m.uniforms.dayPhase.value * 6.28318) * 0.5 + 0.5));
         }
+        applyPreyAppearance();
         applyPredatorAppearance();
 
         if (pointLight) {
