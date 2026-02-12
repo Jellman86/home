@@ -298,8 +298,8 @@
     let lastUIRectUpdateAt = 0;
     let uiWorldBounds: { minX: number; maxX: number; minY: number; maxY: number } | null = null;
     const UI_AVOID_MARGIN_PX = 18;
-    const OBSERVER_SCREEN_PADDING_PX = 72; // extra padding so observer geometry doesn't clip into the UI
-    const OBSERVER_DISTANCE_FROM_CAMERA = 59; // 50% closer looming distance for observers
+    const OBSERVER_SCREEN_PADDING_PX = 96; // extra padding so observer geometry doesn't clip into the UI
+    const OBSERVER_DISTANCE_FROM_CAMERA = 30; // 50% closer again for stronger looming
     const ORIENTATION_SMOOTHING = 0.24;
 
     function applyUIAvoidanceForce(extraPaddingPx = 0) {
@@ -345,14 +345,15 @@
         const angle = (i * 137.5) * (Math.PI / 180);
         const margin = 120 + (i % 4) * 60;
         const timeOff = t * (0.08 + (i % 5) * 0.02) + i * 0.35;
-        let tsx = (uiRect.left + uiRect.right) * 0.5 + Math.cos(angle) * (uiRect.width * 0.5 + margin) + Math.sin(timeOff) * 6;
-        let tsy = (uiRect.top + uiRect.bottom) * 0.5 + Math.sin(angle) * (uiRect.height * 0.5 + margin) + Math.cos(timeOff) * 6;
+        const ringPad = OBSERVER_SCREEN_PADDING_PX + 22;
+        let tsx = (uiRect.left + uiRect.right) * 0.5 + Math.cos(angle) * (uiRect.width * 0.5 + margin + ringPad) + Math.sin(timeOff) * 6;
+        let tsy = (uiRect.top + uiRect.bottom) * 0.5 + Math.sin(angle) * (uiRect.height * 0.5 + margin + ringPad) + Math.cos(timeOff) * 6;
 
-        if (tsx > uiRect.left - 40 && tsx < uiRect.right + 40 && tsy > uiRect.top - 40 && tsy < uiRect.bottom + 40) {
+        if (tsx > uiRect.left - ringPad && tsx < uiRect.right + ringPad && tsy > uiRect.top - ringPad && tsy < uiRect.bottom + ringPad) {
             const dx = tsx - (uiRect.left + uiRect.right) * 0.5;
             const dy = tsy - (uiRect.top + uiRect.bottom) * 0.5;
-            if (Math.abs(dx) > Math.abs(dy)) tsx = dx > 0 ? uiRect.right + 80 : uiRect.left - 80;
-            else tsy = dy > 0 ? uiRect.bottom + 80 : uiRect.top - 80;
+            if (Math.abs(dx) > Math.abs(dy)) tsx = dx > 0 ? uiRect.right + ringPad + 28 : uiRect.left - ringPad - 28;
+            else tsy = dy > 0 ? uiRect.bottom + ringPad + 28 : uiRect.top - ringPad - 28;
         }
 
         return out.set(tsx, tsy);
@@ -402,6 +403,7 @@
     const MOUSE_REPULSION_WEIGHT = 15.0;
     const OBSERVER_MAX_SPEED = 1.1;
     const OBSERVER_MAX_STEER = 0.09;
+    const OBSERVER_SEPARATION_SQ = 20 * 20;
     const MAX_FRAME_DELTA_SEC = 1 / 20;
     const MAX_SIM_STEP_SEC = 1 / 75;
     const MAX_SIM_SUBSTEPS = 4;
@@ -657,9 +659,14 @@
         }
         if (predator) { 
             const pMat = predator.material as THREE.MeshLambertMaterial;
-            pMat.color.set(0xffffff);
+            const bgCol = new THREE.Color(backgroundColor);
+            const bgLuma = 0.2126 * bgCol.r + 0.7152 * bgCol.g + 0.0722 * bgCol.b;
+            const lightMode = bgLuma > 0.6;
+            pMat.transparent = false;
+            pMat.opacity = 1.0;
+            pMat.color.set(predatorColor);
             pMat.emissive.set(predatorColor);
-            pMat.emissiveIntensity = 1.0;
+            pMat.emissiveIntensity = lightMode ? 0.35 : 0.85;
             predator.visible = true; 
         }
         if (predTrailLine) {
@@ -767,7 +774,7 @@
             if (isObserver && uiRect) {
                 const targetScreen = computeObserverScreenTarget(i, t);
                 const depthLayer = ((i % 5) - 2) * 6;
-                const targetDistance = (OBSERVER_DISTANCE_FROM_CAMERA - intFactor * 16) + depthLayer;
+                const targetDistance = (OBSERVER_DISTANCE_FROM_CAMERA - intFactor * 6) + depthLayer;
                 const targetWorld = screenToWorldAtDistance(targetScreen.x, targetScreen.y, targetDistance, _scratchV3);
                 _predDesiredDir.copy(targetWorld).sub(_position);
                 const dist = _predDesiredDir.length();
@@ -782,7 +789,24 @@
                     _velocity.addScaledVector(steer, dtNorm);
                     if (dist < 12) _velocity.multiplyScalar(Math.pow(0.9, dtNorm));
                 }
-                applyUIAvoidanceForce(OBSERVER_SCREEN_PADDING_PX);
+                const obsCount = Math.min(boidCount, Math.floor(maxObs * intFactor));
+                _scratchV2.set(0, 0, 0);
+                for (let j = 0; j < obsCount; j++) {
+                    if (j === i || deathTimers[j] > 0) continue;
+                    const jIdx = j * 3;
+                    const ddx = _position.x - positions[jIdx];
+                    const ddy = _position.y - positions[jIdx + 1];
+                    const ddz = _position.z - positions[jIdx + 2];
+                    const dSq = ddx * ddx + ddy * ddy + ddz * ddz;
+                    if (dSq > 0.001 && dSq < OBSERVER_SEPARATION_SQ) {
+                        const inv = 1 / Math.sqrt(dSq);
+                        const repel = (1 - (dSq / OBSERVER_SEPARATION_SQ)) * 0.08;
+                        _scratchV2.x += ddx * inv * repel;
+                        _scratchV2.y += ddy * inv * repel;
+                        _scratchV2.z += ddz * inv * repel;
+                    }
+                }
+                if (_scratchV2.lengthSq() > 0.0001) _velocity.addScaledVector(_scratchV2, dtNorm);
                 _velocity.multiplyScalar(Math.pow(0.975, dtNorm));
                 _velocity.clampLength(0.02, OBSERVER_MAX_SPEED);
                 _position.addScaledVector(_velocity, dtNorm);
@@ -961,9 +985,7 @@
             } else {
                 const isObserver = intFactor > 0.02 && (i < maxObs * intFactor);
                 if (isObserver && uiRect) {
-                    _lookAt
-                        .set(((uiRect.left + uiRect.right) * 0.5 / window.innerWidth) * 2 - 1, -((uiRect.top + uiRect.bottom) * 0.5 / window.innerHeight) * 2 + 1, 0.5)
-                        .unproject(camera);
+                    _lookAt.copy(screenToWorldAtDistance(window.innerWidth * 0.5, window.innerHeight * 0.5, OBSERVER_DISTANCE_FROM_CAMERA + 28, _scratchV1));
                     const pulse = 1.0 + Math.sin(t * (2.0 + recruitmentLevel * 2.0) + i) * (0.05 + recruitmentLevel * 0.1);
                     _tempColor.copy(_baseCol);
                     if (recruitmentLevel > 0.2) _tempColor.lerp(_whiteCol, Math.min((recruitmentLevel - 0.2) * 1.5, 0.95));
@@ -1023,7 +1045,6 @@
             const m = bgMesh.material as THREE.ShaderMaterial;
             m.uniforms.time.value = t;
             m.uniforms.dayPhase.value = (t * 0.004 + 0.25) % 1.0;
-            m.uniforms.tension.value = recruitmentLevel;
         }
 
         if (pointLight) {
@@ -1054,6 +1075,11 @@
         }
 
         const intFactor = recruitmentLevel * (interactionActive ? Math.pow(Math.max(0, 1 - (timeSinceInteraction / 60000)), 0.5) : 0);
+        if (bgMesh) {
+            const m = bgMesh.material as THREE.ShaderMaterial;
+            const observedPulse = intFactor > 0.08 ? (0.5 + 0.5 * Math.sin(t * 2.4)) * 0.14 : 0;
+            m.uniforms.tension.value = Math.min(1, recruitmentLevel + observedPulse);
+        }
         const simSubsteps = Math.min(MAX_SIM_SUBSTEPS, Math.max(1, Math.ceil(frameDeltaSec / MAX_SIM_STEP_SEC)));
         const simStepNorm = frameDtNorm / simSubsteps;
         for (let s = 0; s < simSubsteps; s++) {
