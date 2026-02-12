@@ -69,7 +69,7 @@
     let backgroundColor = $derived(themes[currentTheme].bg);
     let boidColor = $derived(themes[currentTheme].boids);
     let predatorColor = $derived(themes[currentTheme].predator);
-    let useSkybox = $derived(false); 
+    let useSkybox = $derived(currentTheme === 'terminal'); 
     let isWireframe = $derived(themes[currentTheme].wireframe);
     let boidCount = $derived(themes[currentTheme].count);
     let variant = $derived(themes[currentTheme].variant);

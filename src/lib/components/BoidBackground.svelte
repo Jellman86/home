@@ -96,7 +96,8 @@
                 backgroundUniforms: bgMesh ? {
                     time: (bgMesh.material as THREE.ShaderMaterial).uniforms.time.value,
                     dayPhase: (bgMesh.material as THREE.ShaderMaterial).uniforms.dayPhase.value,
-                    tension: (bgMesh.material as THREE.ShaderMaterial).uniforms.tension.value
+                    tension: (bgMesh.material as THREE.ShaderMaterial).uniforms.tension.value,
+                    pulse: (bgMesh.material as THREE.ShaderMaterial).uniforms.pulse.value
                 } : null
             },
             camera: {
@@ -241,6 +242,7 @@
     let canvas: HTMLCanvasElement;
     
     let recruitmentLevel = $state(0);
+    let typingDurationSec = 0;
     let scene: THREE.Scene;
     let camera: THREE.PerspectiveCamera;
     let renderer: THREE.WebGLRenderer;
@@ -428,6 +430,7 @@
         uniform float time;
         uniform float dayPhase;
         uniform float tension;
+        uniform float pulse;
         varying vec2 vUv;
         float hash31(vec3 p) { return fract(sin(dot(p, vec3(127.1, 311.7, 74.7))) * 43758.5453); }
         float hash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
@@ -444,6 +447,9 @@
             float starNoise = hash(uv * vec2(1800.0, 1000.0));
             float stars = step(0.997, starNoise) * night;
             skyResult += stars * vec3(1.0, 1.0, 1.2) * (0.6 + night);
+            float radial = 1.0 - clamp(length(uv - vec2(0.5)) * 1.6, 0.0, 1.0);
+            skyResult += vec3(0.22, 0.08, 0.04) * pulse * radial * 0.35;
+            skyResult *= 1.0 + pulse * (0.04 + radial * 0.08);
             gl_FragColor = vec4(skyResult, 1.0);
         }
     `;
@@ -472,7 +478,7 @@
         // BG
         const bgGeo = new THREE.PlaneGeometry(2, 2);
         bgMesh = new THREE.Mesh(bgGeo, new THREE.ShaderMaterial({
-            uniforms: { time: { value: 0 }, dayPhase: { value: 0.25 }, tension: { value: 0 } },
+            uniforms: { time: { value: 0 }, dayPhase: { value: 0.25 }, tension: { value: 0 }, pulse: { value: 0 } },
             vertexShader: bgVertexShader, fragmentShader: bgFragmentShader, depthWrite: false
         }));
         bgMesh.renderOrder = -1;
@@ -969,7 +975,7 @@
         updatePredator(dtNorm, now);
     }
 
-    function updateBoidInstances(t: number, intFactor: number, dtNorm: number) {
+    function updateBoidInstances(t: number, intFactor: number, dtNorm: number, typingRampFactor: number) {
         const maxObs = boidCount * (isTerminal ? 0.55 : 0.20);
         const alpha = 1 - Math.pow(1 - ORIENTATION_SMOOTHING, Math.max(0.5, dtNorm));
         _baseCol.set(color);
@@ -980,6 +986,7 @@
             const d = deathTimers[i];
             _position.set(positions[idx], positions[idx + 1], positions[idx + 2]);
             _velocity.set(velocities[idx], velocities[idx + 1], velocities[idx + 2]);
+            let observerShakeAmp = 0;
 
             if (d > 0) {
                 _tempColor.set(0xff0000).lerp(_baseCol, 1.0 - d);
@@ -990,9 +997,12 @@
                 if (isObserver && uiRect) {
                     _lookAt.copy(screenToWorldAtDistance(window.innerWidth * 0.5, window.innerHeight * 0.5, OBSERVER_DISTANCE_FROM_CAMERA + 28, _scratchV1));
                     const pulse = 1.0 + Math.sin(t * (2.0 + recruitmentLevel * 2.0) + i) * (0.05 + recruitmentLevel * 0.1);
+                    const flash = Math.max(0, Math.sin(t * (10 + typingRampFactor * 22) + i * 0.9)) * (0.04 + typingRampFactor * 0.26);
+                    observerShakeAmp = isTerminal ? (0.02 + typingRampFactor * typingRampFactor * 1.15) * Math.max(0.2, intFactor) : 0;
                     _tempColor.copy(_baseCol);
                     if (recruitmentLevel > 0.2) _tempColor.lerp(_whiteCol, Math.min((recruitmentLevel - 0.2) * 1.5, 0.95));
                     _tempColor.multiplyScalar(pulse);
+                    if (flash > 0) _tempColor.lerp(_whiteCol, Math.min(0.42, flash));
                 } else {
                     _lookAt.copy(_position).add(_velocity);
                     _tempColor.copy(_baseCol).multiplyScalar(0.72 + (scales[i] - 0.7) * 0.5);
@@ -1002,6 +1012,11 @@
 
             _quatCurrent.set(orientations[qIdx], orientations[qIdx + 1], orientations[qIdx + 2], orientations[qIdx + 3]);
             _dummy.position.copy(_position);
+            if (observerShakeAmp > 0) {
+                _dummy.position.x += Math.sin(t * (14 + typingRampFactor * 40) + i * 1.37) * observerShakeAmp;
+                _dummy.position.y += Math.cos(t * (17 + typingRampFactor * 45) + i * 1.73) * observerShakeAmp;
+                _dummy.position.z += Math.sin(t * (13 + typingRampFactor * 34) + i * 2.11) * observerShakeAmp * 0.7;
+            }
             _dummy.lookAt(_lookAt);
             _quatTarget.copy(_dummy.quaternion);
             _quatCurrent.slerp(_quatTarget, alpha);
@@ -1066,6 +1081,10 @@
 
         const timeSinceInteraction = now - lastInteractionTime;
         const interactionActive = isTerminal && timeSinceInteraction < 60000;
+        const currentlyTyping = isTerminal && timeSinceInteraction < 280;
+        if (currentlyTyping) typingDurationSec = Math.min(30, typingDurationSec + frameDeltaSec);
+        else typingDurationSec = Math.max(0, typingDurationSec - frameDeltaSec * 2.4);
+        const typingRampFactor = typingDurationSec / 30;
         if (isTerminal && timeSinceInteraction < 2000) recruitmentLevel = Math.min(1, recruitmentLevel + 0.0005 * frameDtNorm);
         else recruitmentLevel = Math.max(0, recruitmentLevel - 0.008 * frameDtNorm);
 
@@ -1082,13 +1101,14 @@
             const m = bgMesh.material as THREE.ShaderMaterial;
             const observedPulse = intFactor > 0.08 ? (0.5 + 0.5 * Math.sin(t * 2.4)) * 0.14 : 0;
             m.uniforms.tension.value = Math.min(1, recruitmentLevel + observedPulse);
+            m.uniforms.pulse.value = intFactor > 0.08 ? (0.5 + 0.5 * Math.sin(t * (2.1 + typingRampFactor * 2.8))) * (0.12 + typingRampFactor * 0.24) : 0;
         }
         const simSubsteps = Math.min(MAX_SIM_SUBSTEPS, Math.max(1, Math.ceil(frameDeltaSec / MAX_SIM_STEP_SEC)));
         const simStepNorm = frameDtNorm / simSubsteps;
         for (let s = 0; s < simSubsteps; s++) {
             simulateBoidsStep(simStepNorm, now, t, intFactor);
         }
-        updateBoidInstances(t, intFactor, frameDtNorm);
+        updateBoidInstances(t, intFactor, frameDtNorm, typingRampFactor);
 
         // Update Trails
         if (showTrails && trails) {
