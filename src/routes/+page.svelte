@@ -68,12 +68,13 @@
 
     // Derived theme properties
     let ActiveComponent = $derived(themes[currentTheme].component);
-    let backgroundColor = $derived(blueprintSkyCycleActive ? 'transparent' : themes[currentTheme].bg);
+    let backgroundColor = $derived(themes[currentTheme].bg);
     let boidColor = $derived(themes[currentTheme].boids);
     let predatorColor = $derived(themes[currentTheme].predator);
     let useSkybox = $derived(blueprintSkyCycleActive); 
     let isWireframe = $derived(themes[currentTheme].wireframe);
     let boidCount = $derived(themes[currentTheme].count);
+    let boidLayerKey = $derived(`${boidCount}-${blueprintSkyCycleActive ? 'sky' : 'flat'}`);
     let variant = $derived(themes[currentTheme].variant);
     let isTerminal = $derived(currentTheme === 'terminal');
     let clockNow = $state(0);
@@ -158,7 +159,7 @@
 
 <div class="relative min-h-screen w-full overflow-hidden transition-colors duration-1000" style="background-color: {backgroundColor}">
     <!-- WebGL Background Layer -->
-    {#key boidCount}
+    {#key boidLayerKey}
         <BoidBackground 
             bind:this={boidBackground}
             {boidCount} 
