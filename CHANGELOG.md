@@ -5,26 +5,20 @@ All notable changes to this project will be documented in this file.
 ## [Unreleased]
 
 ### Added
-- **Triple-Light System**: Implemented `AmbientLight`, `PointLight` (Sentience Flashlight), and `DirectionalLight` (Camera Follow) for comprehensive 3D illumination.
-- **3D Shaded Entities**: Upgraded boids and predator from flat icons to lit 3D objects using `MeshPhongMaterial`.
-- **Dynamic Flashlight**: Implemented a `PointLight` that tracks the user's typing point, providing real-time 3D highlights on the looming swarm.
-- **Observer Effect**: Implemented "Voyeur" boids that break away from the main flock when the user interacts with the terminal.
-- **Stationary Looming**: Observers now calculate fixed stations around the UI perimeter and remain still to focus on the user.
-- **3D Depth Layering**: Observers are distributed across multiple 3D planes to create a voluminous surrounding effect.
-- **Dynamic Git Hash**: Added build-time injection of the actual git commit hash into the UI footer.
-- **Avatar Avoidance**: Specific logic to ensure boids do not obstruct the user's avatar area.
+- **Blueprint Sky Cycle Toggle**: Added a dedicated Blueprint control to switch between overlay-heavy Blueprint backgrounds and full sky-cycle rendering.
+- **Day/Night Sky Shader**: Added a procedural skybox cycle with night-gated stars and atmospheric transitions.
+- **Milky Way Band Pass**: Added a diagonal Milky Way lane with clustered density, dust-lane attenuation, and bright/dark side asymmetry for a more natural galactic look.
+- **Theme-State Background Remounting**: Added sky-mode-aware boid layer remounting to ensure clean transitions when toggling sky-cycle mode.
+- **Terminal Observation Escalation**: Added observer recruitment escalation under typing pressure, including shake/flash behavior ramps.
 
 ### Fixed
-- **Boid Syntax Errors**: Resolved multiple syntax errors in the animation loop that were causing build failures.
-- **Interaction Triggers**: Fixed a bug where boids would loom on initial page load; they now only react to active typing.
-- **Boredom Decay**: Implemented a significantly faster boredom decay (4x) for more responsive rejoining transitions.
-- **Instanced Boid Color Rendering**: Bound `instanceColor` to geometry, recomputed normals, and added subtle emissive fallback to prevent black silhouettes.
-- **Boid Color Space Pass**: Enabled sRGB output + tone mapping and converted boid colors to linear space for lighting consistency.
+- **Sky Toggle Restore Path**: Fixed Blueprint sky toggle state so disabling sky-cycle reliably restores the normal Blueprint background layers.
+- **Observer/UI Collision**: Fixed observer boids clipping into or bouncing off terminal UI bounds in terminal mode.
+- **Observer Orientation and Depth**: Fixed observer-facing logic so looming boids orient toward the interaction center and hold closer camera-relative depth.
+- **Light-Mode Predator Visibility**: Fixed predator color washout in Blueprint light mode by forcing clear blood-red rendering where appropriate.
+- **Sky-Cycle Day Coloring**: Fixed sky-cycle day-phase color handling so predator and prey boids shift to dark gray only during daytime while sky-cycle mode is active.
 
 ### Improved
-- **Code Stability**: Complete rewrite of the animation loop to remove logic duplications and optimize performance.
-- **Species Variation**: Introduced non-uniform sizing for boids to better reflect natural biological diversity.
-- **Vite Configuration**: Enhanced `vite.config.ts` to support dynamic environment constants.
-
-### Known Issues
-- **Boid Color Multiplication**: Instanced boids are currently rendering as solid black despite the presence of light sources and vertex colors.
+- **Observer Motion Quality**: Smoothed observer drift, separation behavior, and approach pacing for less jitter and more intentional looming.
+- **Skybox Composition**: Reduced uniform star-field noise and emphasized diagonal structure to better match real-sky references.
+- **Theme Consistency**: Unified predator/prey appearance rules across Blueprint dark/light and sky-cycle day/night phases.

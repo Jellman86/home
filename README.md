@@ -4,18 +4,32 @@ This repository contains the source code for my personal portfolio website, host
 
 It is a high-performance, interactive experience built with modern web technologies, designed to showcase my work as an Infrastructure Engineer and my interest in the intersection of technology and nature.
 
+## 📌 Current Project Status
+
+The boid/sky systems have been heavily refined and are now in an advanced state:
+
+*   **Blueprint Sky-Cycle Mode** is live, with reliable toggle behavior between standard Blueprint overlays and full day/night sky rendering.
+*   **Terminal Observer Behavior** is now deliberately unsettling: observer boids recruit around the terminal perimeter, hold spacing, orient toward interaction focus, and escalate with typing activity.
+*   **Skybox Work** now includes night-only stars and a diagonal Milky Way-style band with clustered structure and light/shadow asymmetry.
+*   **Contextual Boid Coloring** is implemented for key modes:
+    *   Blueprint light mode forces clear predator blood-red rendering when not in sky-cycle mode.
+    *   In sky-cycle mode daytime, predator and prey shift to darker gray tones.
+
 ## ✨ Features
 
 *   **3D Boid Simulation**: A custom-built Boid flocking simulation using `Three.js` and `InstancedMesh`.
-    *   **Observer Effect**: Boids break away from the flock and surround the terminal window when interaction is detected. They remain stationary and rotate to watch the user type, creating a sense of digital scrutiny.
+    *   **Observer Effect**: In terminal mode, observer boids drift into perimeter positions around the terminal and progressively intensify while the user types.
+    *   **Creeping Escalation**: Observer groups add controlled shake/flash cues over sustained typing to increase tension.
     *   **Predator Logic**: A predator entity that hunts the flock with smooth steering behaviors (Reynolds Steering).
+    *   **Mode-Aware Color Logic**: Predator/prey palettes adapt to Blueprint light and sky-cycle day/night phases.
     *   **Trails System**: Visual trail rendering for boids and the predator to visualize flow dynamics.
     *   **Optimized Performance**: Capable of rendering hundreds of agents at 60FPS.
 *   **"Blueprint" Theme**: A technical, CAD-inspired UI with:
     *   **Dark & Light Modes**: Seamless switching between a deep blue/slate aesthetic and a clean technical white style.
     *   **Draggable Interface**: The main "About Me" window is fully interactive and draggable.
     *   **Visual Diagnostics**: Animated radar dials, scanning lines, and data streams.
-    *   **Parallax Background**: Dynamic grid and starfield that responds to mouse movement.
+    *   **Sky-Cycle Toggle**: Optional day/night skybox mode with night-gated stars and a stylized Milky Way lane.
+    *   **Parallax Background**: Dynamic grid and UI overlays for classic Blueprint mode.
 *   **"Terminal" Theme**: A retro-style CLI interface with interactive commands.
     *   **Command History**: Navigate previous commands using Up/Down arrow keys.
     *   **Secure Handshake**: AES-256-GCM encrypted payload decryption via file upload.
