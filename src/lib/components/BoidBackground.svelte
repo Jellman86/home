@@ -298,8 +298,8 @@
     let lastUIRectUpdateAt = 0;
     let uiWorldBounds: { minX: number; maxX: number; minY: number; maxY: number } | null = null;
     const UI_AVOID_MARGIN_PX = 18;
-    const OBSERVER_SCREEN_PADDING_PX = 48; // extra padding so observer geometry doesn't clip into the UI
-    const OBSERVER_DISTANCE_FROM_CAMERA = 140; // controls observer apparent size/stability (lower = larger/closer)
+    const OBSERVER_SCREEN_PADDING_PX = 72; // extra padding so observer geometry doesn't clip into the UI
+    const OBSERVER_DISTANCE_FROM_CAMERA = 140; // stable observer depth plane from camera to avoid "rush to lens"
     const ORIENTATION_SMOOTHING = 0.24;
 
     function applyUIAvoidanceForce(extraPaddingPx = 0) {
@@ -344,9 +344,9 @@
         if (!uiRect) return out.set(0, 0);
         const angle = (i * 137.5) * (Math.PI / 180);
         const margin = 120 + (i % 4) * 60;
-        const timeOff = t * (0.2 + (i % 5) * 0.05) + i;
-        let tsx = (uiRect.left + uiRect.right) * 0.5 + Math.cos(angle) * (uiRect.width * 0.5 + margin) + Math.sin(timeOff) * 15;
-        let tsy = (uiRect.top + uiRect.bottom) * 0.5 + Math.sin(angle) * (uiRect.height * 0.5 + margin) + Math.cos(timeOff) * 15;
+        const timeOff = t * (0.08 + (i % 5) * 0.02) + i * 0.35;
+        let tsx = (uiRect.left + uiRect.right) * 0.5 + Math.cos(angle) * (uiRect.width * 0.5 + margin) + Math.sin(timeOff) * 6;
+        let tsy = (uiRect.top + uiRect.bottom) * 0.5 + Math.sin(angle) * (uiRect.height * 0.5 + margin) + Math.cos(timeOff) * 6;
 
         if (tsx > uiRect.left - 40 && tsx < uiRect.right + 40 && tsy > uiRect.top - 40 && tsy < uiRect.bottom + 40) {
             const dx = tsx - (uiRect.left + uiRect.right) * 0.5;
@@ -356,6 +356,17 @@
         }
 
         return out.set(tsx, tsy);
+    }
+
+    function screenToWorldAtDistance(screenX: number, screenY: number, distanceFromCamera: number, out = _scratchV3) {
+        const nx = (screenX / window.innerWidth) * 2 - 1;
+        const ny = -(screenY / window.innerHeight) * 2 + 1;
+        out.set(nx, ny, 0.5).unproject(camera);
+        return out
+            .sub(camera.position)
+            .normalize()
+            .multiplyScalar(distanceFromCamera)
+            .add(camera.position);
     }
 
     // PERFORMANCE: Spatial Partitioning & Scratch Vectors
@@ -755,20 +766,24 @@
             const isObserver = intFactor > 0.02 && (i < maxObs * intFactor);
             if (isObserver && uiRect) {
                 const targetScreen = computeObserverScreenTarget(i, t);
-                _diff
-                    .set((targetScreen.x / window.innerWidth) * 2 - 1, -(targetScreen.y / window.innerHeight) * 2 + 1, 0.2)
-                    .unproject(camera);
-                _predDesiredDir.copy(_diff).sub(_position);
-                if (_predDesiredDir.lengthSq() > 0.001) {
+                const depthLayer = ((i % 5) - 2) * 6;
+                const targetDistance = OBSERVER_DISTANCE_FROM_CAMERA + depthLayer;
+                const targetWorld = screenToWorldAtDistance(targetScreen.x, targetScreen.y, targetDistance, _scratchV3);
+                _predDesiredDir.copy(targetWorld).sub(_position);
+                const dist = _predDesiredDir.length();
+                if (dist > 0.001) {
+                    const speedScale = 0.25 + 0.75 * recruitmentLevel;
+                    const desiredSpeed = Math.min(OBSERVER_MAX_SPEED, (0.1 + dist * 0.016) * speedScale);
                     const steer = _scratchV1
                         .copy(_predDesiredDir)
-                        .setLength(OBSERVER_MAX_SPEED)
+                        .multiplyScalar(desiredSpeed / dist)
                         .sub(_velocity)
-                        .clampLength(0, OBSERVER_MAX_STEER);
+                        .clampLength(0, (0.03 + recruitmentLevel * 0.035) * dtNorm);
                     _velocity.addScaledVector(steer, dtNorm);
+                    if (dist < 12) _velocity.multiplyScalar(Math.pow(0.9, dtNorm));
                 }
                 applyUIAvoidanceForce(OBSERVER_SCREEN_PADDING_PX);
-                _velocity.multiplyScalar(Math.pow(0.965, dtNorm));
+                _velocity.multiplyScalar(Math.pow(0.975, dtNorm));
                 _velocity.clampLength(0.02, OBSERVER_MAX_SPEED);
                 _position.addScaledVector(_velocity, dtNorm);
             } else {
@@ -903,7 +918,6 @@
                     const speedDelta = (desiredSpeed - speed) * SPEED_FORCE * dtNorm;
                     _velocity.add(_scratchV1.copy(_velocity).divideScalar(speed).multiplyScalar(speedDelta));
                 }
-                if (isTerminal) applyUIAvoidanceForce();
                 _velocity.clampLength(0.08, maxSpeeds[i]);
                 _position.addScaledVector(_velocity, dtNorm);
             }
