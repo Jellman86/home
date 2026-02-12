@@ -262,14 +262,19 @@
     const PRED_TRAIL_LENGTH = 30;
 
     let lastTime = performance.now();
+    let simLastTime = performance.now();
     let frameCount = 0;
     let startupAt = performance.now();
 
     let positions: Float32Array;
     let velocities: Float32Array;
+    let positionsNext: Float32Array;
+    let velocitiesNext: Float32Array;
     let scales: Float32Array;
     let maxSpeeds: Float32Array;
     let deathTimers: Float32Array;
+    let deathTimersNext: Float32Array;
+    let orientations: Float32Array;
     
     const _position = new THREE.Vector3();
     const _velocity = new THREE.Vector3();
@@ -281,6 +286,9 @@
     const _predPos = new THREE.Vector3();
     const _predVel = new THREE.Vector3();
     const _predDesiredDir = new THREE.Vector3();
+    const _quatCurrent = new THREE.Quaternion();
+    const _quatTarget = new THREE.Quaternion();
+    const _observerTarget = new THREE.Vector2();
 
     let mouse = new THREE.Vector2(-9999, -9999);
     let target = new THREE.Vector3();
@@ -292,10 +300,10 @@
     const UI_AVOID_MARGIN_PX = 18;
     const OBSERVER_SCREEN_PADDING_PX = 48; // extra padding so observer geometry doesn't clip into the UI
     const OBSERVER_DISTANCE_FROM_CAMERA = 140; // controls observer apparent size/stability (lower = larger/closer)
+    const ORIENTATION_SMOOTHING = 0.24;
 
-    function keepOutsideUIRectScreenSpace(extraPaddingPx = 0) {
-        // Hard constraint: if a boid projects inside the UI card rect, shove it outside.
-        // This avoids "boids behind the terminal" regardless of boid Z depth.
+    function applyUIAvoidanceForce(extraPaddingPx = 0) {
+        // Softly push boids away from UI bounds to avoid hard teleports and jitter.
         if (!isTerminal || !uiRect) return;
 
         const ndc = _scratchV2.copy(_position).project(camera);
@@ -310,29 +318,46 @@
 
         if (!(sx > left && sx < right && sy > top && sy < bottom)) return;
 
-        const cx = (left + right) * 0.5;
-        const cy = (top + bottom) * 0.5;
-        const dx = sx - cx;
-        const dy = sy - cy;
+        const dl = sx - left;
+        const dr = right - sx;
+        const dt = sy - top;
+        const db = bottom - sy;
+        const minEdge = Math.min(dl, dr, dt, db);
+        const penetration = Math.max(0, 70 - minEdge);
 
-        // Push towards the nearest edge, with a small overshoot so it looks clearly "outside".
         let tx = sx;
         let ty = sy;
-        if (Math.abs(dx) > Math.abs(dy)) {
-            tx = dx > 0 ? right + 28 : left - 28;
-        } else {
-            ty = dy > 0 ? bottom + 28 : top - 28;
-        }
+        if (minEdge === dl) tx = left - 32;
+        else if (minEdge === dr) tx = right + 32;
+        else if (minEdge === dt) ty = top - 32;
+        else ty = bottom + 32;
 
         const tNdcX = (tx / window.innerWidth) * 2 - 1;
         const tNdcY = -((ty / window.innerHeight) * 2 - 1);
         const targetWorld = _scratchV3.set(tNdcX, tNdcY, ndc.z).unproject(camera);
-
-        // Snap most of the way out immediately, and damp velocity so we don't re-enter next frame.
-        _position.lerp(targetWorld, 0.85);
-        _velocity.multiplyScalar(0.25);
+        const strength = Math.min(0.3, 0.04 + (penetration / 1200));
+        _velocity.add(targetWorld.sub(_position).multiplyScalar(strength));
+        _velocity.multiplyScalar(0.94);
     }
-    
+
+    function computeObserverScreenTarget(i: number, t: number, out = _observerTarget) {
+        if (!uiRect) return out.set(0, 0);
+        const angle = (i * 137.5) * (Math.PI / 180);
+        const margin = 120 + (i % 4) * 60;
+        const timeOff = t * (0.2 + (i % 5) * 0.05) + i;
+        let tsx = (uiRect.left + uiRect.right) * 0.5 + Math.cos(angle) * (uiRect.width * 0.5 + margin) + Math.sin(timeOff) * 15;
+        let tsy = (uiRect.top + uiRect.bottom) * 0.5 + Math.sin(angle) * (uiRect.height * 0.5 + margin) + Math.cos(timeOff) * 15;
+
+        if (tsx > uiRect.left - 40 && tsx < uiRect.right + 40 && tsy > uiRect.top - 40 && tsy < uiRect.bottom + 40) {
+            const dx = tsx - (uiRect.left + uiRect.right) * 0.5;
+            const dy = tsy - (uiRect.top + uiRect.bottom) * 0.5;
+            if (Math.abs(dx) > Math.abs(dy)) tsx = dx > 0 ? uiRect.right + 80 : uiRect.left - 80;
+            else tsy = dy > 0 ? uiRect.bottom + 80 : uiRect.top - 80;
+        }
+
+        return out.set(tsx, tsy);
+    }
+
     // PERFORMANCE: Spatial Partitioning & Scratch Vectors
     const GRID_SIZE = 40;
     let gridHeaders: Int32Array;
@@ -364,10 +389,19 @@
     let ALIGNMENT_WEIGHT = $derived(2.5); 
     let COHESION_WEIGHT = $derived(3.5); 
     const MOUSE_REPULSION_WEIGHT = 15.0;
+    const OBSERVER_MAX_SPEED = 1.1;
+    const OBSERVER_MAX_STEER = 0.09;
+    const MAX_FRAME_DELTA_SEC = 1 / 20;
+    const MAX_SIM_STEP_SEC = 1 / 75;
+    const MAX_SIM_SUBSTEPS = 4;
 
     const VISUAL_RANGE_SQ = 45 * 45;
     const PROTECTED_RANGE_SQ = 12 * 12;
     const MOUSE_REPULSION_SQ = 6000;
+    const GRID_EXTENT = BOUNDARY_SIZE * 1.25;
+    const GRID_SPAN = GRID_EXTENT * 2;
+    const neighborIdx = new Int32Array(NEIGHBOR_COUNT);
+    const neighborDistSq = new Float32Array(NEIGHBOR_COUNT);
 
     const bgVertexShader = `
         varying vec2 vUv;
@@ -461,9 +495,13 @@
         // DATA
         positions = new Float32Array(boidCount * 3);
         velocities = new Float32Array(boidCount * 3);
+        positionsNext = new Float32Array(boidCount * 3);
+        velocitiesNext = new Float32Array(boidCount * 3);
         scales = new Float32Array(boidCount);
         maxSpeeds = new Float32Array(boidCount);
         deathTimers = new Float32Array(boidCount);
+        deathTimersNext = new Float32Array(boidCount);
+        orientations = new Float32Array(boidCount * 4);
         
         // Grid Initialization
         gridCellsCount = Math.ceil((BOUNDARY_SIZE * 2.5) / GRID_SIZE);
@@ -484,10 +522,19 @@
             _tempColor.copy(baseColor).multiplyScalar(0.8);
             mesh.setColorAt(i, _tempColor);
             _dummy.position.copy(_position);
+            _dummy.lookAt(_lookAt.copy(_position).add(_velocity));
             _dummy.scale.set(scales[i], scales[i], scales[i]);
             _dummy.updateMatrix();
             mesh.setMatrixAt(i, _dummy.matrix);
+            const qIdx = i * 4;
+            orientations[qIdx] = _dummy.quaternion.x;
+            orientations[qIdx + 1] = _dummy.quaternion.y;
+            orientations[qIdx + 2] = _dummy.quaternion.z;
+            orientations[qIdx + 3] = _dummy.quaternion.w;
         }
+        positionsNext.set(positions);
+        velocitiesNext.set(velocities);
+        deathTimersNext.set(deathTimers);
         if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
 
         // Initialize predator near a random boid
@@ -632,6 +679,315 @@
     let lastFrameTime = 0;
     let avgFrameTime = 0;
 
+    function gridCoord(v: number) {
+        return Math.min(gridCellsCount - 1, Math.max(0, Math.floor(((v + GRID_EXTENT) / GRID_SPAN) * gridCellsCount)));
+    }
+
+    function gridIndex(x: number, y: number, z: number) {
+        return x + y * gridCellsCount + z * gridCellsCount * gridCellsCount;
+    }
+
+    function rebuildSpatialGrid() {
+        gridHeaders.fill(-1);
+        for (let i = 0; i < boidCount; i++) {
+            const idx = i * 3;
+            const cell = gridIndex(gridCoord(positions[idx]), gridCoord(positions[idx + 1]), gridCoord(positions[idx + 2]));
+            boidNext[i] = gridHeaders[cell];
+            gridHeaders[cell] = i;
+        }
+    }
+
+    function updatePredator(dtNorm: number, now: number) {
+        if (predTargetIdx < 0 || now > predTargetUntil) {
+            predTargetIdx = Math.floor(Math.random() * boidCount);
+            predTargetUntil = now + 5000;
+        }
+
+        const tIdx = predTargetIdx * 3;
+        const predict = _lookAt.set(
+            positions[tIdx] + velocities[tIdx] * PREDATOR_PREDICT_T,
+            positions[tIdx + 1] + velocities[tIdx + 1] * PREDATOR_PREDICT_T,
+            positions[tIdx + 2] + velocities[tIdx + 2] * PREDATOR_PREDICT_T
+        );
+
+        _diff.copy(predict).sub(_predPos);
+        if (_diff.lengthSq() > 0.001) {
+            const steer = _scratchV1.copy(_diff).setLength(PREDATOR_SPEED).sub(_predVel).clampLength(0, PREDATOR_MAX_STEER);
+            _predVel.addScaledVector(steer, dtNorm).clampLength(PREDATOR_MIN_SPEED, PREDATOR_SPEED);
+        }
+
+        const pTurn = 0.08 * dtNorm;
+        if (_predPos.x < -BOUNDARY_SIZE) _predVel.x += pTurn;
+        if (_predPos.x > BOUNDARY_SIZE) _predVel.x -= pTurn;
+        if (_predPos.y < -BOUNDARY_SIZE) _predVel.y += pTurn;
+        if (_predPos.y > BOUNDARY_SIZE) _predVel.y -= pTurn;
+        if (_predPos.z < 20) _predVel.z += pTurn;
+        if (_predPos.z > BOUNDARY_SIZE + 20) _predVel.z -= pTurn;
+
+        _predVel.clampLength(PREDATOR_MIN_SPEED, PREDATOR_SPEED);
+        _predPos.addScaledVector(_predVel, dtNorm);
+    }
+
+    function simulateBoidsStep(dtNorm: number, now: number, t: number, intFactor: number) {
+        const maxObs = boidCount * (isTerminal ? 0.55 : 0.20);
+        rebuildSpatialGrid();
+
+        for (let i = 0; i < boidCount; i++) {
+            const idx = i * 3;
+            _position.set(positions[idx], positions[idx + 1], positions[idx + 2]);
+            _velocity.set(velocities[idx], velocities[idx + 1], velocities[idx + 2]);
+            _acceleration.set(0, 0, 0);
+            let nextDeath = deathTimers[i];
+
+            if (nextDeath > 0) {
+                nextDeath -= 0.025 * dtNorm;
+                if (nextDeath <= 0) {
+                    nextDeath = 0;
+                    _position.set((Math.random() - 0.5) * 350, (Math.random() - 0.5) * 350, 20 + Math.random() * 100);
+                    _velocity.set((Math.random() - 0.5), (Math.random() - 0.5), 1).normalize().multiplyScalar(SPEED_LIMIT);
+                }
+                positionsNext[idx] = _position.x; positionsNext[idx + 1] = _position.y; positionsNext[idx + 2] = _position.z;
+                velocitiesNext[idx] = _velocity.x; velocitiesNext[idx + 1] = _velocity.y; velocitiesNext[idx + 2] = _velocity.z;
+                deathTimersNext[i] = nextDeath;
+                continue;
+            }
+
+            const isObserver = intFactor > 0.02 && (i < maxObs * intFactor);
+            if (isObserver && uiRect) {
+                const targetScreen = computeObserverScreenTarget(i, t);
+                _diff
+                    .set((targetScreen.x / window.innerWidth) * 2 - 1, -(targetScreen.y / window.innerHeight) * 2 + 1, 0.2)
+                    .unproject(camera);
+                _predDesiredDir.copy(_diff).sub(_position);
+                if (_predDesiredDir.lengthSq() > 0.001) {
+                    const steer = _scratchV1
+                        .copy(_predDesiredDir)
+                        .setLength(OBSERVER_MAX_SPEED)
+                        .sub(_velocity)
+                        .clampLength(0, OBSERVER_MAX_STEER);
+                    _velocity.addScaledVector(steer, dtNorm);
+                }
+                applyUIAvoidanceForce(OBSERVER_SCREEN_PADDING_PX);
+                _velocity.multiplyScalar(Math.pow(0.965, dtNorm));
+                _velocity.clampLength(0.02, OBSERVER_MAX_SPEED);
+                _position.addScaledVector(_velocity, dtNorm);
+            } else {
+                _alignF.set(0, 0, 0);
+                _cohF.set(0, 0, 0);
+                _sepF.set(0, 0, 0);
+                let aC = 0;
+                let cC = 0;
+                let sC = 0;
+                let nearCount = 0;
+                let farSlot = 0;
+                let farDist = -1;
+
+                const cx = gridCoord(_position.x);
+                const cy = gridCoord(_position.y);
+                const cz = gridCoord(_position.z);
+
+                for (let dz = -1; dz <= 1; dz++) {
+                    const gz = cz + dz;
+                    if (gz < 0 || gz >= gridCellsCount) continue;
+                    for (let dy = -1; dy <= 1; dy++) {
+                        const gy = cy + dy;
+                        if (gy < 0 || gy >= gridCellsCount) continue;
+                        for (let dx = -1; dx <= 1; dx++) {
+                            const gx = cx + dx;
+                            if (gx < 0 || gx >= gridCellsCount) continue;
+                            let j = gridHeaders[gridIndex(gx, gy, gz)];
+                            while (j !== -1) {
+                                if (j !== i && deathTimers[j] <= 0) {
+                                    const jIdx = j * 3;
+                                    const ddx = _position.x - positions[jIdx];
+                                    const ddy = _position.y - positions[jIdx + 1];
+                                    const ddz = _position.z - positions[jIdx + 2];
+                                    const dSq = ddx * ddx + ddy * ddy + ddz * ddz;
+                                    if (dSq > 0.0001) {
+                                        if (dSq < PROTECTED_RANGE_SQ) {
+                                            const inv = 1 / (dSq + 0.01);
+                                            _sepF.x += ddx * inv;
+                                            _sepF.y += ddy * inv;
+                                            _sepF.z += ddz * inv;
+                                            sC++;
+                                        }
+                                        if (dSq < VISUAL_RANGE_SQ) {
+                                            if (nearCount < NEIGHBOR_COUNT) {
+                                                neighborIdx[nearCount] = j;
+                                                neighborDistSq[nearCount] = dSq;
+                                                if (dSq > farDist) {
+                                                    farDist = dSq;
+                                                    farSlot = nearCount;
+                                                }
+                                                nearCount++;
+                                            } else if (dSq < farDist) {
+                                                neighborIdx[farSlot] = j;
+                                                neighborDistSq[farSlot] = dSq;
+                                                farSlot = 0;
+                                                farDist = neighborDistSq[0];
+                                                for (let n = 1; n < NEIGHBOR_COUNT; n++) {
+                                                    if (neighborDistSq[n] > farDist) {
+                                                        farDist = neighborDistSq[n];
+                                                        farSlot = n;
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                                j = boidNext[j];
+                            }
+                        }
+                    }
+                }
+
+                for (let n = 0; n < nearCount; n++) {
+                    const jIdx = neighborIdx[n] * 3;
+                    _cohF.x += positions[jIdx];
+                    _cohF.y += positions[jIdx + 1];
+                    _cohF.z += positions[jIdx + 2];
+                    _alignF.x += velocities[jIdx];
+                    _alignF.y += velocities[jIdx + 1];
+                    _alignF.z += velocities[jIdx + 2];
+                    cC++;
+                    aC++;
+                }
+
+                if (sC > 0) _acceleration.add(_sepF.multiplyScalar(SEPARATION_WEIGHT * 0.09));
+                if (cC > 0) {
+                    _scratchV1.copy(_cohF).divideScalar(cC).sub(_position).multiplyScalar(COHESION_WEIGHT * 0.004);
+                    _acceleration.add(_scratchV1);
+                }
+                if (aC > 0) {
+                    _scratchV1.copy(_alignF).divideScalar(aC).sub(_velocity).multiplyScalar(ALIGNMENT_WEIGHT * 0.05);
+                    _acceleration.add(_scratchV1);
+                }
+
+                const dxP = _position.x - _predPos.x;
+                const dyP = _position.y - _predPos.y;
+                const dzP = _position.z - _predPos.z;
+                const dSqP = dxP * dxP + dyP * dyP + dzP * dzP;
+                const predRangeSq = PREDATOR_RADIUS * PREDATOR_RADIUS;
+                if (dSqP < predRangeSq) {
+                    const fear = 0.2 + (1 - (dSqP / predRangeSq)) * 0.3;
+                    _acceleration.add(_scratchV1.set(dxP, dyP, dzP).normalize().multiplyScalar(fear));
+                    if (dSqP < EAT_RADIUS_SQ) nextDeath = 1.0;
+                }
+
+                const edgeK = 0.012;
+                if (_position.x < -BOUNDARY_SIZE) _acceleration.x += (-BOUNDARY_SIZE - _position.x) * edgeK;
+                if (_position.x > BOUNDARY_SIZE) _acceleration.x -= (_position.x - BOUNDARY_SIZE) * edgeK;
+                if (_position.y < -BOUNDARY_SIZE) _acceleration.y += (-BOUNDARY_SIZE - _position.y) * edgeK;
+                if (_position.y > BOUNDARY_SIZE) _acceleration.y -= (_position.y - BOUNDARY_SIZE) * edgeK;
+                if (_position.z < 20) _acceleration.z += (20 - _position.z) * edgeK;
+                if (_position.z > BOUNDARY_SIZE + 20) _acceleration.z -= (_position.z - (BOUNDARY_SIZE + 20)) * edgeK;
+
+                const dxT = _position.x - target.x;
+                const dyT = _position.y - target.y;
+                const dzT = _position.z - target.z;
+                const dSqToTarget = dxT * dxT + dyT * dyT + dzT * dzT;
+                if (dSqToTarget < MOUSE_REPULSION_SQ) {
+                    const repel = (1 - (dSqToTarget / MOUSE_REPULSION_SQ)) * MOUSE_REPULSION_WEIGHT * 0.05;
+                    _acceleration.add(_scratchV1.set(dxT, dyT, dzT).normalize().multiplyScalar(repel));
+                }
+
+                const wOff = t * 0.11 + i * 0.173;
+                _scratchV1.set(Math.sin(wOff) * 0.008, Math.cos(wOff * 0.8) * 0.008, Math.sin(wOff * 0.47) * 0.006);
+                _acceleration.add(_scratchV1);
+                _acceleration.clampLength(0, 0.1);
+
+                _velocity.addScaledVector(_acceleration, dtNorm);
+                const speed = _velocity.length();
+                if (speed > 0.0001) {
+                    const desiredSpeed = Math.min(maxSpeeds[i], TARGET_SPEED + (scales[i] - 0.75) * 0.2);
+                    const speedDelta = (desiredSpeed - speed) * SPEED_FORCE * dtNorm;
+                    _velocity.add(_scratchV1.copy(_velocity).divideScalar(speed).multiplyScalar(speedDelta));
+                }
+                if (isTerminal) applyUIAvoidanceForce();
+                _velocity.clampLength(0.08, maxSpeeds[i]);
+                _position.addScaledVector(_velocity, dtNorm);
+            }
+
+            positionsNext[idx] = _position.x; positionsNext[idx + 1] = _position.y; positionsNext[idx + 2] = _position.z;
+            velocitiesNext[idx] = _velocity.x; velocitiesNext[idx + 1] = _velocity.y; velocitiesNext[idx + 2] = _velocity.z;
+            deathTimersNext[i] = nextDeath;
+        }
+
+        const pSwap = positions;
+        positions = positionsNext;
+        positionsNext = pSwap;
+
+        const vSwap = velocities;
+        velocities = velocitiesNext;
+        velocitiesNext = vSwap;
+
+        const dSwap = deathTimers;
+        deathTimers = deathTimersNext;
+        deathTimersNext = dSwap;
+
+        updatePredator(dtNorm, now);
+    }
+
+    function updateBoidInstances(t: number, intFactor: number, dtNorm: number) {
+        const maxObs = boidCount * (isTerminal ? 0.55 : 0.20);
+        const alpha = 1 - Math.pow(1 - ORIENTATION_SMOOTHING, Math.max(0.5, dtNorm));
+        _baseCol.set(color);
+
+        for (let i = 0; i < boidCount; i++) {
+            const idx = i * 3;
+            const qIdx = i * 4;
+            const d = deathTimers[i];
+            _position.set(positions[idx], positions[idx + 1], positions[idx + 2]);
+            _velocity.set(velocities[idx], velocities[idx + 1], velocities[idx + 2]);
+
+            if (d > 0) {
+                _tempColor.set(0xff0000).lerp(_baseCol, 1.0 - d);
+                _lookAt.copy(_position).add(_velocity);
+                _dummy.scale.setScalar(scales[i] * Math.max(0.1, d));
+            } else {
+                const isObserver = intFactor > 0.02 && (i < maxObs * intFactor);
+                if (isObserver && uiRect) {
+                    if (isTerminal && typingPoint) {
+                        _lookAt
+                            .set((typingPoint.x / window.innerWidth) * 2 - 1, -(typingPoint.y / window.innerHeight) * 2 + 1, 0.5)
+                            .unproject(camera);
+                    } else {
+                        _lookAt
+                            .set(((uiRect.left + uiRect.right) * 0.5 / window.innerWidth) * 2 - 1, -((uiRect.top + uiRect.bottom) * 0.5 / window.innerHeight) * 2 + 1, 0.5)
+                            .unproject(camera);
+                    }
+                    const pulse = 1.0 + Math.sin(t * (2.0 + recruitmentLevel * 2.0) + i) * (0.05 + recruitmentLevel * 0.1);
+                    _tempColor.copy(_baseCol);
+                    if (recruitmentLevel > 0.2) _tempColor.lerp(_whiteCol, Math.min((recruitmentLevel - 0.2) * 1.5, 0.95));
+                    _tempColor.multiplyScalar(pulse);
+                } else {
+                    _lookAt.copy(_position).add(_velocity);
+                    _tempColor.copy(_baseCol).multiplyScalar(0.72 + (scales[i] - 0.7) * 0.5);
+                }
+                _dummy.scale.setScalar(scales[i]);
+            }
+
+            _quatCurrent.set(orientations[qIdx], orientations[qIdx + 1], orientations[qIdx + 2], orientations[qIdx + 3]);
+            _dummy.position.copy(_position);
+            _dummy.lookAt(_lookAt);
+            _quatTarget.copy(_dummy.quaternion);
+            _quatCurrent.slerp(_quatTarget, alpha);
+            _dummy.quaternion.copy(_quatCurrent);
+
+            orientations[qIdx] = _dummy.quaternion.x;
+            orientations[qIdx + 1] = _dummy.quaternion.y;
+            orientations[qIdx + 2] = _dummy.quaternion.z;
+            orientations[qIdx + 3] = _dummy.quaternion.w;
+
+            mesh.setColorAt(i, _tempColor);
+            _dummy.updateMatrix();
+            mesh.setMatrixAt(i, _dummy.matrix);
+        }
+
+        mesh.instanceColor!.needsUpdate = true;
+        mesh.instanceMatrix.needsUpdate = true;
+    }
+
     function animate() {
         frameStartTime = performance.now();
         frameId = requestAnimationFrame(animate);
@@ -672,11 +1028,14 @@
 
         target.set((mouse.x * window.innerWidth) / 20, -(mouse.y * window.innerHeight) / 20, 0);
 
+        const frameDeltaSec = Math.min(MAX_FRAME_DELTA_SEC, Math.max(0.0001, (now - simLastTime) * 0.001));
+        simLastTime = now;
+        const frameDtNorm = frameDeltaSec * 60;
+
         const timeSinceInteraction = now - lastInteractionTime;
         const interactionActive = isTerminal && timeSinceInteraction < 60000;
-        
-        if (isTerminal && timeSinceInteraction < 2000) { recruitmentLevel = Math.min(1, recruitmentLevel + 0.0005); } 
-        else { recruitmentLevel = Math.max(0, recruitmentLevel - 0.008); }
+        if (isTerminal && timeSinceInteraction < 2000) recruitmentLevel = Math.min(1, recruitmentLevel + 0.0005 * frameDtNorm);
+        else recruitmentLevel = Math.max(0, recruitmentLevel - 0.008 * frameDtNorm);
 
         // Update UI rect dynamically (throttled) for drag tracking.
         if (recruitmentLevel > 0 && !isTerminal) {
@@ -686,148 +1045,13 @@
             updateUIBounds(now);
         }
 
-        const maxObs = boidCount * (isTerminal ? 0.55 : 0.20);
         const intFactor = recruitmentLevel * (interactionActive ? Math.pow(Math.max(0, 1 - (timeSinceInteraction / 60000)), 0.5) : 0);
-        _baseCol.set(color);
-
-        for (let i = 0; i < boidCount; i++) {
-            const idx = i * 3;
-            _position.set(positions[idx], positions[idx + 1], positions[idx + 2]);
-            _velocity.set(velocities[idx], velocities[idx + 1], velocities[idx + 2]);
-            _acceleration.set(0, 0, 0);
-
-            // DEATH / EATING EFFECT
-            if (deathTimers[i] > 0) {
-                deathTimers[i] -= 0.025;
-                if (deathTimers[i] <= 0) {
-                    _position.set((Math.random()-0.5)*350, (Math.random()-0.5)*350, 20+Math.random()*100);
-                    _velocity.set((Math.random()-0.5), (Math.random()-0.5), 1).normalize().multiplyScalar(SPEED_LIMIT);
-                }
-                _tempColor.set(0xff0000).lerp(_baseCol, 1.0 - deathTimers[i]);
-                mesh.setColorAt(i, _tempColor);
-                const s = scales[i] * Math.max(0, deathTimers[i]);
-                _dummy.position.copy(_position);
-                _dummy.scale.set(s, s, s);
-                _dummy.updateMatrix();
-                mesh.setMatrixAt(i, _dummy.matrix);
-                positions[idx] = _position.x; positions[idx+1] = _position.y; positions[idx+2] = _position.z;
-                continue;
-            }
-
-            const isObserver = intFactor > 0.02 && (i < maxObs * intFactor);
-
-            if (isObserver && uiRect) {
-                const angle = (i * 137.5) * (Math.PI / 180); 
-                const margin = 120 + (i % 4) * 60; 
-                
-                const timeOff = t * (0.2 + (i % 5) * 0.05) + i;
-                let tsx = (uiRect.left + uiRect.right) * 0.5 + Math.cos(angle) * (uiRect.width * 0.5 + margin) + Math.sin(timeOff) * 15;
-                let tsy = (uiRect.top + uiRect.bottom) * 0.5 + Math.sin(angle) * (uiRect.height * 0.5 + margin) + Math.cos(timeOff) * 15;
-                
-                // Force outside terminal area (Observer Avoidance)
-                if (tsx > uiRect.left - 40 && tsx < uiRect.right + 40 && tsy > uiRect.top - 40 && tsy < uiRect.bottom + 40) {
-                    const dx = tsx - (uiRect.left + uiRect.right) * 0.5;
-                    const dy = tsy - (uiRect.top + uiRect.bottom) * 0.5;
-                    if (Math.abs(dx) > Math.abs(dy)) tsx = dx > 0 ? uiRect.right + 80 : uiRect.left - 80;
-                    else tsy = dy > 0 ? uiRect.bottom + 80 : uiRect.top - 80;
-                }
-
-                _diff.set((tsx / window.innerWidth) * 2 - 1, -(tsy / window.innerHeight) * 2 + 1, 0.2).unproject(camera);
-                _position.lerp(_diff, 0.06);
-                _velocity.set(0, 0, 0);
-
-                // In Terminal mode, have observers watch the prompt area, not the card center.
-                if (isTerminal && typingPoint) {
-                    _lookAt
-                        .set((typingPoint.x / window.innerWidth) * 2 - 1, -(typingPoint.y / window.innerHeight) * 2 + 1, 0.5)
-                        .unproject(camera);
-                } else {
-                    _lookAt
-                        .set(((uiRect.left + uiRect.right) * 0.5 / window.innerWidth) * 2 - 1, -((uiRect.top + uiRect.bottom) * 0.5 / window.innerHeight) * 2 + 1, 0.5)
-                        .unproject(camera);
-                }
-                
-                const pulse = 1.0 + Math.sin(t * (2.0 + recruitmentLevel * 2.0) + i) * (0.05 + recruitmentLevel * 0.1);
-                _tempColor.copy(_baseCol);
-                if (recruitmentLevel > 0.2) _tempColor.lerp(_whiteCol, Math.min((recruitmentLevel-0.2)*1.5, 0.95));
-                _tempColor.multiplyScalar(pulse);
-                mesh.setColorAt(i, _tempColor);
-                _dummy.scale.set(scales[i], scales[i], scales[i]);
-
-                // Terminal-only: observers must stay outside the terminal card (they "watch" from the edges).
-                if (isTerminal && uiRect) keepOutsideUIRectScreenSpace();
-
-                // keepOutsideUIRectScreenSpace() can modify _position, so apply it before building the instance matrix.
-                _dummy.position.copy(_position);
-                _dummy.lookAt(_lookAt);
-            } else {
-                _alignF.set(0, 0, 0); _cohF.set(0, 0, 0); _sepF.set(0, 0, 0);
-                let aC = 0, cC = 0, sC = 0;
-
-                for (let j = 0; j < boidCount; j++) {
-                    if (i === j || deathTimers[j] > 0) continue;
-                    const dx = _position.x - positions[j*3], dy = _position.y - positions[j*3+1], dz = _position.z - positions[j*3+2];
-                    const dSq = dx*dx+dy*dy+dz*dz;
-                    
-                    if (dSq < PROTECTED_RANGE_SQ && dSq > 0.01) { _sepF.x += dx; _sepF.y += dy; _sepF.z += dz; sC++; }
-                    if (dSq < VISUAL_RANGE_SQ && dSq > 0.01) {
-                        _cohF.x += positions[j*3]; _cohF.y += positions[j*3+1]; _cohF.z += positions[j*3+2]; cC++;
-                        _alignF.x += velocities[j*3]; _alignF.y += velocities[j*3+1]; _alignF.z += velocities[j*3+2]; aC++;
-                    }
-                }
-
-                if (sC > 0 && _sepF.lengthSq() > 0.001) _acceleration.add(_sepF.normalize().multiplyScalar(SEPARATION_WEIGHT * 0.15));
-                if (cC > 0) _acceleration.add(_cohF.divideScalar(cC).sub(_position).normalize().multiplyScalar(COHESION_WEIGHT * 0.015));
-                if (aC > 0) _acceleration.add(_alignF.divideScalar(aC).normalize().sub(_velocity).multiplyScalar(ALIGNMENT_WEIGHT * 0.05));
-
-                // Predator avoidance & Kill logic
-                const dxP = _position.x - _predPos.x, dyP = _position.y - _predPos.y, dzP = _position.z - _predPos.z;
-                const dSqP = dxP*dxP + dyP*dyP + dzP*dzP;
-                if (dSqP < 3000) { 
-                    _acceleration.add(_scratchV1.set(dxP, dyP, dzP).normalize().multiplyScalar(0.4));
-                    if (dSqP < EAT_RADIUS_SQ) {
-                        deathTimers[i] = 1.0; // Start eating effect
-                    }
-                }
-
-                // Stay within boundaries
-                const turn = 0.1;
-                if (_position.x < -BOUNDARY_SIZE) _acceleration.x += turn;
-                if (_position.x > BOUNDARY_SIZE) _acceleration.x -= turn;
-                if (_position.y < -BOUNDARY_SIZE) _acceleration.y += turn;
-                if (_position.y > BOUNDARY_SIZE) _acceleration.y -= turn;
-                if (_position.z < 20) _acceleration.z += turn;
-                if (_position.z > BOUNDARY_SIZE + 20) _acceleration.z -= turn;
-
-                const dxT = _position.x - target.x, dyT = _position.y - target.y, dzT = _position.z - target.z;
-                const dSqToTarget = dxT*dxT + dyT*dyT + dzT*dzT;
-                if (dSqToTarget < MOUSE_REPULSION_SQ) {
-                    _scratchV1.set(dxT, dyT, dzT).normalize().multiplyScalar(MOUSE_REPULSION_WEIGHT * 0.045);
-                    _acceleration.add(_scratchV1);
-                }
-                
-                // Personality wander (low frequency)
-                const wOff = t * 0.1 + i * 0.1;
-                _scratchV1.set(Math.sin(wOff) * 0.01, Math.cos(wOff * 0.8) * 0.01, Math.sin(wOff * 0.4) * 0.008);
-                _acceleration.add(_scratchV1);
-                _acceleration.clampLength(0, 0.12);
-                
-                _velocity.add(_acceleration).clampLength(0.1, maxSpeeds[i]);
-                _position.add(_velocity);
-
-                _dummy.position.copy(_position);
-                if (_velocity.lengthSq() > 0.0001) _dummy.lookAt(_lookAt.copy(_position).add(_velocity));
-                _dummy.scale.set(scales[i], scales[i], scales[i]);
-                _tempColor.copy(_baseCol).multiplyScalar(0.7 + (scales[i]-0.7)*0.5);
-                mesh.setColorAt(i, _tempColor);
-            }
-
-            positions[idx] = _position.x; positions[idx+1] = _position.y; positions[idx+2] = _position.z;
-            velocities[idx] = _velocity.x; velocities[idx+1] = _velocity.y; velocities[idx+2] = _velocity.z;
-            _dummy.updateMatrix(); mesh.setMatrixAt(i, _dummy.matrix);
+        const simSubsteps = Math.min(MAX_SIM_SUBSTEPS, Math.max(1, Math.ceil(frameDeltaSec / MAX_SIM_STEP_SEC)));
+        const simStepNorm = frameDtNorm / simSubsteps;
+        for (let s = 0; s < simSubsteps; s++) {
+            simulateBoidsStep(simStepNorm, now, t, intFactor);
         }
-        mesh.instanceColor!.needsUpdate = true;
-        mesh.instanceMatrix.needsUpdate = true;
+        updateBoidInstances(t, intFactor, frameDtNorm);
 
         // Update Trails
         if (showTrails && trails) {
@@ -850,25 +1074,6 @@
             attr.needsUpdate = true;
         }
 
-        if (predTargetIdx < 0 || now > predTargetUntil) { predTargetIdx = Math.floor(Math.random() * boidCount); predTargetUntil = now + 5000; }
-        const tIdx = predTargetIdx * 3;
-        const predict = _lookAt.set(positions[tIdx] + velocities[tIdx] * PREDATOR_PREDICT_T, positions[tIdx+1] + velocities[tIdx+1] * PREDATOR_PREDICT_T, positions[tIdx+2] + velocities[tIdx+2] * PREDATOR_PREDICT_T);
-        
-        _diff.copy(predict).sub(_predPos);
-        if (_diff.lengthSq() > 0.001) {
-            const steer = _scratchV1.copy(_diff).setLength(PREDATOR_SPEED).sub(_predVel).clampLength(0, PREDATOR_MAX_STEER);
-            _predVel.add(steer).clampLength(PREDATOR_MIN_SPEED, PREDATOR_SPEED);
-        }
-
-        const pTurn = 0.08;
-        if (_predPos.x < -BOUNDARY_SIZE) _predVel.x += pTurn;
-        if (_predPos.x > BOUNDARY_SIZE) _predVel.x -= pTurn;
-        if (_predPos.y < -BOUNDARY_SIZE) _predVel.y += pTurn;
-        if (_predPos.y > BOUNDARY_SIZE) _predVel.y -= pTurn;
-        if (_predPos.z < 20) _predVel.z += pTurn;
-        if (_predPos.z > BOUNDARY_SIZE + 20) _predVel.z -= pTurn;
-
-        _predPos.add(_predVel);
         if (predator) { 
             predator.position.copy(_predPos); 
             if (_predVel.lengthSq() > 0.001) predator.lookAt(_lookAt.copy(_predPos).add(_predVel)); 
@@ -887,7 +1092,9 @@
     }
 
     onMount(() => {
-        init(); animate();
+        init();
+        simLastTime = performance.now();
+        animate();
         uiTargetElement = (document.getElementById('boid-target') as HTMLElement | null) ?? (document.querySelector('main') as HTMLElement | null);
         if (uiTargetElement) {
             uiRect = uiTargetElement.getBoundingClientRect();
