@@ -429,9 +429,35 @@
         uniform float time;
         uniform float dayPhase;
         uniform float tension;
+        uniform float nightStart;
+        uniform float nightFull;
+        uniform float milkyWayAngle;
+        uniform float milkyWayWidth;
+        uniform float milkyWayCenter;
+        uniform float bandDensity;
+        uniform float globalDensity;
         varying vec2 vUv;
-        float hash31(vec3 p) { return fract(sin(dot(p, vec3(127.1, 311.7, 74.7))) * 43758.5453); }
         float hash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+        float valueNoise(vec2 p) {
+            vec2 i = floor(p);
+            vec2 f = fract(p);
+            vec2 u = f * f * (3.0 - 2.0 * f);
+            float a = hash(i);
+            float b = hash(i + vec2(1.0, 0.0));
+            float c = hash(i + vec2(0.0, 1.0));
+            float d = hash(i + vec2(1.0, 1.0));
+            return mix(mix(a, b, u.x), mix(c, d, u.x), u.y);
+        }
+        float fbm(vec2 p) {
+            float v = 0.0;
+            float a = 0.5;
+            for (int i = 0; i < 4; i++) {
+                v += a * valueNoise(p);
+                p = p * 2.03 + vec2(17.3, 9.2);
+                a *= 0.5;
+            }
+            return v;
+        }
         void main() {
             vec2 uv = vUv;
             float sun = clamp(sin(dayPhase * 6.28318) * 0.5 + 0.5, 0.0, 1.0);
@@ -441,10 +467,37 @@
             vec3 dayHorizon = vec3(0.3, 0.55, 0.85);
             vec3 skyResult = mix(mix(nightHorizon, dayHorizon, pow(sun, 1.1)), mix(nightZenith, dayZenith, pow(sun, 1.2)), pow(uv.y, 0.85));
             skyResult *= (1.0 - tension * 0.75);
+
             float night = 1.0 - sun;
-            float starNoise = hash(uv * vec2(1800.0, 1000.0));
-            float stars = step(0.994, starNoise) * night;
-            skyResult += stars * vec3(1.0, 1.0, 1.2) * (0.6 + night);
+            float nightGate = smoothstep(nightStart, nightFull, night);
+
+            vec2 centered = uv - vec2(0.5);
+            float c = cos(milkyWayAngle);
+            float s = sin(milkyWayAngle);
+            vec2 ruv = vec2(
+                centered.x * c - centered.y * s,
+                centered.x * s + centered.y * c
+            );
+            float bandDist = abs(ruv.y - milkyWayCenter);
+            float bandMask = exp(-pow(bandDist / max(0.0001, milkyWayWidth), 2.0));
+            float bandClumpNoise = fbm(ruv * vec2(4.2, 13.0) + vec2(4.0, -1.5));
+            float bandClump = smoothstep(0.3, 0.88, bandClumpNoise);
+            float milkyWayMask = bandMask * mix(0.45, 1.0, bandClump);
+
+            float globalStarNoise = hash(uv * vec2(1680.0, 980.0) + vec2(13.7, 8.3));
+            float globalStars = step(globalDensity, globalStarNoise);
+            float bandStarNoise = hash(uv * vec2(2360.0, 1420.0) + vec2(77.2, 19.4));
+            float bandStars = step(bandDensity, bandStarNoise) * milkyWayMask;
+
+            float twinkleSeed = hash(uv * vec2(560.0, 310.0) + vec2(91.2, 43.7));
+            float twinkle = 0.94 + 0.06 * sin(time * 0.8 + twinkleSeed * 6.28318);
+            float starMix = (globalStars * 0.48 + bandStars * 1.12) * nightGate * twinkle;
+            float starHue = hash(uv * vec2(3020.0, 1810.0) + vec2(7.4, 92.8));
+            vec3 starColor = mix(vec3(0.82, 0.9, 1.0), vec3(1.0, 0.97, 0.9), starHue);
+            skyResult += starMix * starColor * (0.62 + nightGate);
+
+            float bandGlow = milkyWayMask * nightGate * 0.08;
+            skyResult += bandGlow * vec3(0.2, 0.24, 0.34);
             gl_FragColor = vec4(skyResult, 1.0);
         }
     `;
@@ -473,7 +526,18 @@
         // BG
         const bgGeo = new THREE.PlaneGeometry(2, 2);
         bgMesh = new THREE.Mesh(bgGeo, new THREE.ShaderMaterial({
-            uniforms: { time: { value: 0 }, dayPhase: { value: 0.25 }, tension: { value: 0 } },
+            uniforms: {
+                time: { value: 0 },
+                dayPhase: { value: 0.25 },
+                tension: { value: 0 },
+                nightStart: { value: 0.62 },
+                nightFull: { value: 0.82 },
+                milkyWayAngle: { value: -0.62 },
+                milkyWayWidth: { value: 0.17 },
+                milkyWayCenter: { value: 0.02 },
+                bandDensity: { value: 0.994 },
+                globalDensity: { value: 0.99835 }
+            },
             vertexShader: bgVertexShader, fragmentShader: bgFragmentShader, depthWrite: false
         }));
         bgMesh.renderOrder = -1;
