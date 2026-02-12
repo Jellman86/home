@@ -1,4 +1,5 @@
 <script lang="ts">
+    import { onMount } from 'svelte';
     import BoidBackground from '$lib/components/BoidBackground.svelte';
     import Blueprint from '$lib/components/themes/Blueprint.svelte';
     import Terminal from '$lib/components/themes/Terminal.svelte';
@@ -73,6 +74,12 @@
     let boidCount = $derived(themes[currentTheme].count);
     let variant = $derived(themes[currentTheme].variant);
     let isTerminal = $derived(currentTheme === 'terminal');
+    let clockNow = $state(0);
+    let observeStrength = $derived(
+        isTerminal
+            ? Math.max(0, Math.pow(Math.max(0, 1 - ((clockNow - lastInteractionTime) / 60000)), 0.7))
+            : 0
+    );
     
     // Data
     const portfolioData: PortfolioData = {
@@ -127,6 +134,16 @@
             currentTheme = 'terminal';
         }
     }
+
+    onMount(() => {
+        let raf = 0;
+        const tick = () => {
+            clockNow = performance.now();
+            raf = requestAnimationFrame(tick);
+        };
+        tick();
+        return () => cancelAnimationFrame(raf);
+    });
 </script>
 
 <svelte:head>
@@ -152,6 +169,11 @@
             {gitHash}
         />
     {/key}
+
+    <div
+        class="terminal-observe-pulse pointer-events-none absolute inset-0 z-[5]"
+        style="opacity: {observeStrength * 0.42}; --pulse-alpha: {0.04 + observeStrength * 0.16}; --vignette-alpha: {0.02 + observeStrength * 0.14};"
+    ></div>
 
     <!-- UI Overlay -->
     <main class="relative z-10">
@@ -246,5 +268,19 @@
     :global(body) {
         margin: 0;
         overflow-x: hidden; 
+    }
+
+    .terminal-observe-pulse {
+        background:
+            radial-gradient(55% 45% at 50% 50%, rgba(233, 84, 32, var(--pulse-alpha)) 0%, rgba(233, 84, 32, 0) 72%),
+            radial-gradient(120% 90% at 50% 50%, rgba(0, 0, 0, var(--vignette-alpha)) 0%, rgba(0, 0, 0, 0) 78%);
+        animation: ominousPulse 4.8s ease-in-out infinite;
+        transition: opacity 350ms ease;
+        transform-origin: center center;
+    }
+
+    @keyframes ominousPulse {
+        0%, 100% { transform: scale(1); filter: saturate(1) brightness(1); }
+        50% { transform: scale(1.02); filter: saturate(1.12) brightness(1.08); }
     }
 </style>

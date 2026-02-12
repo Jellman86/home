@@ -662,11 +662,14 @@
             const bgCol = new THREE.Color(backgroundColor);
             const bgLuma = 0.2126 * bgCol.r + 0.7152 * bgCol.g + 0.0722 * bgCol.b;
             const lightMode = bgLuma > 0.6;
+            const forceBloodRed = lightMode && wireframe && !isTerminal;
+            const predTone = forceBloodRed ? '#8B0000' : predatorColor;
             pMat.transparent = false;
             pMat.opacity = 1.0;
-            pMat.color.set(predatorColor);
-            pMat.emissive.set(predatorColor);
-            pMat.emissiveIntensity = lightMode ? 0.35 : 0.85;
+            pMat.color.set(predTone);
+            pMat.emissive.set(predTone);
+            pMat.emissiveIntensity = forceBloodRed ? 1.15 : (lightMode ? 0.35 : 0.85);
+            pMat.needsUpdate = true;
             predator.visible = true; 
         }
         if (predTrailLine) {
