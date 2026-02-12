@@ -56,6 +56,7 @@
     
     let currentTheme = $state<ThemeKey>('blueprint');
     let lastBlueprintTheme = $state<ThemeKey>('blueprint'); // Remembers if we were in light or dark mode
+    let blueprintSkyCycleMode = $state(false);
     let lastInteractionTime = $state(0);
     let typingPoint = $state<{x: number, y: number} | null>(null);
     let showTrails = $state(false);
@@ -69,7 +70,7 @@
     let backgroundColor = $derived(themes[currentTheme].bg);
     let boidColor = $derived(themes[currentTheme].boids);
     let predatorColor = $derived(themes[currentTheme].predator);
-    let useSkybox = $derived(false); 
+    let useSkybox = $derived((currentTheme === 'blueprint' || currentTheme === 'blueprint_light') && blueprintSkyCycleMode); 
     let isWireframe = $derived(themes[currentTheme].wireframe);
     let boidCount = $derived(themes[currentTheme].count);
     let variant = $derived(themes[currentTheme].variant);
@@ -135,6 +136,10 @@
         }
     }
 
+    function toggleBlueprintSkyCycle() {
+        blueprintSkyCycleMode = !blueprintSkyCycleMode;
+    }
+
     onMount(() => {
         let raf = 0;
         const tick = () => {
@@ -177,7 +182,15 @@
 
     <!-- UI Overlay -->
     <main class="relative z-10">
-        <ActiveComponent data={portfolioData} {variant} bind:showTrails={showTrails} toggleTheme={toggleLightDark} onInteraction={handleInteraction} />
+        <ActiveComponent
+            data={portfolioData}
+            {variant}
+            bind:showTrails={showTrails}
+            skyCycleMode={blueprintSkyCycleMode}
+            toggleSkyCycle={toggleBlueprintSkyCycle}
+            toggleTheme={toggleLightDark}
+            onInteraction={handleInteraction}
+        />
     </main>
 
     <!-- Theme Switcher & Stats -->

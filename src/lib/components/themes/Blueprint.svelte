@@ -7,12 +7,16 @@
         data, 
         variant = 'dark', 
         showTrails = $bindable(false),
+        skyCycleMode = false,
+        toggleSkyCycle,
         toggleTheme,
         onInteraction
     }: { 
         data: PortfolioData, 
         variant?: 'light' | 'dark', 
         showTrails?: boolean,
+        skyCycleMode?: boolean,
+        toggleSkyCycle?: () => void,
         toggleTheme?: () => void,
         onInteraction?: () => void
     } = $props();
@@ -79,19 +83,23 @@
 
 <div class="flex items-center justify-center min-h-screen p-4 font-mono {colors.text} overflow-hidden" in:fade={{ duration: 300 }}>
     <!-- Dynamic Grid Background (Parallax) -->
-    <div class="fixed inset-0 pointer-events-none" 
-         style="
-            background-image: 
-                linear-gradient({colors.grid} 1px, transparent 1px), 
-                linear-gradient(90deg, {colors.grid} 1px, transparent 1px); 
-            background-size: 40px 40px; 
-            transform: translate({-$mouseCoords.x * 0.02}px, {-$mouseCoords.y * 0.02}px);
-         ">
-    </div>
+    {#if !skyCycleMode}
+        <div class="fixed inset-0 pointer-events-none" 
+            style="
+                background-image: 
+                    linear-gradient({colors.grid} 1px, transparent 1px), 
+                    linear-gradient(90deg, {colors.grid} 1px, transparent 1px); 
+                background-size: 40px 40px; 
+                transform: translate({-$mouseCoords.x * 0.02}px, {-$mouseCoords.y * 0.02}px);
+            ">
+        </div>
+    {/if}
     
     <!-- Measurement Crosshairs (Fixed to screen) -->
-    <div class="fixed top-0 bottom-0 w-px bg-current opacity-10 pointer-events-none z-0" style="left: {$mouseCoords.x}px"></div>
-    <div class="fixed left-0 right-0 h-px bg-current opacity-10 pointer-events-none z-0" style="top: {$mouseCoords.y}px"></div>
+    {#if !skyCycleMode}
+        <div class="fixed top-0 bottom-0 w-px bg-current opacity-10 pointer-events-none z-0" style="left: {$mouseCoords.x}px"></div>
+        <div class="fixed left-0 right-0 h-px bg-current opacity-10 pointer-events-none z-0" style="top: {$mouseCoords.y}px"></div>
+    {/if}
 
     <!-- Draggable Container -->
     <div 
@@ -166,6 +174,19 @@
                 </button>
                 {/if}
 
+                {#if toggleSkyCycle}
+                <button
+                    onclick={toggleSkyCycle}
+                    class="w-6 h-6 flex items-center justify-center border {colors.border} rounded transition-colors focus:outline-none {skyCycleMode ? 'text-amber-300 bg-amber-500/20' : variant === 'dark' ? 'hover:bg-blue-500 hover:text-white' : 'hover:bg-blue-600 hover:text-white'}"
+                    title={skyCycleMode ? "Disable Sky Cycle Background" : "Enable Sky Cycle Background"}
+                    aria-label="Toggle Sky Cycle Background"
+                >
+                    <svg class="w-3 h-3 pointer-events-none" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 3l1.532 3.104L16 7.5l-2.734 2.665L13.9 14 11 12.5 8.1 14l.634-3.835L6 7.5l3.468-.396L11 3zM18.5 15l.75 1.52 1.68.24-1.215 1.183.287 1.677-1.502-.79-1.502.79.287-1.677L16.07 16.76l1.68-.24L18.5 15z" />
+                    </svg>
+                </button>
+                {/if}
+
                 <!-- Minimize Button -->
                 <button 
                     onclick={toggleMinimize}
@@ -183,7 +204,9 @@
             <!-- Left Column: Content -->
             <div class="p-8 md:p-10 space-y-10 border-r {colors.border} relative overflow-hidden">
                 <!-- Scanline effect (subtler) -->
-                <div class="absolute inset-0 bg-gradient-to-b from-transparent via-current to-transparent h-[20%] w-full animate-scan pointer-events-none opacity-[0.03]"></div>
+                {#if !skyCycleMode}
+                    <div class="absolute inset-0 bg-gradient-to-b from-transparent via-current to-transparent h-[20%] w-full animate-scan pointer-events-none opacity-[0.03]"></div>
+                {/if}
 
                 <div>
                     <h3 class="{colors.accent} mb-2 text-[10px] tracking-[0.3em] uppercase flex items-center gap-2 font-bold opacity-80">
@@ -251,7 +274,7 @@
             <div class="relative p-8 md:p-10 flex flex-col items-center justify-center {variant === 'dark' ? 'bg-blue-950/20' : 'bg-blue-50/50'} overflow-hidden">
                 
                 <!-- Space Background (Dark Mode) -->
-                {#if variant === 'dark'}
+                {#if variant === 'dark' && !skyCycleMode}
                     <div class="absolute inset-0 pointer-events-none">
                         <!-- Nebula -->
                         <div class="absolute inset-0 bg-[radial-gradient(circle_at_50%_50%,_rgba(79,70,229,0.2)_0%,_transparent_60%)]"></div>
@@ -269,10 +292,12 @@
                 {/if}
 
                 <!-- Radial Dial Background -->
-                <div class="absolute inset-0 flex items-center justify-center opacity-20 pointer-events-none">
-                    <div class="w-64 h-64 rounded-full border {colors.border} border-dashed animate-[spin_60s_linear_infinite]"></div>
-                    <div class="absolute w-56 h-56 rounded-full border {colors.border} animate-[spin_40s_linear_infinite_reverse]"></div>
-                </div>
+                {#if !skyCycleMode}
+                    <div class="absolute inset-0 flex items-center justify-center opacity-20 pointer-events-none">
+                        <div class="w-64 h-64 rounded-full border {colors.border} border-dashed animate-[spin_60s_linear_infinite]"></div>
+                        <div class="absolute w-56 h-56 rounded-full border {colors.border} animate-[spin_40s_linear_infinite_reverse]"></div>
+                    </div>
+                {/if}
 
                 <div class="relative w-48 h-48 group cursor-help">
                     <!-- Planetary Rings (Jupiter Belt) -->
@@ -291,7 +316,9 @@
                             class="w-full h-full object-cover grayscale opacity-60 mix-blend-luminosity hover:opacity-100 hover:mix-blend-normal transition-all duration-500 scale-110" 
                         />
                         <!-- Digital Noise Overlay -->
-                        <div class="absolute inset-0 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-30 mix-blend-overlay pointer-events-none"></div>
+                        {#if !skyCycleMode}
+                            <div class="absolute inset-0 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-30 mix-blend-overlay pointer-events-none"></div>
+                        {/if}
                     </div>
                 </div>
             </div>
