@@ -487,36 +487,45 @@
             );
             float bandOffset = ruv.y - milkyWayCenter;
             float bandCore = exp(-pow(bandOffset / max(0.0001, milkyWayWidth), 2.0));
-            float bandWing = exp(-pow(bandOffset / max(0.0001, milkyWayWidth * 2.8), 2.0));
+            float bandWing = exp(-pow(bandOffset / max(0.0001, milkyWayWidth * 2.9), 2.0));
+            float bandSpine = exp(-pow(bandOffset / max(0.0001, milkyWayWidth * 0.42), 2.0));
 
-            float cloudA = fbm(ruv * vec2(3.4, 10.8) + vec2(2.0, -0.6));
-            float cloudB = fbm(ruv * vec2(8.8, 18.0) + vec2(-3.0, 1.8));
-            float cloud = mix(cloudA, cloudB, 0.45);
-            float cloudBoost = smoothstep(0.22, 0.92, cloud);
-            float dustNoise = fbm(ruv * vec2(10.5, 25.0) + vec2(5.1, -2.7));
-            float dustLanes = smoothstep(0.44, 0.78, dustNoise) * smoothstep(0.12, 0.9, bandWing);
-            float milkyWayBody = bandWing * (0.18 + 0.82 * cloudBoost) * (1.0 - dustLanes * milkyWayDust);
+            float longitudinal = fbm(vec2(ruv.x * 2.4 + 3.7, 0.25));
+            float cloudA = fbm(ruv * vec2(3.1, 9.4) + vec2(2.0, -0.6));
+            float cloudB = fbm(ruv * vec2(8.3, 18.7) + vec2(-3.0, 1.8));
+            float cloud = mix(mix(cloudA, cloudB, 0.45), longitudinal, 0.32);
+            float cloudBoost = smoothstep(0.18, 0.9, cloud);
+
+            float dustNoise = fbm(ruv * vec2(11.5, 28.0) + vec2(5.1, -2.7));
+            float darkRiftNoise = fbm(ruv * vec2(14.2, 34.0) + vec2(-7.0, 4.5));
+            float dustLanes = smoothstep(0.42, 0.79, dustNoise) * bandWing;
+            float darkRift = smoothstep(0.35, 0.78, darkRiftNoise) * bandSpine;
+
+            float milkyWayBody = bandWing * (0.2 + 0.8 * cloudBoost);
+            milkyWayBody *= (1.0 - dustLanes * milkyWayDust);
+            milkyWayBody *= (1.0 - darkRift * min(1.0, milkyWayDust * 1.25));
             milkyWayBody = clamp(milkyWayBody, 0.0, 1.0);
 
             float globalStarNoise = hash(uv * vec2(1680.0, 980.0) + vec2(13.7, 8.3));
-            float globalStars = step(globalDensity, globalStarNoise);
+            float globalStars = step(globalDensity + 0.00035, globalStarNoise);
             float bandStarNoise = hash(uv * vec2(2360.0, 1420.0) + vec2(77.2, 19.4));
-            float localBandThreshold = clamp(mix(bandDensity + 0.0035, bandDensity - 0.0045, milkyWayBody), 0.94, 0.9999);
-            float bandStars = step(localBandThreshold, bandStarNoise) * bandCore * (0.35 + milkyWayBody * 0.9);
+            float localBandThreshold = clamp(bandDensity + 0.0022 - milkyWayBody * 0.009, 0.965, 0.99995);
+            float bandStars = step(localBandThreshold, bandStarNoise) * (0.2 + 1.55 * bandCore);
             float brightStarNoise = hash(uv * vec2(720.0, 440.0) + vec2(21.0, 52.0));
-            float brightStars = step(0.9992, brightStarNoise) * (0.35 + milkyWayBody * 0.8);
+            float brightStars = step(0.99925, brightStarNoise) * (0.32 + milkyWayBody * 0.9);
 
             float twinkleSeed = hash(uv * vec2(560.0, 310.0) + vec2(91.2, 43.7));
             float twinkle = 0.96 + 0.04 * sin(time * 0.6 + twinkleSeed * 6.28318);
-            float starMix = (globalStars * 0.38 + bandStars * 1.35 + brightStars * 0.6) * nightGate * twinkle;
+            float starMix = (globalStars * 0.2 + bandStars * 1.7 + brightStars * 0.72) * nightGate * twinkle;
             float starHue = hash(uv * vec2(3020.0, 1810.0) + vec2(7.4, 92.8));
             vec3 starColor = mix(vec3(0.78, 0.86, 1.0), vec3(1.0, 0.95, 0.88), starHue);
             skyResult += starMix * starColor * (0.62 + nightGate);
 
             vec3 milkyTint = mix(vec3(0.22, 0.28, 0.4), vec3(0.55, 0.63, 0.82), cloudBoost);
-            float milkyGlow = nightGate * milkyWayGlow * milkyWayBody;
+            float milkyGlow = nightGate * milkyWayGlow * (0.35 * bandWing + 0.85 * milkyWayBody);
             skyResult += milkyTint * milkyGlow;
-            skyResult *= 1.0 - nightGate * dustLanes * 0.23;
+            skyResult *= 1.0 - nightGate * dustLanes * 0.24;
+            skyResult *= 1.0 - nightGate * darkRift * 0.32;
 
             float knots = smoothstep(0.72, 0.95, cloudB) * bandCore * nightGate;
             skyResult += vec3(0.45, 0.5, 0.65) * knots * 0.22;
@@ -554,13 +563,13 @@
                 tension: { value: 0 },
                 nightStart: { value: 0.62 },
                 nightFull: { value: 0.82 },
-                milkyWayAngle: { value: -0.62 },
-                milkyWayWidth: { value: 0.17 },
+                milkyWayAngle: { value: -0.98 },
+                milkyWayWidth: { value: 0.135 },
                 milkyWayCenter: { value: 0.02 },
-                bandDensity: { value: 0.994 },
-                globalDensity: { value: 0.99835 },
-                milkyWayGlow: { value: 0.26 },
-                milkyWayDust: { value: 0.82 }
+                bandDensity: { value: 0.9958 },
+                globalDensity: { value: 0.99915 },
+                milkyWayGlow: { value: 0.34 },
+                milkyWayDust: { value: 0.88 }
             },
             vertexShader: bgVertexShader, fragmentShader: bgFragmentShader, depthWrite: false
         }));
