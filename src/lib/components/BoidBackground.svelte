@@ -96,8 +96,7 @@
                 backgroundUniforms: bgMesh ? {
                     time: (bgMesh.material as THREE.ShaderMaterial).uniforms.time.value,
                     dayPhase: (bgMesh.material as THREE.ShaderMaterial).uniforms.dayPhase.value,
-                    tension: (bgMesh.material as THREE.ShaderMaterial).uniforms.tension.value,
-                    pulse: (bgMesh.material as THREE.ShaderMaterial).uniforms.pulse.value
+                    tension: (bgMesh.material as THREE.ShaderMaterial).uniforms.tension.value
                 } : null
             },
             camera: {
@@ -430,7 +429,6 @@
         uniform float time;
         uniform float dayPhase;
         uniform float tension;
-        uniform float pulse;
         varying vec2 vUv;
         float hash31(vec3 p) { return fract(sin(dot(p, vec3(127.1, 311.7, 74.7))) * 43758.5453); }
         float hash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
@@ -447,9 +445,6 @@
             float starNoise = hash(uv * vec2(1800.0, 1000.0));
             float stars = step(0.997, starNoise) * night;
             skyResult += stars * vec3(1.0, 1.0, 1.2) * (0.6 + night);
-            float radial = 1.0 - clamp(length(uv - vec2(0.5)) * 1.6, 0.0, 1.0);
-            skyResult += vec3(0.22, 0.08, 0.04) * pulse * radial * 0.35;
-            skyResult *= 1.0 + pulse * (0.04 + radial * 0.08);
             gl_FragColor = vec4(skyResult, 1.0);
         }
     `;
@@ -478,7 +473,7 @@
         // BG
         const bgGeo = new THREE.PlaneGeometry(2, 2);
         bgMesh = new THREE.Mesh(bgGeo, new THREE.ShaderMaterial({
-            uniforms: { time: { value: 0 }, dayPhase: { value: 0.25 }, tension: { value: 0 }, pulse: { value: 0 } },
+            uniforms: { time: { value: 0 }, dayPhase: { value: 0.25 }, tension: { value: 0 } },
             vertexShader: bgVertexShader, fragmentShader: bgFragmentShader, depthWrite: false
         }));
         bgMesh.renderOrder = -1;
@@ -1101,7 +1096,6 @@
             const m = bgMesh.material as THREE.ShaderMaterial;
             const observedPulse = intFactor > 0.08 ? (0.5 + 0.5 * Math.sin(t * 2.4)) * 0.14 : 0;
             m.uniforms.tension.value = Math.min(1, recruitmentLevel + observedPulse);
-            m.uniforms.pulse.value = intFactor > 0.08 ? (0.5 + 0.5 * Math.sin(t * (2.1 + typingRampFactor * 2.8))) * (0.12 + typingRampFactor * 0.24) : 0;
         }
         const simSubsteps = Math.min(MAX_SIM_SUBSTEPS, Math.max(1, Math.ceil(frameDeltaSec / MAX_SIM_STEP_SEC)));
         const simStepNorm = frameDtNorm / simSubsteps;
