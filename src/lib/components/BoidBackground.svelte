@@ -722,24 +722,27 @@
             tMat.opacity = isTerminal ? 0.28 : 0.55;
             trails.visible = showTrails;
         }
+        const bgCol = new THREE.Color(backgroundColor);
+        const bgLuma = 0.2126 * bgCol.r + 0.7152 * bgCol.g + 0.0722 * bgCol.b;
+        const lightMode = bgLuma > 0.6;
+        const forceBloodRed = lightMode && wireframe && !isTerminal;
+
         if (predator) { 
             const pMat = predator.material as THREE.MeshLambertMaterial;
-            const bgCol = new THREE.Color(backgroundColor);
-            const bgLuma = 0.2126 * bgCol.r + 0.7152 * bgCol.g + 0.0722 * bgCol.b;
-            const lightMode = bgLuma > 0.6;
-            const forceBloodRed = lightMode && wireframe && !isTerminal;
-            const predTone = forceBloodRed ? '#8B0000' : predatorColor;
+            const predTone = forceBloodRed ? '#b30000' : predatorColor;
             pMat.transparent = false;
             pMat.opacity = 1.0;
+            // Keep blueprint light-mode predator visibly red by bypassing tone mapping compression.
+            pMat.toneMapped = !forceBloodRed;
             pMat.color.set(predTone);
             pMat.emissive.set(predTone);
-            pMat.emissiveIntensity = forceBloodRed ? 1.15 : (lightMode ? 0.35 : 0.85);
+            pMat.emissiveIntensity = forceBloodRed ? 2.35 : (lightMode ? 0.35 : 0.85);
             pMat.needsUpdate = true;
             predator.visible = true; 
         }
         if (predTrailLine) {
             const pMat = predTrailLine.material as THREE.LineBasicMaterial;
-            pMat.color.set(predatorColor);
+            pMat.color.set(forceBloodRed ? '#b30000' : predatorColor);
             pMat.opacity = isTerminal ? 0.35 : 0.55;
             predTrailLine.visible = showTrails;
         }
