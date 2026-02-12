@@ -242,6 +242,7 @@
     
     let recruitmentLevel = $state(0);
     let typingDurationSec = 0;
+    let skySunLevel = $state(0.5);
     let scene: THREE.Scene;
     let camera: THREE.PerspectiveCamera;
     let renderer: THREE.WebGLRenderer;
@@ -302,6 +303,9 @@
     const OBSERVER_SCREEN_PADDING_PX = 96; // extra padding so observer geometry doesn't clip into the UI
     const OBSERVER_DISTANCE_FROM_CAMERA = 30; // 50% closer again for stronger looming
     const ORIENTATION_SMOOTHING = 0.24;
+    const SKY_DAY_PREDATOR_COLOR = '#3f434b';
+    const BLOOD_RED_PREDATOR_COLOR = '#b30000';
+    const SKY_DAY_THRESHOLD = 0.58;
 
     function applyUIAvoidanceForce(extraPaddingPx = 0) {
         // Softly push boids away from UI bounds to avoid hard teleports and jitter.
@@ -436,6 +440,8 @@
         uniform float milkyWayCenter;
         uniform float bandDensity;
         uniform float globalDensity;
+        uniform float milkyWayGlow;
+        uniform float milkyWayDust;
         varying vec2 vUv;
         float hash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
         float valueNoise(vec2 p) {
@@ -478,26 +484,41 @@
                 centered.x * c - centered.y * s,
                 centered.x * s + centered.y * c
             );
-            float bandDist = abs(ruv.y - milkyWayCenter);
-            float bandMask = exp(-pow(bandDist / max(0.0001, milkyWayWidth), 2.0));
-            float bandClumpNoise = fbm(ruv * vec2(4.2, 13.0) + vec2(4.0, -1.5));
-            float bandClump = smoothstep(0.3, 0.88, bandClumpNoise);
-            float milkyWayMask = bandMask * mix(0.45, 1.0, bandClump);
+            float bandOffset = ruv.y - milkyWayCenter;
+            float bandCore = exp(-pow(bandOffset / max(0.0001, milkyWayWidth), 2.0));
+            float bandWing = exp(-pow(bandOffset / max(0.0001, milkyWayWidth * 2.8), 2.0));
+
+            float cloudA = fbm(ruv * vec2(3.4, 10.8) + vec2(2.0, -0.6));
+            float cloudB = fbm(ruv * vec2(8.8, 18.0) + vec2(-3.0, 1.8));
+            float cloud = mix(cloudA, cloudB, 0.45);
+            float cloudBoost = smoothstep(0.22, 0.92, cloud);
+            float dustNoise = fbm(ruv * vec2(10.5, 25.0) + vec2(5.1, -2.7));
+            float dustLanes = smoothstep(0.44, 0.78, dustNoise) * smoothstep(0.12, 0.9, bandWing);
+            float milkyWayBody = bandWing * (0.18 + 0.82 * cloudBoost) * (1.0 - dustLanes * milkyWayDust);
+            milkyWayBody = clamp(milkyWayBody, 0.0, 1.0);
 
             float globalStarNoise = hash(uv * vec2(1680.0, 980.0) + vec2(13.7, 8.3));
             float globalStars = step(globalDensity, globalStarNoise);
             float bandStarNoise = hash(uv * vec2(2360.0, 1420.0) + vec2(77.2, 19.4));
-            float bandStars = step(bandDensity, bandStarNoise) * milkyWayMask;
+            float localBandThreshold = clamp(mix(bandDensity + 0.0035, bandDensity - 0.0045, milkyWayBody), 0.94, 0.9999);
+            float bandStars = step(localBandThreshold, bandStarNoise) * bandCore * (0.35 + milkyWayBody * 0.9);
+            float brightStarNoise = hash(uv * vec2(720.0, 440.0) + vec2(21.0, 52.0));
+            float brightStars = step(0.9992, brightStarNoise) * (0.35 + milkyWayBody * 0.8);
 
             float twinkleSeed = hash(uv * vec2(560.0, 310.0) + vec2(91.2, 43.7));
-            float twinkle = 0.94 + 0.06 * sin(time * 0.8 + twinkleSeed * 6.28318);
-            float starMix = (globalStars * 0.48 + bandStars * 1.12) * nightGate * twinkle;
+            float twinkle = 0.96 + 0.04 * sin(time * 0.6 + twinkleSeed * 6.28318);
+            float starMix = (globalStars * 0.38 + bandStars * 1.35 + brightStars * 0.6) * nightGate * twinkle;
             float starHue = hash(uv * vec2(3020.0, 1810.0) + vec2(7.4, 92.8));
-            vec3 starColor = mix(vec3(0.82, 0.9, 1.0), vec3(1.0, 0.97, 0.9), starHue);
+            vec3 starColor = mix(vec3(0.78, 0.86, 1.0), vec3(1.0, 0.95, 0.88), starHue);
             skyResult += starMix * starColor * (0.62 + nightGate);
 
-            float bandGlow = milkyWayMask * nightGate * 0.08;
-            skyResult += bandGlow * vec3(0.2, 0.24, 0.34);
+            vec3 milkyTint = mix(vec3(0.22, 0.28, 0.4), vec3(0.55, 0.63, 0.82), cloudBoost);
+            float milkyGlow = nightGate * milkyWayGlow * milkyWayBody;
+            skyResult += milkyTint * milkyGlow;
+            skyResult *= 1.0 - nightGate * dustLanes * 0.23;
+
+            float knots = smoothstep(0.72, 0.95, cloudB) * bandCore * nightGate;
+            skyResult += vec3(0.45, 0.5, 0.65) * knots * 0.22;
             gl_FragColor = vec4(skyResult, 1.0);
         }
     `;
@@ -536,7 +557,9 @@
                 milkyWayWidth: { value: 0.17 },
                 milkyWayCenter: { value: 0.02 },
                 bandDensity: { value: 0.994 },
-                globalDensity: { value: 0.99835 }
+                globalDensity: { value: 0.99835 },
+                milkyWayGlow: { value: 0.26 },
+                milkyWayDust: { value: 0.82 }
             },
             vertexShader: bgVertexShader, fragmentShader: bgFragmentShader, depthWrite: false
         }));
@@ -679,6 +702,51 @@
         (predTrailLine.geometry.getAttribute('position') as THREE.BufferAttribute).needsUpdate = true;
     }
 
+    function getPredatorAppearance() {
+        const bgCol = new THREE.Color(backgroundColor);
+        const bgLuma = 0.2126 * bgCol.r + 0.7152 * bgCol.g + 0.0722 * bgCol.b;
+        const lightMode = bgLuma > 0.6;
+        const blueprintMode = wireframe && !isTerminal;
+        const skyCycleMode = blueprintMode && useSkybox;
+        const skyCycleDay = skyCycleMode && skySunLevel > SKY_DAY_THRESHOLD;
+        const forceBloodRed = blueprintMode && lightMode && !skyCycleMode;
+
+        if (skyCycleDay) {
+            return {
+                tone: SKY_DAY_PREDATOR_COLOR,
+                emissiveIntensity: 0.22,
+                toneMapped: true
+            };
+        }
+
+        return {
+            tone: forceBloodRed ? BLOOD_RED_PREDATOR_COLOR : predatorColor,
+            emissiveIntensity: forceBloodRed ? 2.35 : (lightMode ? 0.35 : 0.85),
+            toneMapped: !forceBloodRed
+        };
+    }
+
+    function applyPredatorAppearance() {
+        const appearance = getPredatorAppearance();
+        if (predator) {
+            const pMat = predator.material as THREE.MeshLambertMaterial;
+            pMat.transparent = false;
+            pMat.opacity = 1.0;
+            pMat.toneMapped = appearance.toneMapped;
+            pMat.color.set(appearance.tone);
+            pMat.emissive.set(appearance.tone);
+            pMat.emissiveIntensity = appearance.emissiveIntensity;
+            pMat.needsUpdate = true;
+            predator.visible = true;
+        }
+        if (predTrailLine) {
+            const pMat = predTrailLine.material as THREE.LineBasicMaterial;
+            pMat.color.set(appearance.tone);
+            pMat.opacity = isTerminal ? 0.35 : 0.55;
+            predTrailLine.visible = showTrails;
+        }
+    }
+
     function updateUIBounds(now: number) {
         // Layout reads are expensive; throttle.
         if (!uiTargetElement || now - lastUIRectUpdateAt < 200) return;
@@ -722,30 +790,7 @@
             tMat.opacity = isTerminal ? 0.28 : 0.55;
             trails.visible = showTrails;
         }
-        const bgCol = new THREE.Color(backgroundColor);
-        const bgLuma = 0.2126 * bgCol.r + 0.7152 * bgCol.g + 0.0722 * bgCol.b;
-        const lightMode = bgLuma > 0.6;
-        const forceBloodRed = lightMode && wireframe && !isTerminal;
-
-        if (predator) { 
-            const pMat = predator.material as THREE.MeshLambertMaterial;
-            const predTone = forceBloodRed ? '#b30000' : predatorColor;
-            pMat.transparent = false;
-            pMat.opacity = 1.0;
-            // Keep blueprint light-mode predator visibly red by bypassing tone mapping compression.
-            pMat.toneMapped = !forceBloodRed;
-            pMat.color.set(predTone);
-            pMat.emissive.set(predTone);
-            pMat.emissiveIntensity = forceBloodRed ? 2.35 : (lightMode ? 0.35 : 0.85);
-            pMat.needsUpdate = true;
-            predator.visible = true; 
-        }
-        if (predTrailLine) {
-            const pMat = predTrailLine.material as THREE.LineBasicMaterial;
-            pMat.color.set(forceBloodRed ? '#b30000' : predatorColor);
-            pMat.opacity = isTerminal ? 0.35 : 0.55;
-            predTrailLine.visible = showTrails;
-        }
+        applyPredatorAppearance();
     });
 
     $effect(() => {
@@ -1126,7 +1171,9 @@
             m.uniforms.time.value = t;
             const dayNightSpeed = useSkybox && !isTerminal ? 0.028 : 0.004;
             m.uniforms.dayPhase.value = (t * dayNightSpeed + 0.25) % 1.0;
+            skySunLevel = Math.max(0, Math.min(1, Math.sin(m.uniforms.dayPhase.value * 6.28318) * 0.5 + 0.5));
         }
+        applyPredatorAppearance();
 
         if (pointLight) {
             if (isTerminal && typingPoint) {
