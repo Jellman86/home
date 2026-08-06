@@ -10,7 +10,8 @@
         skyCycleMode = false,
         toggleSkyCycle,
         toggleTheme,
-        onInteraction
+        onInteraction,
+        onLinkActivate
     }: { 
         data: PortfolioData, 
         variant?: 'light' | 'dark', 
@@ -18,7 +19,8 @@
         skyCycleMode?: boolean,
         toggleSkyCycle?: () => void,
         toggleTheme?: () => void,
-        onInteraction?: () => void
+        onInteraction?: () => void,
+        onLinkActivate?: (label: string | null) => void
     } = $props();
 
     let position = $state({ x: 0, y: 0 });
@@ -228,7 +230,14 @@
                     </h3>
                     <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
                         {#each data.links as link, i}
-                            <div class="relative group flex border {colors.border} {variant === 'dark' ? 'bg-blue-950/30 hover:bg-blue-900/40' : 'bg-blue-50/50 hover:bg-blue-100/80'} transition-all overflow-hidden">
+                            <!-- svelte-ignore a11y_no_static_element_interactions -->
+                            <div
+                                class="relative group flex border {colors.border} {variant === 'dark' ? 'bg-blue-950/30 hover:bg-blue-900/40' : 'bg-blue-50/50 hover:bg-blue-100/80'} transition-all overflow-hidden"
+                                onmouseenter={() => onLinkActivate?.(link.label)}
+                                onmouseleave={() => onLinkActivate?.(null)}
+                                onfocusin={() => onLinkActivate?.(link.label)}
+                                onfocusout={() => onLinkActivate?.(null)}
+                            >
                                 <!-- Main Link Area -->
                                 <a href={link.url} target="_blank" rel="noopener noreferrer" class="flex-1 flex items-center gap-3 p-3 z-10 outline-none focus:bg-blue-500/10 transition-colors">
                                     <div class="absolute inset-0 {colors.highlight} opacity-0 group-hover:opacity-5 translate-x-[-100%] group-hover:translate-x-0 transition-transform duration-300 pointer-events-none"></div>
