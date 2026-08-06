@@ -5,6 +5,8 @@ All notable changes to this project will be documented in this file.
 ## [Unreleased]
 
 ### Added
+- **Optimisarr Project Link**: Added Optimisarr to the links list.
+- **Per-Project Background Modes**: Hovering or keyboard-focusing the Optimisarr link resolves the flock into a macroblock grid, evoking a video encode, and eases back to boids on leave. Implemented as a render-time blend over the existing simulation, so the flock keeps running underneath and no second scene is needed.
 - **Reduced-Motion Support**: Added `prefers-reduced-motion` handling so the boid simulation renders a single still frame instead of animating, and responds live when the preference changes.
 - **Social Sharing Metadata**: Added Open Graph and Twitter card tags plus a canonical URL, so shared links render a card rather than a bare URL.
 - **Blueprint Sky Cycle Toggle**: Added a dedicated Blueprint control to switch between overlay-heavy Blueprint backgrounds and full sky-cycle rendering.

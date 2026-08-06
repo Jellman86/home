@@ -15,6 +15,8 @@
         lastInteractionTime?: number;
         typingPoint?: {x: number, y: number} | null;
         gitHash?: string;
+        /** 'boids' flocks freely; 'macroblocks' resolves the flock into an encode grid. */
+        backgroundMode?: 'boids' | 'macroblocks';
     }
 
     let { 
@@ -29,7 +31,8 @@
         isTerminal = false,
         lastInteractionTime = 0,
         typingPoint = null,
-        gitHash = 'unknown'
+        gitHash = 'unknown',
+        backgroundMode = 'boids'
     }: Props = $props();
 
     let debugMode = $state(false);
@@ -288,6 +291,36 @@
     const _predPos = new THREE.Vector3();
     const _predVel = new THREE.Vector3();
     const _predDesiredDir = new THREE.Vector3();
+    const _macroTarget = new THREE.Vector3();
+    // The cone has four radial segments, so its base sits diamond-on to the screen.
+    // Roll it 45 degrees so blocks land square with the viewport.
+    const _quatFlat = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 0, 1), Math.PI / 4);
+
+    // Macroblock mode is a render-time blend laid over the simulation rather than a
+    // second physics model: the flock keeps running underneath, so easing back out
+    // costs nothing and the sim can never be left in a broken state.
+    const MACROBLOCK_COLS = 40;
+    const MACROBLOCK_SPAN_X = 470;
+    const MACROBLOCK_SPAN_Y = 280;
+    const MACROBLOCK_EASE = 0.045;
+    const MACROBLOCK_BLOCK_W = 5.4;
+    const MACROBLOCK_BLOCK_H = 5.4;
+    const MACROBLOCK_BLOCK_D = 0.3;
+    let macroblockFactor = 0;
+
+    function macroblockTarget(i: number, out: THREE.Vector3) {
+        const cols = MACROBLOCK_COLS;
+        const rows = Math.max(1, Math.ceil(boidCount / cols));
+        const col = i % cols;
+        const row = Math.floor(i / cols);
+        // Quantised positions, with a small deterministic depth stagger so the grid
+        // reads as blocks settling rather than a flat wall.
+        out.set(
+            (cols > 1 ? col / (cols - 1) - 0.5 : 0) * MACROBLOCK_SPAN_X,
+            (rows > 1 ? row / (rows - 1) - 0.5 : 0) * MACROBLOCK_SPAN_Y,
+            18 + ((i * 37) % 11) * 1.6
+        );
+    }
     const _quatCurrent = new THREE.Quaternion();
     const _quatTarget = new THREE.Quaternion();
     const _observerTarget = new THREE.Vector2();
@@ -1165,6 +1198,10 @@
 
             _quatCurrent.set(orientations[qIdx], orientations[qIdx + 1], orientations[qIdx + 2], orientations[qIdx + 3]);
             _dummy.position.copy(_position);
+            if (macroblockFactor > 0.001) {
+                macroblockTarget(i, _macroTarget);
+                _dummy.position.lerp(_macroTarget, macroblockFactor);
+            }
             if (observerShakeAmp > 0) {
                 _dummy.position.x += Math.sin(t * (14 + typingRampFactor * 40) + i * 1.37) * observerShakeAmp;
                 _dummy.position.y += Math.cos(t * (17 + typingRampFactor * 45) + i * 1.73) * observerShakeAmp;
@@ -1174,6 +1211,19 @@
             _quatTarget.copy(_dummy.quaternion);
             _quatCurrent.slerp(_quatTarget, alpha);
             _dummy.quaternion.copy(_quatCurrent);
+
+            if (macroblockFactor > 0.001) {
+                // The bird is a square-based pyramid pointing at the camera, so facing
+                // it flat and squashing its depth turns each one into a square plate:
+                // macroblocks resolving, with no second mesh needed.
+                _dummy.quaternion.slerp(_quatFlat, macroblockFactor);
+                const s = _dummy.scale.x;
+                _dummy.scale.set(
+                    s + (MACROBLOCK_BLOCK_W - s) * macroblockFactor,
+                    s + (MACROBLOCK_BLOCK_H - s) * macroblockFactor,
+                    s + (MACROBLOCK_BLOCK_D - s) * macroblockFactor
+                );
+            }
 
             orientations[qIdx] = _dummy.quaternion.x;
             orientations[qIdx + 1] = _dummy.quaternion.y;
@@ -1201,6 +1251,11 @@
             avgFrameTime = lastFrameTime;
         }
         const t = now * 0.001;
+
+        // Ease toward the requested mode so hovering in and out glides.
+        const macroblockGoal = backgroundMode === 'macroblocks' ? 1 : 0;
+        macroblockFactor += (macroblockGoal - macroblockFactor) * MACROBLOCK_EASE;
+        if (Math.abs(macroblockGoal - macroblockFactor) < 0.001) macroblockFactor = macroblockGoal;
 
         // Keep the UI bounds updated so Terminal observer mode stays outside the card.
         // (Also fixes cases where the initial bounds accidentally used <main> instead of the terminal card.)

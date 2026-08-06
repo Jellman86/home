@@ -78,6 +78,11 @@
     let variant = $derived(themes[currentTheme].variant);
     let isTerminal = $derived(currentTheme === 'terminal');
     let clockNow = $state(0);
+    // A link can nominate a background; hovering or focusing it swaps the scene.
+    let activeLinkLabel = $state<string | null>(null);
+    let backgroundMode = $derived(
+        activeLinkLabel === 'Optimisarr' ? 'macroblocks' as const : 'boids' as const
+    );
     let observeStrength = $derived(
         isTerminal
             ? Math.max(0, Math.pow(Math.max(0, 1 - ((clockNow - lastInteractionTime) / 60000)), 0.7))
@@ -95,6 +100,11 @@
                 url: "https://github.com/Jellman86/YetAnother-WhosAtMyFeeder", 
                 icon: "🚀",
                 demoUrl: "https://yetanotherwhosatmyfeeder.pownet.uk"
+            },
+            {
+                label: "Optimisarr",
+                url: "https://github.com/Jellman86/optimisarr",
+                icon: "🎞️"
             },
             { label: "GitHub", url: "https://github.com/jellman86", icon: "💻" },
             { label: "LinkedIn", url: "https://www.linkedin.com/in/scott-powdrill-3b727b10b/", icon: "💼" } 
@@ -174,6 +184,7 @@
             {lastInteractionTime}
             {typingPoint}
             {gitHash}
+            {backgroundMode}
         />
     {/key}
 
@@ -192,6 +203,7 @@
             toggleSkyCycle={toggleBlueprintSkyCycle}
             toggleTheme={toggleLightDark}
             onInteraction={handleInteraction}
+            onLinkActivate={(label: string | null) => (activeLinkLabel = label)}
         />
     </main>
 
