@@ -271,7 +271,9 @@
             </div>
 
             <!-- Right Column: Visual Diagnostics -->
-            <div class="relative p-8 md:p-10 flex flex-col items-center justify-center {variant === 'dark' ? 'bg-blue-950/20' : 'bg-blue-50/50'} overflow-hidden">
+            <!-- pb-32 lg:pb-10: on narrow screens the columns stack, so this block sits
+                 under the fixed diagnostics toolbar without extra bottom clearance. -->
+            <div class="relative p-8 md:p-10 pb-32 lg:pb-10 flex flex-col items-center justify-center {variant === 'dark' ? 'bg-blue-950/20' : 'bg-blue-50/50'} overflow-hidden">
                 
                 <!-- Space Background (Dark Mode) -->
                 {#if variant === 'dark' && !skyCycleMode}

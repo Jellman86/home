@@ -1304,10 +1304,35 @@
         lastFrameTime = performance.now() - frameStartTime;
     }
 
+    // The whole page background is continuous motion, so honour a reduced-motion
+    // request by drawing the scene once and leaving it still rather than hiding it.
+    let motionQuery: MediaQueryList | null = null;
+    let prefersReducedMotion = false;
+
+    function renderStillFrame() {
+        if (renderer && scene && camera) renderer.render(scene, camera);
+    }
+
+    function startMotion() {
+        if (frameId) cancelAnimationFrame(frameId);
+        simLastTime = performance.now();
+        animate();
+    }
+
+    function stopMotion() {
+        if (frameId) cancelAnimationFrame(frameId);
+        frameId = 0;
+        renderStillFrame();
+    }
+
     onMount(() => {
         init();
         simLastTime = performance.now();
-        animate();
+
+        motionQuery = window.matchMedia('(prefers-reduced-motion: reduce)');
+        prefersReducedMotion = motionQuery.matches;
+        if (prefersReducedMotion) renderStillFrame();
+        else animate();
         uiTargetElement = (document.getElementById('boid-target') as HTMLElement | null) ?? (document.querySelector('main') as HTMLElement | null);
         if (uiTargetElement) {
             uiRect = uiTargetElement.getBoundingClientRect();
@@ -1327,12 +1352,20 @@
             mouse.x = (e.clientX / window.innerWidth) * 2 - 1;
             mouse.y = -(e.clientY / window.innerHeight) * 2 + 1;
         };
+        const onMotionPreferenceChange = (event: MediaQueryListEvent) => {
+            prefersReducedMotion = event.matches;
+            if (prefersReducedMotion) stopMotion();
+            else startMotion();
+        };
+
         window.addEventListener('resize', onResize);
         window.addEventListener('mousemove', onMouseMove);
+        motionQuery?.addEventListener('change', onMotionPreferenceChange);
 
         onDestroy(() => {
             window.removeEventListener('resize', onResize);
             window.removeEventListener('mousemove', onMouseMove);
+            motionQuery?.removeEventListener('change', onMotionPreferenceChange);
         });
     });
 

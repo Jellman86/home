@@ -5,6 +5,8 @@ All notable changes to this project will be documented in this file.
 ## [Unreleased]
 
 ### Added
+- **Reduced-Motion Support**: Added `prefers-reduced-motion` handling so the boid simulation renders a single still frame instead of animating, and responds live when the preference changes.
+- **Social Sharing Metadata**: Added Open Graph and Twitter card tags plus a canonical URL, so shared links render a card rather than a bare URL.
 - **Blueprint Sky Cycle Toggle**: Added a dedicated Blueprint control to switch between overlay-heavy Blueprint backgrounds and full sky-cycle rendering.
 - **Day/Night Sky Shader**: Added a procedural skybox cycle with night-gated stars and atmospheric transitions.
 - **Milky Way Band Pass**: Added a diagonal Milky Way lane with clustered density, dust-lane attenuation, and bright/dark side asymmetry for a more natural galactic look.
@@ -12,6 +14,7 @@ All notable changes to this project will be documented in this file.
 - **Terminal Observation Escalation**: Added observer recruitment escalation under typing pressure, including shake/flash behavior ramps.
 
 ### Fixed
+- **Mobile Toolbar Overlap**: Fixed the fixed diagnostics toolbar covering the portrait on narrow screens by giving the stacked visual column bottom clearance.
 - **Sky Toggle Restore Path**: Fixed Blueprint sky toggle state so disabling sky-cycle reliably restores the normal Blueprint background layers.
 - **Observer/UI Collision**: Fixed observer boids clipping into or bouncing off terminal UI bounds in terminal mode.
 - **Observer Orientation and Depth**: Fixed observer-facing logic so looming boids orient toward the interaction center and hold closer camera-relative depth.
