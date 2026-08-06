@@ -104,26 +104,18 @@
     <!-- Draggable Container -->
     <div 
         id="boid-target"
-        class="relative w-full max-w-5xl border {colors.border} {colors.bg} backdrop-blur-md pointer-events-auto transition-all duration-300"
+        class="relative w-full max-w-5xl border {colors.border} {colors.bg} backdrop-blur-md rounded-lg overflow-hidden pointer-events-auto transition-all duration-300"
         style="
-            transform: translate({position.x}px, {position.y}px); 
-            transition: transform {isDragging ? '0s' : '0.1s'}, height 0.3s; 
-            box-shadow: 0 0 0 1px {variant === 'dark' ? 'rgba(59, 130, 246, 0.1)' : 'rgba(37, 99, 235, 0.1)'}, 0 20px 50px -10px {colors.shadow};
+            transform: translate({position.x}px, {position.y}px);
+            transition: transform {isDragging ? '0s' : '0.1s'}, height 0.3s;
+            box-shadow: 0 25px 50px -12px {variant === 'dark' ? 'rgba(0, 0, 0, 0.75)' : 'rgba(30, 58, 138, 0.25)'};
         "
         in:scale={{ duration: 400, start: 0.95, opacity: 0 }}
     >
-        <!-- Complex Corner Markers -->
-        <svg class="absolute -top-2 -left-2 w-8 h-8 {colors.accent} pointer-events-none" viewBox="0 0 32 32">
-            <path d="M0,0 L12,0 M0,0 L0,12" fill="none" stroke="currentColor" stroke-width="2"/>
-            <rect x="4" y="4" width="2" height="2" fill="currentColor" class="animate-pulse"/>
-        </svg>
-        <svg class="absolute -top-2 -right-2 w-8 h-8 {colors.accent} pointer-events-none rotate-90" viewBox="0 0 32 32">
-            <path d="M0,0 L12,0 M0,0 L0,12" fill="none" stroke="currentColor" stroke-width="2"/>
-        </svg>
-        <svg class="absolute -bottom-2 -left-2 w-8 h-8 {colors.accent} pointer-events-none -rotate-90" viewBox="0 0 32 32">
-            <path d="M0,0 L12,0 M0,0 L0,12" fill="none" stroke="currentColor" stroke-width="2"/>
-        </svg>
-        <svg class="absolute -bottom-2 -right-2 w-8 h-8 {colors.accent} pointer-events-none rotate-180" viewBox="0 0 32 32">
+        <!-- Single registration mark, inset and dimmed, reading as annotation on the
+             drawing rather than a second frame. The header already carries the
+             identity at the top, so a mark there only collides with its tick marks. -->
+        <svg class="absolute bottom-2.5 right-2.5 w-5 h-5 {colors.accent} opacity-40 pointer-events-none rotate-180 z-10" viewBox="0 0 32 32">
             <path d="M0,0 L12,0 M0,0 L0,12" fill="none" stroke="currentColor" stroke-width="2"/>
             <rect x="4" y="4" width="2" height="2" fill="currentColor" class="animate-pulse"/>
         </svg>

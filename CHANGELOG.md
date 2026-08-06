@@ -13,6 +13,9 @@ All notable changes to this project will be documented in this file.
 - **Theme-State Background Remounting**: Added sky-mode-aware boid layer remounting to ensure clean transitions when toggling sky-cycle mode.
 - **Terminal Observation Escalation**: Added observer recruitment escalation under typing pressure, including shake/flash behavior ramps.
 
+### Changed
+- **Blueprint Window Framing**: Reduced the Blueprint panel from three concentric frames to one. Removed the duplicate `0 0 0 1px` shadow ring, added rounded corners and a real drop shadow to match the Terminal window, and replaced the four protruding corner brackets with a single inset registration mark.
+
 ### Fixed
 - **Mobile Toolbar Overlap**: Fixed the fixed diagnostics toolbar covering the portrait on narrow screens by giving the stacked visual column bottom clearance.
 - **Sky Toggle Restore Path**: Fixed Blueprint sky toggle state so disabling sky-cycle reliably restores the normal Blueprint background layers.
