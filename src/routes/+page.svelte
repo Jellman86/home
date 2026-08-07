@@ -1,5 +1,6 @@
 <script lang="ts">
     import { onMount } from 'svelte';
+    import { base } from '$app/paths';
     import BoidBackground from '$lib/components/BoidBackground.svelte';
     import Blueprint from '$lib/components/themes/Blueprint.svelte';
     import Terminal from '$lib/components/themes/Terminal.svelte';
@@ -56,7 +57,6 @@
     
     let currentTheme = $state<ThemeKey>('blueprint');
     let lastBlueprintTheme = $state<ThemeKey>('blueprint'); // Remembers if we were in light or dark mode
-    let blueprintSkyCycleMode = $state(false);
     let lastInteractionTime = $state(0);
     let typingPoint = $state<{x: number, y: number} | null>(null);
     let showTrails = $state(false);
@@ -64,17 +64,15 @@
     let fps = $state(0);
     const gitHash = __GIT_HASH__; 
     let boidBackground = $state<any>(null);
-    let blueprintSkyCycleActive = $derived((currentTheme === 'blueprint' || currentTheme === 'blueprint_light') && blueprintSkyCycleMode);
 
     // Derived theme properties
     let ActiveComponent = $derived(themes[currentTheme].component);
     let backgroundColor = $derived(themes[currentTheme].bg);
     let boidColor = $derived(themes[currentTheme].boids);
     let predatorColor = $derived(themes[currentTheme].predator);
-    let useSkybox = $derived(blueprintSkyCycleActive); 
     let isWireframe = $derived(themes[currentTheme].wireframe);
     let boidCount = $derived(themes[currentTheme].count);
-    let boidLayerKey = $derived(`${boidCount}-${blueprintSkyCycleActive ? 'sky' : 'flat'}`);
+    let boidLayerKey = $derived(`${boidCount}`);
     let variant = $derived(themes[currentTheme].variant);
     let isTerminal = $derived(currentTheme === 'terminal');
     let clockNow = $state(0);
@@ -95,19 +93,21 @@
         avatarUrl: "https://avatars.githubusercontent.com/u/179294116?v=4",
         bio: "I love science, nature, and technology. Fascinated by the boundary where digital systems meet the natural world.",
         links: [
-            { 
-                label: "YA-WAMF", 
-                url: "https://github.com/Jellman86/YetAnother-WhosAtMyFeeder", 
+            {
+                label: "YA-WAMF",
+                url: "https://github.com/Jellman86/YetAnother-WhosAtMyFeeder",
                 icon: "🚀",
+                iconUrl: `${base}/icons/yawamf.png`,
                 demoUrl: "https://yetanotherwhosatmyfeeder.pownet.uk"
             },
             {
                 label: "Optimisarr",
                 url: "https://github.com/Jellman86/optimisarr",
-                icon: "🎞️"
+                icon: "🎞️",
+                iconUrl: `${base}/icons/optimisarr.png`
             },
-            { label: "GitHub", url: "https://github.com/jellman86", icon: "💻" },
-            { label: "LinkedIn", url: "https://www.linkedin.com/in/scott-powdrill-3b727b10b/", icon: "💼" } 
+            { label: "GitHub", url: "https://github.com/jellman86", icon: "💻", iconGlyph: "github" },
+            { label: "LinkedIn", url: "https://www.linkedin.com/in/scott-powdrill-3b727b10b/", icon: "💼", iconGlyph: "linkedin" }
         ]
     };
 
@@ -148,9 +148,6 @@
         }
     }
 
-    function toggleBlueprintSkyCycle() {
-        blueprintSkyCycleMode = !blueprintSkyCycleMode;
-    }
 
     onMount(() => {
         let raf = 0;
@@ -175,7 +172,6 @@
             {boidCount} 
             color={boidColor} 
             {backgroundColor} 
-            {useSkybox} 
             wireframe={isWireframe} 
             {predatorColor} 
             {showTrails} 
@@ -199,8 +195,6 @@
             data={portfolioData}
             {variant}
             bind:showTrails={showTrails}
-            skyCycleMode={blueprintSkyCycleActive}
-            toggleSkyCycle={toggleBlueprintSkyCycle}
             toggleTheme={toggleLightDark}
             onInteraction={handleInteraction}
             onLinkActivate={(label: string | null) => (activeLinkLabel = label)}

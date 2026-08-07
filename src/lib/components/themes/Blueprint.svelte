@@ -7,8 +7,6 @@
         data, 
         variant = 'dark', 
         showTrails = $bindable(false),
-        skyCycleMode = false,
-        toggleSkyCycle,
         toggleTheme,
         onInteraction,
         onLinkActivate
@@ -16,8 +14,6 @@
         data: PortfolioData, 
         variant?: 'light' | 'dark', 
         showTrails?: boolean,
-        skyCycleMode?: boolean,
-        toggleSkyCycle?: () => void,
         toggleTheme?: () => void,
         onInteraction?: () => void,
         onLinkActivate?: (label: string | null) => void
@@ -85,23 +81,19 @@
 
 <div class="flex items-center justify-center min-h-screen p-4 font-mono {colors.text} overflow-hidden" in:fade={{ duration: 300 }}>
     <!-- Dynamic Grid Background (Parallax) -->
-    {#if !skyCycleMode}
-        <div class="fixed inset-0 pointer-events-none" 
-            style="
-                background-image: 
-                    linear-gradient({colors.grid} 1px, transparent 1px), 
-                    linear-gradient(90deg, {colors.grid} 1px, transparent 1px); 
-                background-size: 40px 40px; 
-                transform: translate({-$mouseCoords.x * 0.02}px, {-$mouseCoords.y * 0.02}px);
-            ">
-        </div>
-    {/if}
+    <div class="fixed inset-0 pointer-events-none" 
+        style="
+            background-image: 
+                linear-gradient({colors.grid} 1px, transparent 1px), 
+                linear-gradient(90deg, {colors.grid} 1px, transparent 1px); 
+            background-size: 40px 40px; 
+            transform: translate({-$mouseCoords.x * 0.02}px, {-$mouseCoords.y * 0.02}px);
+        ">
+    </div>
     
     <!-- Measurement Crosshairs (Fixed to screen) -->
-    {#if !skyCycleMode}
-        <div class="fixed top-0 bottom-0 w-px bg-current opacity-10 pointer-events-none z-0" style="left: {$mouseCoords.x}px"></div>
-        <div class="fixed left-0 right-0 h-px bg-current opacity-10 pointer-events-none z-0" style="top: {$mouseCoords.y}px"></div>
-    {/if}
+    <div class="fixed top-0 bottom-0 w-px bg-current opacity-10 pointer-events-none z-0" style="left: {$mouseCoords.x}px"></div>
+    <div class="fixed left-0 right-0 h-px bg-current opacity-10 pointer-events-none z-0" style="top: {$mouseCoords.y}px"></div>
 
     <!-- Draggable Container -->
     <div 
@@ -168,19 +160,6 @@
                 </button>
                 {/if}
 
-                {#if toggleSkyCycle}
-                <button
-                    onclick={toggleSkyCycle}
-                    class="w-6 h-6 flex items-center justify-center border {colors.border} rounded transition-colors focus:outline-none {skyCycleMode ? 'text-amber-300 bg-amber-500/20' : variant === 'dark' ? 'hover:bg-blue-500 hover:text-white' : 'hover:bg-blue-600 hover:text-white'}"
-                    title={skyCycleMode ? "Disable Sky Cycle Background" : "Enable Sky Cycle Background"}
-                    aria-label="Toggle Sky Cycle Background"
-                >
-                    <svg class="w-3 h-3 pointer-events-none" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 3l1.532 3.104L16 7.5l-2.734 2.665L13.9 14 11 12.5 8.1 14l.634-3.835L6 7.5l3.468-.396L11 3zM18.5 15l.75 1.52 1.68.24-1.215 1.183.287 1.677-1.502-.79-1.502.79.287-1.677L16.07 16.76l1.68-.24L18.5 15z" />
-                    </svg>
-                </button>
-                {/if}
-
                 <!-- Minimize Button -->
                 <button 
                     onclick={toggleMinimize}
@@ -198,9 +177,7 @@
             <!-- Left Column: Content -->
             <div class="p-8 md:p-10 space-y-10 border-r {colors.border} relative overflow-hidden">
                 <!-- Scanline effect (subtler) -->
-                {#if !skyCycleMode}
-                    <div class="absolute inset-0 bg-gradient-to-b from-transparent via-current to-transparent h-[20%] w-full animate-scan pointer-events-none opacity-[0.03]"></div>
-                {/if}
+                <div class="absolute inset-0 bg-gradient-to-b from-transparent via-current to-transparent h-[20%] w-full animate-scan pointer-events-none opacity-[0.03]"></div>
 
                 <div>
                     <h3 class="{colors.accent} mb-2 text-[10px] tracking-[0.3em] uppercase flex items-center gap-2 font-bold opacity-80">
@@ -239,10 +216,36 @@
                                 onfocusout={() => onLinkActivate?.(null)}
                             >
                                 <!-- Main Link Area -->
-                                <a href={link.url} target="_blank" rel="noopener noreferrer" class="flex-1 flex items-center gap-3 p-3 z-10 outline-none focus:bg-blue-500/10 transition-colors">
+                                <a href={link.url} target="_blank" rel="noopener noreferrer" class="flex-1 min-w-0 flex items-center gap-2.5 p-3 z-10 outline-none focus:bg-blue-500/10 transition-colors">
                                     <div class="absolute inset-0 {colors.highlight} opacity-0 group-hover:opacity-5 translate-x-[-100%] group-hover:translate-x-0 transition-transform duration-300 pointer-events-none"></div>
                                     <span class="{colors.accent} font-bold text-xs">0{i+1}</span>
-                                    <span class="flex-1 uppercase tracking-wider text-xs font-bold {colors.text}">{link.label}</span>
+                                    <!-- One tile for every link so a raster favicon and an inline
+                                         brand mark share a silhouette instead of competing. -->
+                                    <span
+                                        class="shrink-0 w-6 h-6 grid place-items-center border {colors.border} rounded-sm {variant === 'dark' ? 'bg-blue-950/60' : 'bg-white/70'} overflow-hidden"
+                                        aria-hidden="true"
+                                    >
+                                        {#if link.iconUrl}
+                                            <img
+                                                src={link.iconUrl}
+                                                alt=""
+                                                width="16"
+                                                height="16"
+                                                loading="lazy"
+                                                decoding="async"
+                                                class="w-4 h-4 object-contain"
+                                            />
+                                        {:else if link.iconGlyph === 'github'}
+                                            <svg class="w-4 h-4 {colors.text}" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
+                                                <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27s1.36.09 2 .27c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8Z" />
+                                            </svg>
+                                        {:else if link.iconGlyph === 'linkedin'}
+                                            <svg class="w-4 h-4 {colors.text}" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
+                                                <path d="M3.6 5.7H1.1V15h2.5V5.7ZM2.35 1A1.45 1.45 0 1 0 2.35 3.9 1.45 1.45 0 0 0 2.35 1ZM15 9.7c0-2.6-1.4-3.8-3.26-3.8-1.5 0-2.17.82-2.55 1.4V5.7H6.7c.03.7 0 9.3 0 9.3h2.49V9.8c0-.22.02-.45.08-.61.18-.45.59-.91 1.28-.91.9 0 1.26.69 1.26 1.7V15H15V9.7Z" />
+                                            </svg>
+                                        {/if}
+                                    </span>
+                                    <span class="flex-1 min-w-0 truncate uppercase tracking-wider text-xs font-bold {colors.text}">{link.label}</span>
                                     <!-- Arrow Icon -->
                                     <svg class="w-3 h-3 {colors.accent} transform -translate-x-2 opacity-0 group-hover:opacity-100 group-hover:translate-x-0 transition-all" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3" />
@@ -277,7 +280,7 @@
             <div class="relative p-8 md:p-10 pb-32 lg:pb-10 flex flex-col items-center justify-center {variant === 'dark' ? 'bg-blue-950/20' : 'bg-blue-50/50'} overflow-hidden">
                 
                 <!-- Space Background (Dark Mode) -->
-                {#if variant === 'dark' && !skyCycleMode}
+                {#if variant === 'dark'}
                     <div class="absolute inset-0 pointer-events-none">
                         <!-- Nebula -->
                         <div class="absolute inset-0 bg-[radial-gradient(circle_at_50%_50%,_rgba(79,70,229,0.2)_0%,_transparent_60%)]"></div>
@@ -295,12 +298,10 @@
                 {/if}
 
                 <!-- Radial Dial Background -->
-                {#if !skyCycleMode}
-                    <div class="absolute inset-0 flex items-center justify-center opacity-20 pointer-events-none">
-                        <div class="w-64 h-64 rounded-full border {colors.border} border-dashed animate-[spin_60s_linear_infinite]"></div>
-                        <div class="absolute w-56 h-56 rounded-full border {colors.border} animate-[spin_40s_linear_infinite_reverse]"></div>
-                    </div>
-                {/if}
+                <div class="absolute inset-0 flex items-center justify-center opacity-20 pointer-events-none">
+                    <div class="w-64 h-64 rounded-full border {colors.border} border-dashed animate-[spin_60s_linear_infinite]"></div>
+                    <div class="absolute w-56 h-56 rounded-full border {colors.border} animate-[spin_40s_linear_infinite_reverse]"></div>
+                </div>
 
                 <div class="relative w-48 h-48 group cursor-help">
                     <!-- Planetary Rings (Jupiter Belt) -->
@@ -319,9 +320,7 @@
                             class="w-full h-full object-cover grayscale opacity-60 mix-blend-luminosity hover:opacity-100 hover:mix-blend-normal transition-all duration-500 scale-110" 
                         />
                         <!-- Digital Noise Overlay -->
-                        {#if !skyCycleMode}
-                            <div class="absolute inset-0 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-30 mix-blend-overlay pointer-events-none"></div>
-                        {/if}
+                        <div class="absolute inset-0 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-30 mix-blend-overlay pointer-events-none"></div>
                     </div>
                 </div>
             </div>
