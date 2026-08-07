@@ -6,7 +6,6 @@
         boidCount?: number;
         color?: string;
         backgroundColor?: string;
-        useSkybox?: boolean;
         wireframe?: boolean;
         predatorColor?: string;
         showTrails?: boolean;
@@ -23,7 +22,6 @@
         boidCount = 800, 
         color = '#00ffff',
         backgroundColor = '#0f172a',
-        useSkybox = true,
         wireframe = false,
         predatorColor = '#cfd8e3',
         showTrails = false,
@@ -96,11 +94,6 @@
                     near: (scene.fog as any).near || null,
                     far: (scene.fog as any).far || null
                 } : null,
-                backgroundUniforms: bgMesh ? {
-                    time: (bgMesh.material as THREE.ShaderMaterial).uniforms.time.value,
-                    dayPhase: (bgMesh.material as THREE.ShaderMaterial).uniforms.dayPhase.value,
-                    tension: (bgMesh.material as THREE.ShaderMaterial).uniforms.tension.value
-                } : null
             },
             camera: {
                 position: camera.position.toArray(),
@@ -245,7 +238,6 @@
     
     let recruitmentLevel = $state(0);
     let typingDurationSec = 0;
-    let skySunLevel = $state(0.5);
     let scene: THREE.Scene;
     let camera: THREE.PerspectiveCamera;
     let renderer: THREE.WebGLRenderer;
@@ -258,7 +250,6 @@
     let frameId: number;
     let debugMaterial: THREE.MeshNormalMaterial | null = null;
 
-    let bgMesh: THREE.Mesh;
     let ambientLight: THREE.AmbientLight;
     let pointLight: THREE.PointLight;
     let dirLight: THREE.DirectionalLight;
@@ -288,6 +279,7 @@
     const _diff = new THREE.Vector3();
     const _lookAt = new THREE.Vector3();
     const _tempColor = new THREE.Color();
+    const _quantCol = new THREE.Color();
     const _predPos = new THREE.Vector3();
     const _predVel = new THREE.Vector3();
     const _predDesiredDir = new THREE.Vector3();
@@ -299,26 +291,66 @@
     // Macroblock mode is a render-time blend laid over the simulation rather than a
     // second physics model: the flock keeps running underneath, so easing back out
     // costs nothing and the sim can never be left in a broken state.
-    const MACROBLOCK_COLS = 40;
-    const MACROBLOCK_SPAN_X = 470;
-    const MACROBLOCK_SPAN_Y = 280;
+    //
+    // Positions are quantised where the boid already is rather than assigned a slot
+    // in a lattice, so the flock keeps swirling and the field steps between cells
+    // the way a starved encode does. Cells subdivide where boids crowd, which is how
+    // a codec spends small partitions on busy regions and leaves flat areas coarse.
     const MACROBLOCK_EASE = 0.045;
-    const MACROBLOCK_BLOCK_W = 5.4;
-    const MACROBLOCK_BLOCK_H = 5.4;
+    const MACROBLOCK_COARSE_CELL = 34;
+    const MACROBLOCK_SPLIT_AT = 3;
+    const MACROBLOCK_SPLIT_AGAIN_AT = 8;
+    // Blocks collapse onto one plane: an encoded frame is a flat image, and leaving
+    // them spread through the flock's depth makes perspective skew them into confetti.
+    const MACROBLOCK_PLANE_Z = 40;
+    const MACROBLOCK_FILL = 0.9;
+    // A 4-segment cone of radius r reads as a square of side r*sqrt(2) once rolled
+    // flat, so this converts a target cell size into an instance scale.
+    const MACROBLOCK_SCALE_PER_UNIT = 1 / (0.6 * Math.SQRT2);
     const MACROBLOCK_BLOCK_D = 0.3;
+    const MACROBLOCK_COLOUR_LEVELS = 5;
     let macroblockFactor = 0;
 
-    function macroblockTarget(i: number, out: THREE.Vector3) {
-        const cols = MACROBLOCK_COLS;
-        const rows = Math.max(1, Math.ceil(boidCount / cols));
-        const col = i % cols;
-        const row = Math.floor(i / cols);
-        // Quantised positions, with a small deterministic depth stagger so the grid
-        // reads as blocks settling rather than a flat wall.
+    // Coarse occupancy, rebuilt each frame the mode is engaged. Keyed on a packed
+    // cell index; the simulation volume keeps cells far inside the packing range.
+    const macroblockCounts = new Map<number, number>();
+
+    function macroblockCellKey(cx: number, cy: number) {
+        return (cx + 2048) * 4096 + (cy + 2048);
+    }
+
+    function rebuildMacroblockOccupancy() {
+        macroblockCounts.clear();
+        const cell = MACROBLOCK_COARSE_CELL;
+        for (let i = 0; i < boidCount; i++) {
+            const key = macroblockCellKey(
+                Math.floor(positions[i * 3] / cell),
+                Math.floor(positions[i * 3 + 1] / cell)
+            );
+            macroblockCounts.set(key, (macroblockCounts.get(key) ?? 0) + 1);
+        }
+    }
+
+    function macroblockCellSize(i: number) {
+        const cell = MACROBLOCK_COARSE_CELL;
+        const key = macroblockCellKey(
+            Math.floor(positions[i * 3] / cell),
+            Math.floor(positions[i * 3 + 1] / cell)
+        );
+        const occupancy = macroblockCounts.get(key) ?? 0;
+        if (occupancy >= MACROBLOCK_SPLIT_AGAIN_AT) return cell * 0.25;
+        if (occupancy >= MACROBLOCK_SPLIT_AT) return cell * 0.5;
+        return cell;
+    }
+
+    function macroblockQuantise(i: number, cell: number, out: THREE.Vector3) {
+        const i3 = i * 3;
+        // The depth stagger keeps blocks sharing a cell off the same plane, so
+        // stacked instances cannot z-fight.
         out.set(
-            (cols > 1 ? col / (cols - 1) - 0.5 : 0) * MACROBLOCK_SPAN_X,
-            (rows > 1 ? row / (rows - 1) - 0.5 : 0) * MACROBLOCK_SPAN_Y,
-            18 + ((i * 37) % 11) * 1.6
+            (Math.floor(positions[i3] / cell) + 0.5) * cell,
+            (Math.floor(positions[i3 + 1] / cell) + 0.5) * cell,
+            MACROBLOCK_PLANE_Z + ((i * 37) % 11) * 0.35
         );
     }
     const _quatCurrent = new THREE.Quaternion();
@@ -336,10 +368,7 @@
     const OBSERVER_SCREEN_PADDING_PX = 96; // extra padding so observer geometry doesn't clip into the UI
     const OBSERVER_DISTANCE_FROM_CAMERA = 30; // 50% closer again for stronger looming
     const ORIENTATION_SMOOTHING = 0.24;
-    const SKY_DAY_PREY_COLOR = '#5b6473';
-    const SKY_DAY_PREDATOR_COLOR = '#3f434b';
     const BLOOD_RED_PREDATOR_COLOR = '#b30000';
-    const SKY_DAY_THRESHOLD = 0.58;
 
     function applyUIAvoidanceForce(extraPaddingPx = 0) {
         // Softly push boids away from UI bounds to avoid hard teleports and jitter.
@@ -455,130 +484,6 @@
     const neighborIdx = new Int32Array(NEIGHBOR_COUNT);
     const neighborDistSq = new Float32Array(NEIGHBOR_COUNT);
 
-    const bgVertexShader = `
-        varying vec2 vUv;
-        void main() {
-            vUv = uv;
-            gl_Position = vec4(position.xy, 0.999, 1.0);
-        }
-    `;
-
-    const bgFragmentShader = `
-        uniform float time;
-        uniform float dayPhase;
-        uniform float tension;
-        uniform float nightStart;
-        uniform float nightFull;
-        uniform float milkyWayAngle;
-        uniform float milkyWayWidth;
-        uniform float milkyWayCenter;
-        uniform float bandDensity;
-        uniform float globalDensity;
-        uniform float milkyWayGlow;
-        uniform float milkyWayDust;
-        varying vec2 vUv;
-        float hash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
-        float valueNoise(vec2 p) {
-            vec2 i = floor(p);
-            vec2 f = fract(p);
-            vec2 u = f * f * (3.0 - 2.0 * f);
-            float a = hash(i);
-            float b = hash(i + vec2(1.0, 0.0));
-            float c = hash(i + vec2(0.0, 1.0));
-            float d = hash(i + vec2(1.0, 1.0));
-            return mix(mix(a, b, u.x), mix(c, d, u.x), u.y);
-        }
-        float fbm(vec2 p) {
-            float v = 0.0;
-            float a = 0.5;
-            for (int i = 0; i < 4; i++) {
-                v += a * valueNoise(p);
-                p = p * 2.03 + vec2(17.3, 9.2);
-                a *= 0.5;
-            }
-            return v;
-        }
-        void main() {
-            vec2 uv = vUv;
-            float sun = clamp(sin(dayPhase * 6.28318) * 0.5 + 0.5, 0.0, 1.0);
-            vec3 nightZenith = vec3(0.01, 0.02, 0.08);
-            vec3 nightHorizon = vec3(0.02, 0.04, 0.1);
-            vec3 dayZenith = vec3(0.12, 0.32, 0.75);
-            vec3 dayHorizon = vec3(0.3, 0.55, 0.85);
-            vec3 skyResult = mix(mix(nightHorizon, dayHorizon, pow(sun, 1.1)), mix(nightZenith, dayZenith, pow(sun, 1.2)), pow(uv.y, 0.85));
-            skyResult *= (1.0 - tension * 0.75);
-
-            float night = 1.0 - sun;
-            float nightGate = smoothstep(nightStart, nightFull, night);
-
-            vec2 centered = uv - vec2(0.5);
-            float c = cos(milkyWayAngle);
-            float s = sin(milkyWayAngle);
-            vec2 ruv = vec2(
-                centered.x * c - centered.y * s,
-                centered.x * s + centered.y * c
-            );
-            float bandOffset = ruv.y - milkyWayCenter;
-            float bandCore = exp(-pow(bandOffset / max(0.0001, milkyWayWidth), 2.0));
-            float bandWing = exp(-pow(bandOffset / max(0.0001, milkyWayWidth * 2.9), 2.0));
-            float bandSpine = exp(-pow(bandOffset / max(0.0001, milkyWayWidth * 0.42), 2.0));
-            float sideCoord = bandOffset / max(0.0001, milkyWayWidth * 2.4);
-            float brightSide = smoothstep(-0.2, 0.95, sideCoord);
-            float shadowSide = smoothstep(-0.85, 0.25, -sideCoord);
-
-            float longitudinal = fbm(vec2(ruv.x * 2.4 + 3.7, 0.25));
-            float cloudA = fbm(ruv * vec2(3.1, 9.4) + vec2(2.0, -0.6));
-            float cloudB = fbm(ruv * vec2(8.3, 18.7) + vec2(-3.0, 1.8));
-            float cloud = mix(mix(cloudA, cloudB, 0.45), longitudinal, 0.32);
-            float cloudBoost = smoothstep(0.18, 0.9, cloud);
-
-            float dustNoise = fbm(ruv * vec2(11.5, 28.0) + vec2(5.1, -2.7));
-            float darkRiftNoise = fbm(ruv * vec2(14.2, 34.0) + vec2(-7.0, 4.5));
-            float dustLanes = smoothstep(0.42, 0.79, dustNoise) * bandWing;
-            float darkRift = smoothstep(0.35, 0.78, darkRiftNoise) * bandSpine;
-            float sideShadow = shadowSide * bandWing * smoothstep(0.08, 0.95, dustNoise);
-
-            float milkyWayBody = bandWing * (0.2 + 0.8 * cloudBoost);
-            milkyWayBody *= mix(0.74, 1.14, brightSide);
-            milkyWayBody *= (1.0 - dustLanes * milkyWayDust);
-            milkyWayBody *= (1.0 - darkRift * min(1.0, milkyWayDust * 1.25));
-            milkyWayBody *= (1.0 - sideShadow * 0.35);
-            milkyWayBody = clamp(milkyWayBody, 0.0, 1.0);
-
-            float globalStarNoise = hash(uv * vec2(1680.0, 980.0) + vec2(13.7, 8.3));
-            float globalStars = step(globalDensity + 0.00035, globalStarNoise);
-            float bandStarNoise = hash(uv * vec2(2360.0, 1420.0) + vec2(77.2, 19.4));
-            float localBandThreshold = clamp(
-                bandDensity + 0.0022 - milkyWayBody * 0.009 + shadowSide * 0.0014 - brightSide * 0.0007,
-                0.965,
-                0.99995
-            );
-            float bandStars = step(localBandThreshold, bandStarNoise) * (0.2 + 1.55 * bandCore);
-            float brightStarNoise = hash(uv * vec2(720.0, 440.0) + vec2(21.0, 52.0));
-            float brightStars = step(0.99925, brightStarNoise) * (0.32 + milkyWayBody * 0.9);
-
-            float twinkleSeed = hash(uv * vec2(560.0, 310.0) + vec2(91.2, 43.7));
-            float twinkle = 0.96 + 0.04 * sin(time * 0.6 + twinkleSeed * 6.28318);
-            float starMix = (globalStars * 0.2 + bandStars * 1.7 + brightStars * 0.72) * nightGate * twinkle;
-            float starHue = hash(uv * vec2(3020.0, 1810.0) + vec2(7.4, 92.8));
-            vec3 starColor = mix(vec3(0.78, 0.86, 1.0), vec3(1.0, 0.95, 0.88), starHue);
-            starColor *= mix(0.84, 1.1, brightSide);
-            skyResult += starMix * starColor * (0.62 + nightGate);
-
-            vec3 milkyTint = mix(vec3(0.22, 0.28, 0.4), vec3(0.55, 0.63, 0.82), cloudBoost);
-            float milkyGlow = nightGate * milkyWayGlow * (0.35 * bandWing + 0.85 * milkyWayBody);
-            milkyGlow *= mix(0.78, 1.18, brightSide);
-            skyResult += milkyTint * milkyGlow;
-            skyResult *= 1.0 - nightGate * dustLanes * 0.24;
-            skyResult *= 1.0 - nightGate * darkRift * 0.32;
-            skyResult *= 1.0 - nightGate * sideShadow * 0.48;
-
-            float knots = smoothstep(0.72, 0.95, cloudB) * bandCore * nightGate;
-            skyResult += vec3(0.45, 0.5, 0.65) * knots * 0.22;
-            gl_FragColor = vec4(skyResult, 1.0);
-        }
-    `;
-
     function init() {
         scene = new THREE.Scene();
         camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 2000);
@@ -599,28 +504,6 @@
         dirLight = new THREE.DirectionalLight(0xffffff, 2.0);
         dirLight.position.set(0, 0, 400);
         scene.add(dirLight);
-
-        // BG
-        const bgGeo = new THREE.PlaneGeometry(2, 2);
-        bgMesh = new THREE.Mesh(bgGeo, new THREE.ShaderMaterial({
-            uniforms: {
-                time: { value: 0 },
-                dayPhase: { value: 0.25 },
-                tension: { value: 0 },
-                nightStart: { value: 0.62 },
-                nightFull: { value: 0.82 },
-                milkyWayAngle: { value: -0.98 },
-                milkyWayWidth: { value: 0.135 },
-                milkyWayCenter: { value: 0.02 },
-                bandDensity: { value: 0.9958 },
-                globalDensity: { value: 0.99915 },
-                milkyWayGlow: { value: 0.34 },
-                milkyWayDust: { value: 0.88 }
-            },
-            vertexShader: bgVertexShader, fragmentShader: bgFragmentShader, depthWrite: false
-        }));
-        bgMesh.renderOrder = -1;
-        if (useSkybox) scene.add(bgMesh);
 
         // BOIDS
         const birdGeo = new THREE.ConeGeometry(0.6, 2.5, 4);
@@ -758,16 +641,8 @@
         (predTrailLine.geometry.getAttribute('position') as THREE.BufferAttribute).needsUpdate = true;
     }
 
-    function getSkyCyclePhaseState() {
-        const blueprintMode = wireframe && !isTerminal;
-        const skyCycleMode = blueprintMode && useSkybox;
-        const skyCycleDay = skyCycleMode && skySunLevel > SKY_DAY_THRESHOLD;
-        return { blueprintMode, skyCycleMode, skyCycleDay };
-    }
-
     function getPreyTone() {
-        const { skyCycleDay } = getSkyCyclePhaseState();
-        return skyCycleDay ? SKY_DAY_PREY_COLOR : color;
+        return color;
     }
 
     function applyPreyAppearance() {
@@ -787,16 +662,8 @@
         const bgCol = new THREE.Color(backgroundColor);
         const bgLuma = 0.2126 * bgCol.r + 0.7152 * bgCol.g + 0.0722 * bgCol.b;
         const lightMode = bgLuma > 0.6;
-        const { blueprintMode, skyCycleMode, skyCycleDay } = getSkyCyclePhaseState();
-        const forceBloodRed = blueprintMode && lightMode && !skyCycleMode;
-
-        if (skyCycleDay) {
-            return {
-                tone: SKY_DAY_PREDATOR_COLOR,
-                emissiveIntensity: 0.22,
-                toneMapped: true
-            };
-        }
+        const blueprintMode = wireframe && !isTerminal;
+        const forceBloodRed = blueprintMode && lightMode;
 
         return {
             tone: forceBloodRed ? BLOOD_RED_PREDATOR_COLOR : predatorColor,
@@ -808,21 +675,24 @@
     function applyPredatorAppearance() {
         const appearance = getPredatorAppearance();
         if (predator) {
+            // A hunting cone reads as a stray object once the field resolves into
+            // blocks, so the predator fades out with the macroblock blend.
+            const hunterVisibility = 1 - macroblockFactor;
             const pMat = predator.material as THREE.MeshLambertMaterial;
-            pMat.transparent = false;
-            pMat.opacity = 1.0;
+            pMat.transparent = macroblockFactor > 0.001;
+            pMat.opacity = hunterVisibility;
             pMat.toneMapped = appearance.toneMapped;
             pMat.color.set(appearance.tone);
             pMat.emissive.set(appearance.tone);
-            pMat.emissiveIntensity = appearance.emissiveIntensity;
+            pMat.emissiveIntensity = appearance.emissiveIntensity * hunterVisibility;
             pMat.needsUpdate = true;
-            predator.visible = true;
+            predator.visible = hunterVisibility > 0.005;
         }
         if (predTrailLine) {
             const pMat = predTrailLine.material as THREE.LineBasicMaterial;
             pMat.color.set(appearance.tone);
-            pMat.opacity = isTerminal ? 0.35 : 0.55;
-            predTrailLine.visible = showTrails;
+            pMat.opacity = (isTerminal ? 0.35 : 0.55) * (1 - macroblockFactor);
+            predTrailLine.visible = showTrails && macroblockFactor < 0.995;
         }
     }
 
@@ -857,9 +727,6 @@
         if (ambientLight) ambientLight.intensity = isTerminal ? 0.8 : 1.0;
         if (pointLight) pointLight.intensity = isTerminal ? 5.0 : 2.0;
         if (dirLight) dirLight.intensity = isTerminal ? 2.0 : 1.5;
-
-        if (useSkybox) { if (bgMesh && !scene.children.includes(bgMesh)) scene.add(bgMesh); }
-        else { if (bgMesh && scene.children.includes(bgMesh)) scene.remove(bgMesh); }
 
         if (trails) {
             const tMat = trails.material as THREE.LineBasicMaterial;
@@ -1198,8 +1065,9 @@
 
             _quatCurrent.set(orientations[qIdx], orientations[qIdx + 1], orientations[qIdx + 2], orientations[qIdx + 3]);
             _dummy.position.copy(_position);
+            const macroCell = macroblockFactor > 0.001 ? macroblockCellSize(i) : 0;
             if (macroblockFactor > 0.001) {
-                macroblockTarget(i, _macroTarget);
+                macroblockQuantise(i, macroCell, _macroTarget);
                 _dummy.position.lerp(_macroTarget, macroblockFactor);
             }
             if (observerShakeAmp > 0) {
@@ -1218,11 +1086,21 @@
                 // macroblocks resolving, with no second mesh needed.
                 _dummy.quaternion.slerp(_quatFlat, macroblockFactor);
                 const s = _dummy.scale.x;
+                const blockScale = macroCell * MACROBLOCK_FILL * MACROBLOCK_SCALE_PER_UNIT;
                 _dummy.scale.set(
-                    s + (MACROBLOCK_BLOCK_W - s) * macroblockFactor,
-                    s + (MACROBLOCK_BLOCK_H - s) * macroblockFactor,
+                    s + (blockScale - s) * macroblockFactor,
+                    s + (blockScale - s) * macroblockFactor,
                     s + (MACROBLOCK_BLOCK_D - s) * macroblockFactor
                 );
+
+                // Banding is the other half of the look: posterise toward a few
+                // levels so colour steps as coarsely as position does.
+                _quantCol.setRGB(
+                    Math.round(_tempColor.r * MACROBLOCK_COLOUR_LEVELS) / MACROBLOCK_COLOUR_LEVELS,
+                    Math.round(_tempColor.g * MACROBLOCK_COLOUR_LEVELS) / MACROBLOCK_COLOUR_LEVELS,
+                    Math.round(_tempColor.b * MACROBLOCK_COLOUR_LEVELS) / MACROBLOCK_COLOUR_LEVELS
+                );
+                _tempColor.lerp(_quantCol, macroblockFactor);
             }
 
             orientations[qIdx] = _dummy.quaternion.x;
@@ -1256,6 +1134,7 @@
         const macroblockGoal = backgroundMode === 'macroblocks' ? 1 : 0;
         macroblockFactor += (macroblockGoal - macroblockFactor) * MACROBLOCK_EASE;
         if (Math.abs(macroblockGoal - macroblockFactor) < 0.001) macroblockFactor = macroblockGoal;
+        if (macroblockFactor > 0.001) rebuildMacroblockOccupancy();
 
         // Keep the UI bounds updated so Terminal observer mode stays outside the card.
         // (Also fixes cases where the initial bounds accidentally used <main> instead of the terminal card.)
@@ -1267,13 +1146,6 @@
             updateUIBounds(now);
         }
         
-        if (bgMesh) {
-            const m = bgMesh.material as THREE.ShaderMaterial;
-            m.uniforms.time.value = t;
-            const dayNightSpeed = useSkybox && !isTerminal ? 0.028 : 0.004;
-            m.uniforms.dayPhase.value = (t * dayNightSpeed + 0.25) % 1.0;
-            skySunLevel = Math.max(0, Math.min(1, Math.sin(m.uniforms.dayPhase.value * 6.28318) * 0.5 + 0.5));
-        }
         applyPreyAppearance();
         applyPredatorAppearance();
 
@@ -1309,11 +1181,6 @@
         }
 
         const intFactor = recruitmentLevel * (interactionActive ? Math.pow(Math.max(0, 1 - (timeSinceInteraction / 60000)), 0.5) : 0);
-        if (bgMesh) {
-            const m = bgMesh.material as THREE.ShaderMaterial;
-            const observedPulse = intFactor > 0.08 ? (0.5 + 0.5 * Math.sin(t * 2.4)) * 0.14 : 0;
-            m.uniforms.tension.value = Math.min(1, recruitmentLevel + observedPulse);
-        }
         const simSubsteps = Math.min(MAX_SIM_SUBSTEPS, Math.max(1, Math.ceil(frameDeltaSec / MAX_SIM_STEP_SEC)));
         const simStepNorm = frameDtNorm / simSubsteps;
         for (let s = 0; s < simSubsteps; s++) {
