@@ -29,6 +29,18 @@
     let frameId = 0;
     let lastFrame = 0;
 
+    /**
+     * The prop, mirrored into a plain variable.
+     *
+     * `step` and `draw` run from requestAnimationFrame rather than from
+     * anything reactive, and this loop is the one place on the page where
+     * reading a stale value would leave the canvas painted forever with
+     * nothing running to clear it. Syncing it in an effect removes the question
+     * entirely rather than relying on how a destructured prop behaves inside a
+     * callback.
+     */
+    let wantsPresence = false;
+
     /** How far in it is. */
     let value = 0;
     /** Runs ahead of `value`: the flock is told to scatter before the tile has
@@ -54,21 +66,26 @@
     ];
 
     function step(dt: number) {
+        const on = wantsPresence;
         if (reduceMotion) {
-            value = active ? 1 : 0;
+            value = on ? 1 : 0;
             lead = value;
             held = 0;
             return;
         }
-        lead += (active ? 1 - lead : -lead) * (active ? 0.16 : 0.05) * dt;
+        lead += (on ? 1 - lead : -lead) * (on ? 0.16 : 0.05) * dt;
 
         // Leaving the tile dismisses it. An earlier version let the reveal play
         // out whatever the cursor did, on the theory that something which
         // ignores you is worse than something that obeys — but a background
         // still winding down five seconds after you moved on reads as stuck,
         // not as ominous. Still slower out than in, just not stubborn.
-        const wants = active ? 1 : 0;
-        value += (wants - value) * (wants > value ? 0.05 : 0.045) * dt;
+        const wants = on ? 1 : 0;
+        // Out faster on the light theme. The same fade that is unobtrusive
+        // behind a navy page is a room that stays dark for two seconds behind a
+        // white one, and that reads as broken rather than as atmosphere.
+        const out = variant === 'light' ? 0.11 : 0.045;
+        value += (wants - value) * (wants > value ? 0.05 : out) * dt;
         held = wants && value > 0.9 ? held + dt / 30 : Math.max(0, held - dt / 8);
     }
 
@@ -76,7 +93,7 @@
         // Idle costs nothing: with the tile unhovered and the fade finished
         // there is no frame to ask for, so the page is not running a canvas
         // loop for the ninety-nine percent of a visit that nobody hovers it.
-        if (!active && value <= 0.004) {
+        if (!wantsPresence && value <= 0.004) {
             frameId = 0;
             if (canvas) canvas.getContext('2d')?.clearRect(0, 0, canvas.width, canvas.height);
             return;
@@ -199,20 +216,30 @@
         ctx.fillRect(0, 0, w, h);
     }
 
+    /**
+     * Restarts the loop after it has parked itself.
+     *
+     * This deliberately has no cleanup. An earlier version cancelled the frame
+     * in the effect's teardown, which runs on every re-run and not only on
+     * destroy — so un-hovering killed the loop while `value` was still at one
+     * and the canvas froze at full presence with nothing left running to fade
+     * it. The loop decides when to stop, in `draw`; nothing else may.
+     */
     $effect(() => {
         if (typeof window === 'undefined') return;
+        wantsPresence = active;
         reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-        // Reading `active` here is what restarts the loop after it has parked
-        // itself: the effect re-runs on hover, and the guard stops a second
-        // frame being queued while one is already in flight.
-        if (active && !frameId) {
+        if (!frameId) {
             lastFrame = performance.now();
             frameId = requestAnimationFrame(draw);
         }
-        return () => {
-            if (frameId) cancelAnimationFrame(frameId);
-            frameId = 0;
-        };
+    });
+
+    // Teardown only. No dependencies, so its cleanup runs when the component
+    // goes away and at no other time.
+    $effect(() => () => {
+        if (frameId) cancelAnimationFrame(frameId);
+        frameId = 0;
     });
 </script>
 
