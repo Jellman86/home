@@ -325,7 +325,10 @@
     //
     // Faster in than out. Arriving is an event; leaving is it losing interest.
     const STARFIELD_EASE_IN = 0.055;
-    const STARFIELD_EASE_OUT = 0.018;
+    // 0.018 took about six seconds to fall below the threshold that gates the
+    // whole branch — long enough to still be fighting the next background the
+    // user had already moved on to.
+    const STARFIELD_EASE_OUT = 0.05;
     /**
      * Where the sky sits.
      *
@@ -1120,9 +1123,9 @@
                 macroblockQuantise(i, macroCell, _macroTarget);
                 _dummy.position.lerp(_macroTarget, macroblockFactor);
             }
-            if (starFactor > 0.001) {
+            if (starFactor > 0.001 && macroblockFactor < 0.999) {
                 starTarget(i, _starTarget);
-                _dummy.position.lerp(_starTarget, starFactor);
+                _dummy.position.lerp(_starTarget, starFactor * (1 - macroblockFactor));
             }
             if (observerShakeAmp > 0) {
                 _dummy.position.x += Math.sin(t * (14 + typingRampFactor * 40) + i * 1.37) * observerShakeAmp;
@@ -1157,12 +1160,25 @@
                 _tempColor.lerp(_quantCol, macroblockFactor);
             }
 
-            if (starFactor > 0.001) {
+            // Yielded to the macroblocks where they overlap. The two modes are
+            // mutually exclusive by intent, but not in time: moving from Auspex
+            // to Optimisarr leaves this one easing out for seconds while the
+            // other is easing in, and for that whole window this was writing a
+            // uniform scale over the flattened depth the macroblocks depend on.
+            // The pyramids kept their length and pointed at the camera, which
+            // is the one thing that look cannot survive.
+            const starBlend = starFactor * (1 - macroblockFactor);
+            if (starBlend > 0.001) {
                 // Face-on and small: a bird seen edge-on is a sliver, and a
                 // sliver twinkling is a bird, not a star.
-                _dummy.quaternion.slerp(_quatFlat, starFactor);
-                const sc = _dummy.scale.x;
-                _dummy.scale.setScalar(sc + (STAR_SCALE - sc) * starFactor);
+                _dummy.quaternion.slerp(_quatFlat, starBlend);
+                // Per axis, so whatever the macroblock branch did to depth
+                // survives the blend instead of being replaced by it.
+                _dummy.scale.set(
+                    _dummy.scale.x + (STAR_SCALE - _dummy.scale.x) * starBlend,
+                    _dummy.scale.y + (STAR_SCALE - _dummy.scale.y) * starBlend,
+                    _dummy.scale.z + (STAR_SCALE - _dummy.scale.z) * starBlend
+                );
                 // Independent phases, so the sky never pulses in unison.
                 const twinkle = 0.55 + 0.45 * Math.sin(t * (0.6 + (i % 7) * 0.22) + i * 1.31);
                 // Pushed well past white: instance colour multiplies a lit
@@ -1170,7 +1186,7 @@
                 // overdrive is what makes it read as emitting rather than
                 // reflecting.
                 _starCol.setRGB(0.88, 0.92, 1.0).multiplyScalar(1.1 + twinkle * 2.2);
-                _tempColor.lerp(_starCol, starFactor);
+                _tempColor.lerp(_starCol, starBlend);
             }
 
             orientations[qIdx] = _dummy.quaternion.x;
