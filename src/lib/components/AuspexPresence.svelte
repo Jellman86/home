@@ -17,8 +17,8 @@
      * - **It must not look at the cursor.** Nothing here reads pointer position.
      * - **Only what the mask covered may be sharp.** Everything is drawn on a
      *   coarse lattice except the lens, which uses a cell a quarter the size.
-     * - **It leaves when it is finished.** Releasing the tile does not cut the
-     *   reveal short; see `committed`.
+     * - **It goes when you go.** Slower out than in, but leaving the tile
+     *   dismisses it rather than starting a queue.
      * - **The panel stays readable.** Being tolerated is worse than being
      *   obstructed.
      */
@@ -35,10 +35,8 @@
      *  finished registering the hover, which is the only moment on the site
      *  where something anticipates the user. */
     let lead = 0;
-    /** Seconds held at full presence. */
+    /** Seconds held at full presence. Drives the reveal. */
     let held = 0;
-    /** Once the reveal has begun it plays out whether or not the cursor stayed. */
-    let committed = 0;
 
     // Fixed positions, aimed at nothing. Perimeter-ish so they frame the panel
     // without ringing it — a ring reads as staging, and staging reads as intent.
@@ -62,16 +60,16 @@
             held = 0;
             return;
         }
-        lead += (active ? 1 - lead : -lead) * (active ? 0.16 : 0.02) * dt;
+        lead += (active ? 1 - lead : -lead) * (active ? 0.16 : 0.05) * dt;
 
-        if (active) committed = Math.min(1, committed + dt / 2.6);
-        else if (committed > 0 && committed < 1) committed = Math.min(1, committed + dt / 2.6);
-        else committed = Math.max(0, committed - dt / 2.5);
-
-        const wants = active || (committed > 0 && committed < 1) ? 1 : 0;
-        // In fast, out slow. A slam back to boids reads as a bug.
-        value += (wants - value) * (wants > value ? 0.05 : 0.014) * dt;
-        held = wants && value > 0.9 ? held + dt / 30 : Math.max(0, held - dt / 20);
+        // Leaving the tile dismisses it. An earlier version let the reveal play
+        // out whatever the cursor did, on the theory that something which
+        // ignores you is worse than something that obeys — but a background
+        // still winding down five seconds after you moved on reads as stuck,
+        // not as ominous. Still slower out than in, just not stubborn.
+        const wants = active ? 1 : 0;
+        value += (wants - value) * (wants > value ? 0.05 : 0.045) * dt;
+        held = wants && value > 0.9 ? held + dt / 30 : Math.max(0, held - dt / 8);
     }
 
     function draw(now: number) {
@@ -99,11 +97,15 @@
         const t = now * 0.001;
         const rev = reduceMotion ? 0 : held > 0.9 ? smoothstep((held - 0.9) / 1.5) : 0;
 
-        // The scrim goes first. On the site's navy the pale read as fog laid over
-        // the blueprint; darkening the room before it arrives puts the pale back
-        // on the near-black ground it was drawn for, and satisfies the rule that
-        // this darkens rather than competes.
-        ctx.fillStyle = `rgba(4,2,10,${k * 0.62})`;
+        // The scrim goes first, so the pale that follows sits on the near-black
+        // ground it was drawn for rather than reading as fog over the navy.
+        //
+        // Kept light on purpose. At 0.62 it looked right on its own and quietly
+        // destroyed the point of the whole thing: the flock has just become a
+        // star field behind this canvas, and a heavy wash over the top puts the
+        // stars out. The creature is standing in front of a sky, so the sky has
+        // to survive it.
+        ctx.fillStyle = `rgba(4,2,10,${k * 0.26})`;
         ctx.fillRect(0, 0, w, h);
 
         // The pale. It slides away as the mask comes off, uncovering what the
@@ -180,7 +182,7 @@
         // that the scene has depth now that the flock is a sky.
         const vignette = ctx.createRadialGradient(w * 0.5, h * 0.5, Math.min(w, h) * 0.32, w * 0.5, h * 0.5, Math.max(w, h) * 0.78);
         vignette.addColorStop(0, 'rgba(0,0,0,0)');
-        vignette.addColorStop(1, `rgba(3,1,8,${k * 0.55})`);
+        vignette.addColorStop(1, `rgba(3,1,8,${k * 0.30})`);
         ctx.fillStyle = vignette;
         ctx.fillRect(0, 0, w, h);
     }

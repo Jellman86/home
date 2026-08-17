@@ -326,12 +326,20 @@
     // Faster in than out. Arriving is an event; leaving is it losing interest.
     const STARFIELD_EASE_IN = 0.055;
     const STARFIELD_EASE_OUT = 0.018;
-    /** Far behind the flock's volume, so they read as distance rather than as
-     *  small birds. The camera sits at z=180 and the boids live in [20, 140]. */
-    const STAR_PLANE_Z = -430;
-    const STAR_SPREAD_X = 950;
-    const STAR_SPREAD_Y = 620;
-    const STAR_SCALE = 0.30;
+    /**
+     * Where the sky sits.
+     *
+     * The first attempt put this at z = -430, far behind the flock, on the
+     * reasoning that distance is what makes a star a star. At that range each
+     * one lands on well under a pixel and the whole field disappears — the
+     * birds simply faded out. Distance is not what sells it: stillness,
+     * evenness and a hard white point are. So the plane stays inside the
+     * volume the flock already occupies, and the reading comes from behaviour.
+     */
+    const STAR_PLANE_Z = 34;
+    const STAR_SPREAD_X = 420;
+    const STAR_SPREAD_Y = 270;
+    const STAR_SCALE = 0.5;
     let starFactor = 0;
     const _starTarget = new THREE.Vector3();
     const _starCol = new THREE.Color();
@@ -349,7 +357,7 @@
         out.set(
             (fract(Math.sin(i * 127.1) * 43758.5453) - 0.5) * STAR_SPREAD_X,
             (fract(Math.sin(i * 311.7) * 24634.6345) - 0.5) * STAR_SPREAD_Y,
-            STAR_PLANE_Z + fract(Math.sin(i * 74.7) * 12345.6789) * 120
+            STAR_PLANE_Z + fract(Math.sin(i * 74.7) * 12345.6789) * 46
         );
     }
 
@@ -609,22 +617,6 @@
             _dummy.updateMatrix();
             mesh.setMatrixAt(i, _dummy.matrix);
             const qIdx = i * 4;
-            if (starFactor > 0.001) {
-                // Face-on and small: a bird seen edge-on is a sliver, and a
-                // sliver twinkling is a bird, not a star.
-                _dummy.quaternion.slerp(_quatFlat, starFactor);
-                const sc = _dummy.scale.x;
-                _dummy.scale.setScalar(sc + (STAR_SCALE - sc) * starFactor);
-                // Independent phases, so the sky never pulses in unison.
-                const twinkle = 0.55 + 0.45 * Math.sin(t * (0.6 + (i % 7) * 0.22) + i * 1.31);
-                // Pushed well past white: instance colour multiplies a lit
-                // material, so a star set to 1.0 comes out shaded grey. The
-                // overdrive is what makes it read as emitting rather than
-                // reflecting.
-                _starCol.setRGB(0.88, 0.92, 1.0).multiplyScalar(1.1 + twinkle * 2.2);
-                _tempColor.lerp(_starCol, starFactor);
-            }
-
             orientations[qIdx] = _dummy.quaternion.x;
             orientations[qIdx + 1] = _dummy.quaternion.y;
             orientations[qIdx + 2] = _dummy.quaternion.z;

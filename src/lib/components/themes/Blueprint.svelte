@@ -20,20 +20,6 @@
         onLinkActivate?: (label: string | null) => void
     } = $props();
 
-    // Kept here rather than in the portfolio data because it is prose belonging
-    // to one section, not a field every theme has to carry. Terminal prints its
-    // own copy of this under `cat auspex.md`.
-    const auspexCopy = [
-        "iPhone, iPad and Mac. It watches a self-hosted lab and tells you what it thinks is wrong with it.",
-        "Auspex knows how to talk to about twenty self-hosted services and connects to none of them until you turn one on. No agent to install, no monitoring stack to stand up first. The AI runs on your own API key in the Keychain \u2014 there is no bundled one and no server of mine in the middle.",
-        "The AI features have a face. It is violet, it has too many eyes, and it wears a cheerful mask that never stops being cheerful. You are being asked to hand a model facts about your own network and then believe what it tells you back. The mask is there to remind you that something is being made simple for your benefit, and that simple is not the same as true."
-    ];
-
-    const auspexModules = [
-        'Sonarr', 'Radarr', 'Prowlarr', 'Plex', 'Seerr', 'qBittorrent', 'Docker',
-        'Prometheus', 'TrueNAS', 'Home Assistant', 'Frigate', 'Gluetun', 'HTTP check'
-    ];
-
     /** Which link the right column is describing. Tracked here as well as being
      *  reported upward, because the column is part of this theme while the
      *  background belongs to the page. */
@@ -78,6 +64,10 @@
 
     function toggleMinimize() {
         isMinimized = !isMinimized;
+        // Collapsing takes the tiles out of the DOM, so the hovered one never
+        // gets its mouseleave and whatever it summoned stays summoned. Same
+        // reason the window blur handler exists below.
+        if (isMinimized) setFocus(null);
     }
 
     // Colors based on variant
@@ -104,7 +94,7 @@
     });
 </script>
 
-<svelte:window onmousemove={handleMouseMove} onmouseup={handleMouseUp} />
+<svelte:window onmousemove={handleMouseMove} onmouseup={handleMouseUp} onblur={() => setFocus(null)} />
 
 <div class="flex items-center justify-center min-h-screen p-4 font-mono {colors.text} overflow-hidden" in:fade={{ duration: 300 }}>
     <!-- Dynamic Grid Background (Parallax) -->
@@ -226,25 +216,6 @@
                         <span class="absolute -left-[3px] top-0 w-[4px] h-[4px] {colors.highlight}"></span>
                         {data.bio}
                     </p>
-                </div>
-
-                <div>
-                    <h3 class="{colors.accent} mb-4 text-[10px] tracking-[0.3em] uppercase flex items-center gap-2 font-bold opacity-80">
-                        <span class="w-2 h-px {colors.highlight}"></span> Auspex
-                        <span class="ml-1 px-1.5 py-px border {colors.border} text-[9px] tracking-[0.15em] opacity-70">In development</span>
-                    </h3>
-                    <div class="space-y-3">
-                        {#each auspexCopy as paragraph}
-                            <p class="{colors.text} opacity-90 leading-relaxed text-sm border-l-2 {colors.border} pl-4 py-1">
-                                {paragraph}
-                            </p>
-                        {/each}
-                    </div>
-                    <div class="flex flex-wrap gap-1.5 mt-4">
-                        {#each auspexModules as module}
-                            <span class="px-1.5 py-0.5 border {colors.border} text-[9px] {colors.textMuted} uppercase tracking-wider">{module}</span>
-                        {/each}
-                    </div>
                 </div>
 
                 <div>
@@ -410,11 +381,16 @@
                             <path d="M3.6 5.7H1.1V15h2.5V5.7ZM2.35 1A1.45 1.45 0 1 0 2.35 3.9 1.45 1.45 0 0 0 2.35 1ZM15 9.7c0-2.6-1.4-3.8-3.26-3.8-1.5 0-2.17.82-2.55 1.4V5.7H6.7c.03.7 0 9.3 0 9.3h2.49V9.8c0-.22.02-.45.08-.61.18-.45.59-.91 1.28-.91.9 0 1.26.69 1.26 1.7V15H15V9.7Z" />
                         </svg>
                     {:else}
-                        <!-- Nothing hovered: the site's own mark, so the column is
-                             never an empty hole waiting to be filled. -->
-                        <div class="relative z-10 flex flex-col items-center gap-1.5" in:fade={{ duration: 300 }}>
-                            <span class="text-3xl font-bold tracking-[0.18em] {colors.accent}">PN</span>
-                            <span class="text-[9px] tracking-[0.25em] {colors.textMuted} uppercase opacity-70">Pownet</span>
+                        <!-- Nothing hovered: back to the photograph. The column is
+                             about whoever or whatever has focus, and with no tile
+                             hovered that is still the person who built the lot. -->
+                        <div class="relative z-10 w-40 h-40 rounded-full overflow-hidden border-2 {colors.border} {colors.bgSolid}" in:fade={{ duration: 300 }}>
+                            <img
+                                src={data.avatarUrl}
+                                alt={data.name}
+                                class="w-full h-full object-cover grayscale opacity-60 mix-blend-luminosity hover:opacity-100 hover:mix-blend-normal transition-all duration-500 scale-110"
+                            />
+                            <div class="absolute inset-0 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-30 mix-blend-overlay pointer-events-none"></div>
                         </div>
                     {/if}
                 </div>
@@ -423,7 +399,7 @@
                     {#key focusedLabel}
                         <div in:fade={{ duration: 250 }}>
                             <h4 class="text-[10px] tracking-[0.3em] uppercase font-bold {colors.accent} mb-2">
-                                {focused?.label ?? 'Selected works'}
+                                {focused?.label ?? data.name}
                             </h4>
                             <p class="text-xs leading-relaxed {colors.textMuted}">
                                 {focused?.blurb ?? 'Hover a link. Whatever it points at gets explained here.'}
