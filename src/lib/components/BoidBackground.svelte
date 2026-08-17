@@ -16,6 +16,11 @@
         gitHash?: string;
         /** 'boids' flocks freely; 'macroblocks' resolves the flock into an encode grid. */
         backgroundMode?: 'boids' | 'macroblocks';
+        /** Resolves the flock into a star field. Like the macroblock mode this
+         *  is a render-time blend over a simulation that never stops, so the
+         *  birds are still flocking underneath and easing back out costs
+         *  nothing. */
+        starfield?: boolean;
     }
 
     let { 
@@ -30,7 +35,8 @@
         lastInteractionTime = 0,
         typingPoint = null,
         gitHash = 'unknown',
-        backgroundMode = 'boids'
+        backgroundMode = 'boids',
+        starfield = false
     }: Props = $props();
 
     let debugMode = $state(false);
@@ -310,6 +316,50 @@
     const MACROBLOCK_BLOCK_D = 0.3;
     const MACROBLOCK_COLOUR_LEVELS = 5;
     let macroblockFactor = 0;
+
+    // The flock becoming a star field: same render-time blend as the
+    // macroblocks, aimed at a different idea. The birds do not flee and they do
+    // not resolve into the creature — the frame of reference simply pulls back
+    // until what was a garden is a sky, and the thing is standing in front of
+    // it. Nothing about the simulation changes underneath.
+    //
+    // Faster in than out. Arriving is an event; leaving is it losing interest.
+    const STARFIELD_EASE_IN = 0.055;
+    const STARFIELD_EASE_OUT = 0.018;
+    /**
+     * Where the sky sits.
+     *
+     * The first attempt put this at z = -430, far behind the flock, on the
+     * reasoning that distance is what makes a star a star. At that range each
+     * one lands on well under a pixel and the whole field disappears — the
+     * birds simply faded out. Distance is not what sells it: stillness,
+     * evenness and a hard white point are. So the plane stays inside the
+     * volume the flock already occupies, and the reading comes from behaviour.
+     */
+    const STAR_PLANE_Z = 34;
+    const STAR_SPREAD_X = 420;
+    const STAR_SPREAD_Y = 270;
+    const STAR_SCALE = 0.5;
+    let starFactor = 0;
+    const _starTarget = new THREE.Vector3();
+    const _starCol = new THREE.Color();
+
+    const fract = (v: number) => v - Math.floor(v);
+
+    /**
+     * A fixed point per boid, hashed from its index.
+     *
+     * Hashed rather than stored so the layout survives a boid count change, and
+     * fixed rather than random per frame so the sky holds still — a star field
+     * that reshuffles is snow.
+     */
+    function starTarget(i: number, out: THREE.Vector3) {
+        out.set(
+            (fract(Math.sin(i * 127.1) * 43758.5453) - 0.5) * STAR_SPREAD_X,
+            (fract(Math.sin(i * 311.7) * 24634.6345) - 0.5) * STAR_SPREAD_Y,
+            STAR_PLANE_Z + fract(Math.sin(i * 74.7) * 12345.6789) * 46
+        );
+    }
 
     // Coarse occupancy, rebuilt each frame the mode is engaged. Keyed on a packed
     // cell index; the simulation volume keeps cells far inside the packing range.
@@ -677,9 +727,9 @@
         if (predator) {
             // A hunting cone reads as a stray object once the field resolves into
             // blocks, so the predator fades out with the macroblock blend.
-            const hunterVisibility = 1 - macroblockFactor;
+            const hunterVisibility = 1 - Math.max(macroblockFactor, starFactor);
             const pMat = predator.material as THREE.MeshLambertMaterial;
-            pMat.transparent = macroblockFactor > 0.001;
+            pMat.transparent = Math.max(macroblockFactor, starFactor) > 0.001;
             pMat.opacity = hunterVisibility;
             pMat.toneMapped = appearance.toneMapped;
             pMat.color.set(appearance.tone);
@@ -691,8 +741,8 @@
         if (predTrailLine) {
             const pMat = predTrailLine.material as THREE.LineBasicMaterial;
             pMat.color.set(appearance.tone);
-            pMat.opacity = (isTerminal ? 0.35 : 0.55) * (1 - macroblockFactor);
-            predTrailLine.visible = showTrails && macroblockFactor < 0.995;
+            pMat.opacity = (isTerminal ? 0.35 : 0.55) * (1 - Math.max(macroblockFactor, starFactor));
+            predTrailLine.visible = showTrails && Math.max(macroblockFactor, starFactor) < 0.995;
         }
     }
 
@@ -1070,6 +1120,10 @@
                 macroblockQuantise(i, macroCell, _macroTarget);
                 _dummy.position.lerp(_macroTarget, macroblockFactor);
             }
+            if (starFactor > 0.001) {
+                starTarget(i, _starTarget);
+                _dummy.position.lerp(_starTarget, starFactor);
+            }
             if (observerShakeAmp > 0) {
                 _dummy.position.x += Math.sin(t * (14 + typingRampFactor * 40) + i * 1.37) * observerShakeAmp;
                 _dummy.position.y += Math.cos(t * (17 + typingRampFactor * 45) + i * 1.73) * observerShakeAmp;
@@ -1101,6 +1155,22 @@
                     Math.round(_tempColor.b * MACROBLOCK_COLOUR_LEVELS) / MACROBLOCK_COLOUR_LEVELS
                 );
                 _tempColor.lerp(_quantCol, macroblockFactor);
+            }
+
+            if (starFactor > 0.001) {
+                // Face-on and small: a bird seen edge-on is a sliver, and a
+                // sliver twinkling is a bird, not a star.
+                _dummy.quaternion.slerp(_quatFlat, starFactor);
+                const sc = _dummy.scale.x;
+                _dummy.scale.setScalar(sc + (STAR_SCALE - sc) * starFactor);
+                // Independent phases, so the sky never pulses in unison.
+                const twinkle = 0.55 + 0.45 * Math.sin(t * (0.6 + (i % 7) * 0.22) + i * 1.31);
+                // Pushed well past white: instance colour multiplies a lit
+                // material, so a star set to 1.0 comes out shaded grey. The
+                // overdrive is what makes it read as emitting rather than
+                // reflecting.
+                _starCol.setRGB(0.88, 0.92, 1.0).multiplyScalar(1.1 + twinkle * 2.2);
+                _tempColor.lerp(_starCol, starFactor);
             }
 
             orientations[qIdx] = _dummy.quaternion.x;
@@ -1135,6 +1205,10 @@
         macroblockFactor += (macroblockGoal - macroblockFactor) * MACROBLOCK_EASE;
         if (Math.abs(macroblockGoal - macroblockFactor) < 0.001) macroblockFactor = macroblockGoal;
         if (macroblockFactor > 0.001) rebuildMacroblockOccupancy();
+
+        const starGoal = starfield ? 1 : 0;
+        starFactor += (starGoal - starFactor) * (starfield ? STARFIELD_EASE_IN : STARFIELD_EASE_OUT);
+        if (Math.abs(starGoal - starFactor) < 0.001) starFactor = starGoal;
 
         // Keep the UI bounds updated so Terminal observer mode stays outside the card.
         // (Also fixes cases where the initial bounds accidentally used <main> instead of the terminal card.)

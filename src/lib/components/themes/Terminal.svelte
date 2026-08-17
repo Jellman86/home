@@ -10,6 +10,27 @@
     let isMinimized = $state(false);
     let dragOffset = { x: 0, y: 0 };
 
+    // The same three paragraphs the Blueprint panel shows, wrapped for a
+    // terminal. Duplicated rather than shared because the two themes want it
+    // in different shapes and neither should own the other's line breaks.
+    const AUSPEX_MD = `# Auspex
+
+iPhone, iPad and Mac. It watches a self-hosted lab and tells you what it
+thinks is wrong with it.
+
+Auspex knows how to talk to about twenty self-hosted services and connects
+to none of them until you turn one on. No agent to install, no monitoring
+stack to stand up first. The AI runs on your own API key in the Keychain -
+there is no bundled one and no server of mine in the middle.
+
+The AI features have a face. It is violet, it has too many eyes, and it
+wears a cheerful mask that never stops being cheerful. You are being asked
+to hand a model facts about your own network and then believe what it tells
+you back. The mask is there to remind you that something is being made
+simple for your benefit, and that simple is not the same as true.
+
+Status: not out yet. The repo stays private until it isn't.`;
+
     // Terminal Logic
     let commandInput = $state("");
     let inputRef = $state<HTMLInputElement | null>(null);
@@ -144,7 +165,7 @@
 
     // Initial history mimics the static view
     let history = $state<{cmd: string, output: string | any, type?: 'text'|'component'}[]>([
-        { cmd: '', output: 'Welcome to Pownet OS. Type "help" for a list of commands.', type: 'text' }
+        { cmd: '', output: 'Pownet OS. Type "help" if you want the list, or just try things.', type: 'text' }
     ]);
 
     let fileInputRef = $state<HTMLInputElement | null>(null);
@@ -232,7 +253,7 @@
 
             switch (mainCmd) {
                 case 'help':
-                    output = "Available commands:\n  help     Show this help message\n  clear    Clear terminal history\n  ls       List links/files\n  cat      Read file content\n  whoami   Display current user\n  date     Show current system time\n  sudo     Execute a command as another user\n  ./upload-file.sh Upload decryption key (.pem, .key)\n  ./send-message.sh \"Your Message\" Send message to Scott\n  exit     Close the terminal session\n  neofetch System info\n  pownet   Display branding";
+                    output = "Available commands:\n  help     Show this help message\n  clear    Clear terminal history\n  ls       List links/files\n  cat      Read file content (bio.txt, auspex.md)\n  whoami   Display current user\n  date     Show current system time\n  sudo     Execute a command as another user\n  ./upload-file.sh Upload decryption key (.pem, .key)\n  ./send-message.sh \"Your Message\" Send message to Scott\n  exit     Close the terminal session\n  neofetch System info\n  pownet   Display branding";
                     break;
                 case 'clear':
                     history = [];
@@ -249,6 +270,8 @@
                 case 'cat':
                     if (args[1] === 'bio.txt') {
                         output = data.bio;
+                    } else if (args[1] === 'auspex.md') {
+                        output = AUSPEX_MD;
                     } else {
                         output = `cat: ${args[1] || ''}: No such file or directory`;
                     }
@@ -490,9 +513,18 @@
                                 <div class="flex flex-col gap-1">
                                     {#each item.output as link}
                                         <div class="flex flex-col">
+                                            <!-- A link with a status has no destination yet, so it
+                                                 lists as text. An anchor with an empty href reloads
+                                                 the page, which is a worse answer than none. -->
+                                            {#if link.status}
+                                                <span class="text-gray-400 w-fit flex items-center gap-2">
+                                                    {link.label} <span class="text-gray-500 text-xs">-> {link.statusNote ?? 'not released'}</span>
+                                                </span>
+                                            {:else}
                                             <a href={link.url} target="_blank" rel="noopener noreferrer" class="text-[#729fcf] hover:underline w-fit flex items-center gap-2">
                                                 {link.label} <span class="text-gray-500 text-xs">-> {link.url}</span>
                                             </a>
+                                            {/if}
                                             {#if link.demoUrl}
                                                 <a href={link.demoUrl} target="_blank" rel="noopener noreferrer" class="text-[#8ae234] hover:underline w-fit flex items-center gap-2 ml-4">
                                                     ↳ {link.label}_Demo <span class="text-gray-500 text-xs">-> {link.demoUrl}</span>

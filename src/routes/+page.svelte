@@ -2,6 +2,7 @@
     import { onMount } from 'svelte';
     import { base } from '$app/paths';
     import BoidBackground from '$lib/components/BoidBackground.svelte';
+    import AuspexPresence from '$lib/components/AuspexPresence.svelte';
     import Blueprint from '$lib/components/themes/Blueprint.svelte';
     import Terminal from '$lib/components/themes/Terminal.svelte';
     import type { PortfolioData } from '$lib/types';
@@ -78,9 +79,6 @@
     let clockNow = $state(0);
     // A link can nominate a background; hovering or focusing it swaps the scene.
     let activeLinkLabel = $state<string | null>(null);
-    let backgroundMode = $derived(
-        activeLinkLabel === 'Optimisarr' ? 'macroblocks' as const : 'boids' as const
-    );
     let observeStrength = $derived(
         isTerminal
             ? Math.max(0, Math.pow(Math.max(0, 1 - ((clockNow - lastInteractionTime) / 60000)), 0.7))
@@ -91,25 +89,59 @@
     const portfolioData: PortfolioData = {
         name: "Scott Powdrill (jellman86)",
         avatarUrl: "https://avatars.githubusercontent.com/u/179294116?v=4",
-        bio: "I love science, nature, and technology. Fascinated by the boundary where digital systems meet the natural world.",
+        bio: "Most of what's here started as something I wanted for my own homelab and then wouldn't stop poking at: a bird feeder that names its visitors, a transcoder that re-encodes until the quality maths agrees, an app that watches the lot. I like the point where a system gets complicated enough to behave like something alive.",
         links: [
             {
                 label: "YA-WAMF",
                 url: "https://github.com/Jellman86/YetAnother-WhosAtMyFeeder",
                 icon: "🚀",
                 iconUrl: `${base}/icons/yawamf.png`,
-                demoUrl: "https://yetanotherwhosatmyfeeder.pownet.uk"
+                demoUrl: "https://yetanotherwhosatmyfeeder.pownet.uk",
+                blurb: "Watches the bird feeder and names what turns up. Detection, a species classifier, and a UI that keeps the interesting ones."
             },
             {
                 label: "Optimisarr",
                 url: "https://github.com/Jellman86/optimisarr",
                 icon: "🎞️",
-                iconUrl: `${base}/icons/optimisarr.png`
+                iconUrl: `${base}/icons/optimisarr.png`,
+                background: "macroblocks",
+                blurb: "Re-encodes a media library and then checks its own work. A file is only replaced once the quality maths agrees it survived."
             },
-            { label: "GitHub", url: "https://github.com/jellman86", icon: "💻", iconGlyph: "github" },
-            { label: "LinkedIn", url: "https://www.linkedin.com/in/scott-powdrill-3b727b10b/", icon: "💼", iconGlyph: "linkedin" }
+            {
+                label: "Auspex",
+                url: "",
+                icon: "👁️",
+                iconGlyph: "auspex",
+                status: "coming-soon",
+                statusNote: "Not out yet. It's an iOS app and the repo stays private until it isn't.",
+                background: "auspex",
+                blurb: "Watches a self-hosted lab and tells you what it thinks is wrong with it. About twenty connectors, none of them on until you turn one on."
+            },
+            {
+                label: "GitHub",
+                url: "https://github.com/jellman86",
+                icon: "💻",
+                iconGlyph: "github",
+                blurb: "Everything above, plus the things that did not work."
+            },
+            {
+                label: "LinkedIn",
+                url: "https://www.linkedin.com/in/scott-powdrill-3b727b10b/",
+                icon: "💼",
+                iconGlyph: "linkedin",
+                blurb: "The formal version, for people who need one."
+            }
         ]
     };
+
+    let activeLink = $derived(portfolioData.links.find((l) => l.label === activeLinkLabel));
+    let backgroundMode = $derived(
+        activeLink?.background === 'macroblocks' ? 'macroblocks' as const : 'boids' as const
+    );
+    // Auspex is drawn over the scene rather than out of it. What the flock does
+    // is pull back into a star field, so the creature is standing in front of a
+    // sky rather than in front of birds.
+    let auspexPresent = $derived(activeLink?.background === 'auspex');
 
     // Stats colors based on variant
     let statsColors = $derived(currentTheme === 'terminal' ?
@@ -181,8 +213,11 @@
             {typingPoint}
             {gitHash}
             {backgroundMode}
+            starfield={auspexPresent}
         />
     {/key}
+
+    <AuspexPresence active={auspexPresent} {variant} />
 
     <div
         class="terminal-observe-pulse pointer-events-none absolute inset-0 z-[5]"
