@@ -1,6 +1,7 @@
 <script lang="ts">
     import { fade, scale, slide } from 'svelte/transition';
     import { spring } from 'svelte/motion';
+    import AuspexMascot from '$lib/components/AuspexMascot.svelte';
     import type { PortfolioData } from '$lib/types';
 
     let { 
@@ -18,6 +19,32 @@
         onInteraction?: () => void,
         onLinkActivate?: (label: string | null) => void
     } = $props();
+
+    // Kept here rather than in the portfolio data because it is prose belonging
+    // to one section, not a field every theme has to carry. Terminal prints its
+    // own copy of this under `cat auspex.md`.
+    const auspexCopy = [
+        "iPhone, iPad and Mac. It watches a self-hosted lab and tells you what it thinks is wrong with it.",
+        "Auspex knows how to talk to about twenty self-hosted services and connects to none of them until you turn one on. No agent to install, no monitoring stack to stand up first. The AI runs on your own API key in the Keychain \u2014 there is no bundled one and no server of mine in the middle.",
+        "The AI features have a face. It is violet, it has too many eyes, and it wears a cheerful mask that never stops being cheerful. You are being asked to hand a model facts about your own network and then believe what it tells you back. The mask is there to remind you that something is being made simple for your benefit, and that simple is not the same as true."
+    ];
+
+    const auspexModules = [
+        'Sonarr', 'Radarr', 'Prowlarr', 'Plex', 'Seerr', 'qBittorrent', 'Docker',
+        'Prometheus', 'TrueNAS', 'Home Assistant', 'Frigate', 'Gluetun', 'HTTP check'
+    ];
+
+    /** Which link the right column is describing. Tracked here as well as being
+     *  reported upward, because the column is part of this theme while the
+     *  background belongs to the page. */
+    let focusedLabel = $state<string | null>(null);
+    let focused = $derived(data.links.find((l) => l.label === focusedLabel));
+    let focusedIsAuspex = $derived(focused?.background === 'auspex');
+
+    function setFocus(label: string | null) {
+        focusedLabel = label;
+        onLinkActivate?.(label);
+    }
 
     let position = $state({ x: 0, y: 0 });
     let isDragging = $state(false);
@@ -203,6 +230,25 @@
 
                 <div>
                     <h3 class="{colors.accent} mb-4 text-[10px] tracking-[0.3em] uppercase flex items-center gap-2 font-bold opacity-80">
+                        <span class="w-2 h-px {colors.highlight}"></span> Auspex
+                        <span class="ml-1 px-1.5 py-px border {colors.border} text-[9px] tracking-[0.15em] opacity-70">In development</span>
+                    </h3>
+                    <div class="space-y-3">
+                        {#each auspexCopy as paragraph}
+                            <p class="{colors.text} opacity-90 leading-relaxed text-sm border-l-2 {colors.border} pl-4 py-1">
+                                {paragraph}
+                            </p>
+                        {/each}
+                    </div>
+                    <div class="flex flex-wrap gap-1.5 mt-4">
+                        {#each auspexModules as module}
+                            <span class="px-1.5 py-0.5 border {colors.border} text-[9px] {colors.textMuted} uppercase tracking-wider">{module}</span>
+                        {/each}
+                    </div>
+                </div>
+
+                <div>
+                    <h3 class="{colors.accent} mb-4 text-[10px] tracking-[0.3em] uppercase flex items-center gap-2 font-bold opacity-80">
                         <span class="w-2 h-px {colors.highlight}"></span> Links
                     </h3>
                     <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -210,13 +256,24 @@
                             <!-- svelte-ignore a11y_no_static_element_interactions -->
                             <div
                                 class="relative group flex border {colors.border} {variant === 'dark' ? 'bg-blue-950/30 hover:bg-blue-900/40' : 'bg-blue-50/50 hover:bg-blue-100/80'} transition-all overflow-hidden"
-                                onmouseenter={() => onLinkActivate?.(link.label)}
-                                onmouseleave={() => onLinkActivate?.(null)}
-                                onfocusin={() => onLinkActivate?.(link.label)}
-                                onfocusout={() => onLinkActivate?.(null)}
+                                onmouseenter={() => setFocus(link.label)}
+                                onmouseleave={() => setFocus(null)}
+                                onfocusin={() => setFocus(link.label)}
+                                onfocusout={() => setFocus(null)}
                             >
-                                <!-- Main Link Area -->
-                                <a href={link.url} target="_blank" rel="noopener noreferrer" class="flex-1 min-w-0 flex items-center gap-2.5 p-3 z-10 outline-none focus:bg-blue-500/10 transition-colors">
+                                <!-- Main link area. A status tile has nowhere to go
+                                     yet, so it is a focusable div rather than an
+                                     anchor: it still reports hover and focus to the
+                                     background, and there is no dead href to follow. -->
+                                <svelte:element
+                                    this={link.status ? 'div' : 'a'}
+                                    href={link.status ? undefined : link.url}
+                                    target={link.status ? undefined : '_blank'}
+                                    rel={link.status ? undefined : 'noopener noreferrer'}
+                                    tabindex="0"
+                                    title={link.statusNote}
+                                    role={link.status ? 'note' : undefined}
+                                    class="flex-1 min-w-0 flex items-center gap-2.5 p-3 z-10 outline-none focus:bg-blue-500/10 transition-colors {link.status ? 'cursor-default' : ''}">
                                     <div class="absolute inset-0 {colors.highlight} opacity-0 group-hover:opacity-5 translate-x-[-100%] group-hover:translate-x-0 transition-transform duration-300 pointer-events-none"></div>
                                     <span class="{colors.accent} font-bold text-xs">0{i+1}</span>
                                     <!-- One tile for every link so a raster favicon and an inline
@@ -239,6 +296,8 @@
                                             <svg class="w-4 h-4 {colors.text}" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
                                                 <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27s1.36.09 2 .27c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8Z" />
                                             </svg>
+                                        {:else if link.iconGlyph === 'auspex'}
+                                            <AuspexMascot size={16} />
                                         {:else if link.iconGlyph === 'linkedin'}
                                             <svg class="w-4 h-4 {colors.text}" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
                                                 <path d="M3.6 5.7H1.1V15h2.5V5.7ZM2.35 1A1.45 1.45 0 1 0 2.35 3.9 1.45 1.45 0 0 0 2.35 1ZM15 9.7c0-2.6-1.4-3.8-3.26-3.8-1.5 0-2.17.82-2.55 1.4V5.7H6.7c.03.7 0 9.3 0 9.3h2.49V9.8c0-.22.02-.45.08-.61.18-.45.59-.91 1.28-.91.9 0 1.26.69 1.26 1.7V15H15V9.7Z" />
@@ -247,10 +306,18 @@
                                     </span>
                                     <span class="flex-1 min-w-0 truncate uppercase tracking-wider text-xs font-bold {colors.text}">{link.label}</span>
                                     <!-- Arrow Icon -->
-                                    <svg class="w-3 h-3 {colors.accent} transform -translate-x-2 opacity-0 group-hover:opacity-100 group-hover:translate-x-0 transition-all" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3" />
-                                    </svg>
-                                </a>
+                                    {#if !link.status}
+                                        <svg class="w-3 h-3 {colors.accent} transform -translate-x-2 opacity-0 group-hover:opacity-100 group-hover:translate-x-0 transition-all" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3" />
+                                        </svg>
+                                    {/if}
+                                </svelte:element>
+
+                                {#if link.status === 'coming-soon'}
+                                    <span class="flex items-center px-3 border-l {colors.border} text-[10px] font-bold uppercase tracking-widest {colors.accent} opacity-80">
+                                        Soon
+                                    </span>
+                                {/if}
 
                                 <!-- Demo Button (if exists) -->
                                 {#if link.demoUrl}
@@ -303,25 +370,69 @@
                     <div class="absolute w-56 h-56 rounded-full border {colors.border} animate-[spin_40s_linear_infinite_reverse]"></div>
                 </div>
 
-                <div class="relative w-48 h-48 group cursor-help">
+                <!-- What has focus, rather than who owns the site. The photo that
+                     used to sit here said nothing about the work; the icon and one
+                     line about the project say what the hovered tile is for, and
+                     the rings stay because they are the panel's furniture. -->
+                <div class="relative w-48 h-48 flex items-center justify-center">
                     <!-- Planetary Rings (Jupiter Belt) -->
-                    <div class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[140%] h-[40%] border-2 {colors.border} rounded-[100%] rotate-12 pointer-events-none opacity-60 group-hover:opacity-100 transition-opacity"></div>
-                    <div class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[160%] h-[30%] border {colors.border} rounded-[100%] -rotate-6 pointer-events-none opacity-40 group-hover:opacity-80 transition-opacity"></div>
+                    <div class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[140%] h-[40%] border-2 {colors.border} rounded-[100%] rotate-12 pointer-events-none opacity-60 transition-opacity"></div>
+                    <div class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[160%] h-[30%] border {colors.border} rounded-[100%] -rotate-6 pointer-events-none opacity-40 transition-opacity"></div>
                     <div class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[130%] h-[50%] border border-dashed {colors.border} rounded-[100%] rotate-[20deg] pointer-events-none opacity-30 animate-[spin_20s_linear_infinite]"></div>
+                    <div class="absolute -inset-1 border-t border-b {colors.border} rounded-full animate-[spin_4s_linear_infinite] pointer-events-none"></div>
 
-                    <!-- Animated Rings (Scanning) -->
-                    <div class="absolute -inset-4 border {colors.border} rounded-full opacity-0 group-hover:opacity-100 transition-opacity duration-500 scale-90 group-hover:scale-100"></div>
-                    <div class="absolute -inset-1 border-t border-b {colors.border} rounded-full animate-[spin_4s_linear_infinite]"></div>
-                    
-                    <div class="relative w-full h-full rounded-full overflow-hidden border-2 {colors.border} group-hover:border-blue-400 transition-colors {colors.bgSolid}">
-                        <img 
-                            src={data.avatarUrl} 
-                            alt={data.name} 
-                            class="w-full h-full object-cover grayscale opacity-60 mix-blend-luminosity hover:opacity-100 hover:mix-blend-normal transition-all duration-500 scale-110" 
+                    <!-- Auspex gets the mask itself, and it looms: same component
+                         the tile uses, scaled up and lit while it has focus. -->
+                    {#if focusedIsAuspex}
+                        <div
+                            class="relative z-10 transition-transform duration-700 ease-out scale-110"
+                            style="filter: drop-shadow(0 0 26px rgba(122,46,212,0.65));"
+                            in:scale={{ duration: 500, start: 0.82, opacity: 0 }}
+                        >
+                            <AuspexMascot size={168} />
+                        </div>
+                    {:else if focused?.iconUrl}
+                        <img
+                            src={focused.iconUrl}
+                            alt=""
+                            width="96"
+                            height="96"
+                            class="relative z-10 w-24 h-24 object-contain"
+                            style="filter: drop-shadow(0 0 18px {variant === 'dark' ? 'rgba(59,130,246,0.45)' : 'rgba(30,58,138,0.25)'});"
+                            in:scale={{ duration: 350, start: 0.85, opacity: 0 }}
                         />
-                        <!-- Digital Noise Overlay -->
-                        <div class="absolute inset-0 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-30 mix-blend-overlay pointer-events-none"></div>
-                    </div>
+                    {:else if focused?.iconGlyph === 'github'}
+                        <svg class="relative z-10 w-20 h-20 {colors.text} opacity-90" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true" in:scale={{ duration: 350, start: 0.85, opacity: 0 }}>
+                            <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27s1.36.09 2 .27c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8Z" />
+                        </svg>
+                    {:else if focused?.iconGlyph === 'linkedin'}
+                        <svg class="relative z-10 w-20 h-20 {colors.text} opacity-90" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true" in:scale={{ duration: 350, start: 0.85, opacity: 0 }}>
+                            <path d="M3.6 5.7H1.1V15h2.5V5.7ZM2.35 1A1.45 1.45 0 1 0 2.35 3.9 1.45 1.45 0 0 0 2.35 1ZM15 9.7c0-2.6-1.4-3.8-3.26-3.8-1.5 0-2.17.82-2.55 1.4V5.7H6.7c.03.7 0 9.3 0 9.3h2.49V9.8c0-.22.02-.45.08-.61.18-.45.59-.91 1.28-.91.9 0 1.26.69 1.26 1.7V15H15V9.7Z" />
+                        </svg>
+                    {:else}
+                        <!-- Nothing hovered: the site's own mark, so the column is
+                             never an empty hole waiting to be filled. -->
+                        <div class="relative z-10 flex flex-col items-center gap-1.5" in:fade={{ duration: 300 }}>
+                            <span class="text-3xl font-bold tracking-[0.18em] {colors.accent}">PN</span>
+                            <span class="text-[9px] tracking-[0.25em] {colors.textMuted} uppercase opacity-70">Pownet</span>
+                        </div>
+                    {/if}
+                </div>
+
+                <div class="relative z-10 mt-7 w-full max-w-[16rem] text-center min-h-[6.5rem]">
+                    {#key focusedLabel}
+                        <div in:fade={{ duration: 250 }}>
+                            <h4 class="text-[10px] tracking-[0.3em] uppercase font-bold {colors.accent} mb-2">
+                                {focused?.label ?? 'Selected works'}
+                            </h4>
+                            <p class="text-xs leading-relaxed {colors.textMuted}">
+                                {focused?.blurb ?? 'Hover a link. Whatever it points at gets explained here.'}
+                            </p>
+                            {#if focused?.status === 'coming-soon'}
+                                <p class="mt-2 text-[9px] tracking-[0.2em] uppercase {colors.accent} opacity-70">Not released</p>
+                            {/if}
+                        </div>
+                    {/key}
                 </div>
             </div>
         </div>
