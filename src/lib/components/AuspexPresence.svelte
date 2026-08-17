@@ -22,7 +22,7 @@
      * - **The panel stays readable.** Being tolerated is worse than being
      *   obstructed.
      */
-    let { active = false }: { active?: boolean } = $props();
+    let { active = false, variant = 'dark' }: { active?: boolean; variant?: 'light' | 'dark' } = $props();
 
     let canvas = $state<HTMLCanvasElement | null>(null);
     let reduceMotion = false;
@@ -73,6 +73,14 @@
     }
 
     function draw(now: number) {
+        // Idle costs nothing: with the tile unhovered and the fade finished
+        // there is no frame to ask for, so the page is not running a canvas
+        // loop for the ninety-nine percent of a visit that nobody hovers it.
+        if (!active && value <= 0.004) {
+            frameId = 0;
+            if (canvas) canvas.getContext('2d')?.clearRect(0, 0, canvas.width, canvas.height);
+            return;
+        }
         frameId = requestAnimationFrame(draw);
         if (!canvas) return;
         // 30fps: it is a grid of large blocks, and nothing here rewards more.
@@ -100,12 +108,16 @@
         // The scrim goes first, so the pale that follows sits on the near-black
         // ground it was drawn for rather than reading as fog over the navy.
         //
-        // Kept light on purpose. At 0.62 it looked right on its own and quietly
-        // destroyed the point of the whole thing: the flock has just become a
-        // star field behind this canvas, and a heavy wash over the top puts the
-        // stars out. The creature is standing in front of a sky, so the sky has
-        // to survive it.
-        ctx.fillStyle = `rgba(4,2,10,${k * 0.26})`;
+        // On the dark theme it stays light on purpose. At 0.62 it looked right
+        // on its own and quietly destroyed the point of the whole thing: the
+        // flock has just become a star field behind this canvas, and a heavy
+        // wash over the top puts the stars out.
+        //
+        // Blueprint light needs the opposite. White stars on a blue-50 page are
+        // invisible however bright they are, so there the scrim goes most of the
+        // way to black and the arrival is the lights going out — which is a
+        // better beat than the dark theme gets, and costs one number.
+        ctx.fillStyle = `rgba(4,2,10,${k * (variant === 'light' ? 0.88 : 0.26)})`;
         ctx.fillRect(0, 0, w, h);
 
         // The pale. It slides away as the mask comes off, uncovering what the
@@ -190,9 +202,17 @@
     $effect(() => {
         if (typeof window === 'undefined') return;
         reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-        lastFrame = performance.now();
-        frameId = requestAnimationFrame(draw);
-        return () => cancelAnimationFrame(frameId);
+        // Reading `active` here is what restarts the loop after it has parked
+        // itself: the effect re-runs on hover, and the guard stops a second
+        // frame being queued while one is already in flight.
+        if (active && !frameId) {
+            lastFrame = performance.now();
+            frameId = requestAnimationFrame(draw);
+        }
+        return () => {
+            if (frameId) cancelAnimationFrame(frameId);
+            frameId = 0;
+        };
     });
 </script>
 

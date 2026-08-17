@@ -513,9 +513,18 @@ Status: not out yet. The repo stays private until it isn't.`;
                                 <div class="flex flex-col gap-1">
                                     {#each item.output as link}
                                         <div class="flex flex-col">
+                                            <!-- A link with a status has no destination yet, so it
+                                                 lists as text. An anchor with an empty href reloads
+                                                 the page, which is a worse answer than none. -->
+                                            {#if link.status}
+                                                <span class="text-gray-400 w-fit flex items-center gap-2">
+                                                    {link.label} <span class="text-gray-500 text-xs">-> {link.statusNote ?? 'not released'}</span>
+                                                </span>
+                                            {:else}
                                             <a href={link.url} target="_blank" rel="noopener noreferrer" class="text-[#729fcf] hover:underline w-fit flex items-center gap-2">
                                                 {link.label} <span class="text-gray-500 text-xs">-> {link.url}</span>
                                             </a>
+                                            {/if}
                                             {#if link.demoUrl}
                                                 <a href={link.demoUrl} target="_blank" rel="noopener noreferrer" class="text-[#8ae234] hover:underline w-fit flex items-center gap-2 ml-4">
                                                     ↳ {link.label}_Demo <span class="text-gray-500 text-xs">-> {link.demoUrl}</span>

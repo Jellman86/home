@@ -217,7 +217,7 @@
         />
     {/key}
 
-    <AuspexPresence active={auspexPresent} />
+    <AuspexPresence active={auspexPresent} {variant} />
 
     <div
         class="terminal-observe-pulse pointer-events-none absolute inset-0 z-[5]"

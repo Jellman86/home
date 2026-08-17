@@ -244,6 +244,7 @@
                                     tabindex="0"
                                     title={link.statusNote}
                                     role={link.status ? 'note' : undefined}
+                                    aria-label={link.status ? `${link.label}. ${link.statusNote ?? 'Not released yet.'}` : undefined}
                                     class="flex-1 min-w-0 flex items-center gap-2.5 p-3 z-10 outline-none focus:bg-blue-500/10 transition-colors {link.status ? 'cursor-default' : ''}">
                                     <div class="absolute inset-0 {colors.highlight} opacity-0 group-hover:opacity-5 translate-x-[-100%] group-hover:translate-x-0 transition-transform duration-300 pointer-events-none"></div>
                                     <span class="{colors.accent} font-bold text-xs">0{i+1}</span>
