@@ -212,6 +212,9 @@
 </script>
 
 <svelte:head>
+    <!-- Safari paints its bars from this. Prerendered, so the first paint
+         matches too; the only one in the document, because Safari honours
+         the first it finds and would ignore a change behind a static one. -->
     <meta name="theme-color" content={chromeColor} />
 </svelte:head>
 
