@@ -3,7 +3,11 @@
 	<head>
 		<meta charset="utf-8" />
 		<link rel="icon" href="%sveltekit.assets%/favicon.svg" type="image/svg+xml" />
-		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+		<!-- Safari paints its own bars from this. Overridden per theme once the
+		     page is up; this is the colour of the dark theme under the galaxy's
+		     scrim, so the first paint matches too. -->
+		<meta name="theme-color" content="#0a1026" />
 		<meta name="description" content="Scott Powdrill (jellman86) - Infrastructure Engineer Portfolio. Exploring the boundary between digital systems and the natural world." />
 		<meta name="author" content="Scott Powdrill" />
 		<link rel="canonical" href="https://pownet.uk/" />
@@ -29,7 +33,7 @@
 		<meta name="twitter:image" content="https://avatars.githubusercontent.com/u/179294116?v=4" />
 		%sveltekit.head%
 	</head>
-	<body data-sveltekit-preload-data="hover">
+	<body data-sveltekit-preload-data="hover" style="background-color: #0a1026">
 		<div style="display: contents">%sveltekit.body%</div>
 	</body>
 </html>

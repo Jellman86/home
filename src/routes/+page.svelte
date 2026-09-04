@@ -76,6 +76,10 @@
     let boidLayerKey = $derived(`${boidCount}`);
     let variant = $derived(themes[currentTheme].variant);
     let isTerminal = $derived(currentTheme === 'terminal');
+    // What Safari paints its status bar and toolbar with. The dark Blueprint
+    // theme sits under the galaxy's scrim, so its chrome is darker than its
+    // nominal background; the others are their own colour.
+    let chromeColor = $derived(currentTheme === 'blueprint' ? '#0a1026' : themes[currentTheme].bg);
     let clockNow = $state(0);
     // A link can nominate a background; hovering or focusing it swaps the scene.
     let activeLinkLabel = $state<string | null>(null);
@@ -189,6 +193,13 @@
     }
 
 
+    // The document itself, behind everything, in the theme's colour: Safari
+    // shows it at the safe-area edges and while rubber-banding.
+    $effect(() => {
+        document.documentElement.style.backgroundColor = chromeColor;
+        document.body.style.backgroundColor = chromeColor;
+    });
+
     onMount(() => {
         let raf = 0;
         const tick = () => {
@@ -201,7 +212,7 @@
 </script>
 
 <svelte:head>
-    <!-- Fonts now handled in app.css imports -->
+    <meta name="theme-color" content={chromeColor} />
 </svelte:head>
 
 <div class="relative min-h-screen w-full overflow-hidden transition-colors duration-1000" style="background-color: {backgroundColor}">
