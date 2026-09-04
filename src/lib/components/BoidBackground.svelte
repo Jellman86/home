@@ -1,6 +1,7 @@
 <script lang="ts">
     import { onMount, onDestroy } from 'svelte';
     import * as THREE from 'three';
+    import { createGalaxy, type Galaxy } from '$lib/galaxy';
 
     interface Props {
         boidCount?: number;
@@ -14,13 +15,13 @@
         lastInteractionTime?: number;
         typingPoint?: {x: number, y: number} | null;
         gitHash?: string;
-        /** 'boids' flocks freely; 'macroblocks' resolves the flock into an encode grid. */
-        backgroundMode?: 'boids' | 'macroblocks';
-        /** Resolves the flock into a star field. Like the macroblock mode this
-         *  is a render-time blend over a simulation that never stops, so the
-         *  birds are still flocking underneath and easing back out costs
-         *  nothing. */
-        starfield?: boolean;
+        /** 'stars' is the galaxy alone; 'boids' the flock alone;
+         *  'macroblocks' the flock resolved into an encode grid; 'none' an
+         *  empty ground for something drawn over the top. One thing at a
+         *  time: whatever is leaving fades out as the next fades in. The flock
+         *  simulation never stops, whichever is showing, so easing between
+         *  them costs nothing and nothing is ever mid-state. */
+        backgroundMode?: 'boids' | 'macroblocks' | 'stars' | 'none';
     }
 
     let { 
@@ -35,8 +36,7 @@
         lastInteractionTime = 0,
         typingPoint = null,
         gitHash = 'unknown',
-        backgroundMode = 'boids',
-        starfield = false
+        backgroundMode = 'boids'
     }: Props = $props();
 
     let debugMode = $state(false);
@@ -58,6 +58,7 @@
                 navigation: performance.getEntriesByType('navigation')[0] || 'N/A'
             },
             boidCount,
+            layers: { backgroundMode, skyFactor: +skyFactor.toFixed(3), flockFactor: +flockFactor.toFixed(3), macroblockFactor: +macroblockFactor.toFixed(3) },
             themeColor: color,
             isTerminal,
             recruitmentLevel,
@@ -317,51 +318,37 @@
     const MACROBLOCK_COLOUR_LEVELS = 5;
     let macroblockFactor = 0;
 
-    // The flock becoming a star field: same render-time blend as the
-    // macroblocks, aimed at a different idea. The birds do not flee and they do
-    // not resolve into the creature — the frame of reference simply pulls back
-    // until what was a garden is a sky, and the thing is standing in front of
-    // it. Nothing about the simulation changes underneath.
-    //
-    // Faster in than out. Arriving is an event; leaving is it losing interest.
-    const STARFIELD_EASE_IN = 0.055;
-    // 0.018 took about six seconds to fall below the threshold that gates the
-    // whole branch — long enough to still be fighting the next background the
-    // user had already moved on to.
-    const STARFIELD_EASE_OUT = 0.05;
-    /**
-     * Where the sky sits.
-     *
-     * The first attempt put this at z = -430, far behind the flock, on the
-     * reasoning that distance is what makes a star a star. At that range each
-     * one lands on well under a pixel and the whole field disappears — the
-     * birds simply faded out. Distance is not what sells it: stillness,
-     * evenness and a hard white point are. So the plane stays inside the
-     * volume the flock already occupies, and the reading comes from behaviour.
-     */
-    const STAR_PLANE_Z = 34;
-    const STAR_SPREAD_X = 420;
-    const STAR_SPREAD_Y = 270;
-    const STAR_SCALE = 0.5;
-    let starFactor = 0;
-    const _starTarget = new THREE.Vector3();
-    const _starCol = new THREE.Color();
+    // The sky and the flock are two layers crossfaded, not one thing turned
+    // into another. An earlier version flew the birds to fixed points and
+    // flattened them into twinkling squares, which read as exactly that.
+    // Faster in than out for the sky: arriving is an event, leaving is it
+    // losing interest.
+    const SKY_EASE_IN = 0.045;
+    const SKY_EASE_OUT = 0.06;
+    const FLOCK_EASE = 0.05;
+    const FLOCK_OPACITY = 0.95;
+    let skyFactor = 0;
+    let flockFactor = 1;
+    let galaxy: Galaxy | null = null;
 
-    const fract = (v: number) => v - Math.floor(v);
+    function skyGoal(): number {
+        return backgroundMode === 'stars' ? 1 : 0;
+    }
+    function flockGoal(): number {
+        return backgroundMode === 'boids' || backgroundMode === 'macroblocks' ? 1 : 0;
+    }
 
-    /**
-     * A fixed point per boid, hashed from its index.
-     *
-     * Hashed rather than stored so the layout survives a boid count change, and
-     * fixed rather than random per frame so the sky holds still — a star field
-     * that reshuffles is snow.
-     */
-    function starTarget(i: number, out: THREE.Vector3) {
-        out.set(
-            (fract(Math.sin(i * 127.1) * 43758.5453) - 0.5) * STAR_SPREAD_X,
-            (fract(Math.sin(i * 311.7) * 24634.6345) - 0.5) * STAR_SPREAD_Y,
-            STAR_PLANE_Z + fract(Math.sin(i * 74.7) * 12345.6789) * 46
-        );
+    /** Pushes the current blend into the materials. Called every animated
+     *  frame, and once more whenever a still frame is drawn. */
+    function applyLayerBlend(now: number) {
+        if (mesh) {
+            const mat = mesh.material as THREE.MeshLambertMaterial;
+            mat.opacity = FLOCK_OPACITY * flockFactor;
+            mesh.visible = flockFactor > 0.004;
+        }
+        if (galaxy && camera) {
+            galaxy.update(now, camera.aspect, skyFactor);
+        }
     }
 
     // Coarse occupancy, rebuilt each frame the mode is engaged. Keyed on a packed
@@ -585,6 +572,16 @@
         predator.visible = true;
         scene.add(predator);
 
+        // THE SKY
+        galaxy = createGalaxy(renderer);
+        applySkyPalette();
+        scene.add(galaxy.group);
+        // Start where the page wants to be, except that the sky always rises
+        // from nothing on load: a second of stars coming out is the one
+        // transition on the page that nobody had to hover for.
+        flockFactor = flockGoal();
+        skyFactor = 0;
+
         // DATA
         positions = new Float32Array(boidCount * 3);
         velocities = new Float32Array(boidCount * 3);
@@ -706,8 +703,8 @@
         if (trails) {
             const tMat = trails.material as THREE.LineBasicMaterial;
             tMat.color.set(getPreyTone());
-            tMat.opacity = isTerminal ? 0.28 : 0.55;
-            trails.visible = showTrails;
+            tMat.opacity = (isTerminal ? 0.28 : 0.55) * flockFactor;
+            trails.visible = showTrails && flockFactor > 0.005;
         }
     }
 
@@ -730,9 +727,10 @@
         if (predator) {
             // A hunting cone reads as a stray object once the field resolves into
             // blocks, so the predator fades out with the macroblock blend.
-            const hunterVisibility = 1 - Math.max(macroblockFactor, starFactor);
+            const hidden = Math.max(macroblockFactor, 1 - flockFactor);
+            const hunterVisibility = 1 - hidden;
             const pMat = predator.material as THREE.MeshLambertMaterial;
-            pMat.transparent = Math.max(macroblockFactor, starFactor) > 0.001;
+            pMat.transparent = hidden > 0.001;
             pMat.opacity = hunterVisibility;
             pMat.toneMapped = appearance.toneMapped;
             pMat.color.set(appearance.tone);
@@ -744,8 +742,8 @@
         if (predTrailLine) {
             const pMat = predTrailLine.material as THREE.LineBasicMaterial;
             pMat.color.set(appearance.tone);
-            pMat.opacity = (isTerminal ? 0.35 : 0.55) * (1 - Math.max(macroblockFactor, starFactor));
-            predTrailLine.visible = showTrails && Math.max(macroblockFactor, starFactor) < 0.995;
+            pMat.opacity = (isTerminal ? 0.35 : 0.55) * flockFactor * (1 - macroblockFactor);
+            predTrailLine.visible = showTrails && flockFactor > 0.005 && macroblockFactor < 0.995;
         }
     }
 
@@ -768,6 +766,28 @@
             maxY: Math.max(p1.y, p2.y),
         };
     }
+
+    function applySkyPalette() {
+        if (!galaxy) return;
+        const bg = new THREE.Color(backgroundColor);
+        const luma = 0.2126 * bg.r + 0.7152 * bg.g + 0.0722 * bg.b;
+        galaxy.setPalette({ light: luma > 0.6, ink: color });
+    }
+
+    $effect(() => {
+        backgroundColor; color;
+        applySkyPalette();
+    });
+
+    // Under reduced motion nothing animates, so a mode change has to land in
+    // one step and be drawn once, or hovering a tile would do nothing at all.
+    $effect(() => {
+        backgroundMode;
+        if (!prefersReducedMotion || !renderer) return;
+        skyFactor = skyGoal();
+        flockFactor = flockGoal();
+        stopMotion();
+    });
 
     $effect(() => {
         if (!mesh) return;
@@ -1123,10 +1143,6 @@
                 macroblockQuantise(i, macroCell, _macroTarget);
                 _dummy.position.lerp(_macroTarget, macroblockFactor);
             }
-            if (starFactor > 0.001 && macroblockFactor < 0.999) {
-                starTarget(i, _starTarget);
-                _dummy.position.lerp(_starTarget, starFactor * (1 - macroblockFactor));
-            }
             if (observerShakeAmp > 0) {
                 _dummy.position.x += Math.sin(t * (14 + typingRampFactor * 40) + i * 1.37) * observerShakeAmp;
                 _dummy.position.y += Math.cos(t * (17 + typingRampFactor * 45) + i * 1.73) * observerShakeAmp;
@@ -1158,35 +1174,6 @@
                     Math.round(_tempColor.b * MACROBLOCK_COLOUR_LEVELS) / MACROBLOCK_COLOUR_LEVELS
                 );
                 _tempColor.lerp(_quantCol, macroblockFactor);
-            }
-
-            // Yielded to the macroblocks where they overlap. The two modes are
-            // mutually exclusive by intent, but not in time: moving from Auspex
-            // to Optimisarr leaves this one easing out for seconds while the
-            // other is easing in, and for that whole window this was writing a
-            // uniform scale over the flattened depth the macroblocks depend on.
-            // The pyramids kept their length and pointed at the camera, which
-            // is the one thing that look cannot survive.
-            const starBlend = starFactor * (1 - macroblockFactor);
-            if (starBlend > 0.001) {
-                // Face-on and small: a bird seen edge-on is a sliver, and a
-                // sliver twinkling is a bird, not a star.
-                _dummy.quaternion.slerp(_quatFlat, starBlend);
-                // Per axis, so whatever the macroblock branch did to depth
-                // survives the blend instead of being replaced by it.
-                _dummy.scale.set(
-                    _dummy.scale.x + (STAR_SCALE - _dummy.scale.x) * starBlend,
-                    _dummy.scale.y + (STAR_SCALE - _dummy.scale.y) * starBlend,
-                    _dummy.scale.z + (STAR_SCALE - _dummy.scale.z) * starBlend
-                );
-                // Independent phases, so the sky never pulses in unison.
-                const twinkle = 0.55 + 0.45 * Math.sin(t * (0.6 + (i % 7) * 0.22) + i * 1.31);
-                // Pushed well past white: instance colour multiplies a lit
-                // material, so a star set to 1.0 comes out shaded grey. The
-                // overdrive is what makes it read as emitting rather than
-                // reflecting.
-                _starCol.setRGB(0.88, 0.92, 1.0).multiplyScalar(1.1 + twinkle * 2.2);
-                _tempColor.lerp(_starCol, starBlend);
             }
 
             orientations[qIdx] = _dummy.quaternion.x;
@@ -1222,9 +1209,13 @@
         if (Math.abs(macroblockGoal - macroblockFactor) < 0.001) macroblockFactor = macroblockGoal;
         if (macroblockFactor > 0.001) rebuildMacroblockOccupancy();
 
-        const starGoal = starfield ? 1 : 0;
-        starFactor += (starGoal - starFactor) * (starfield ? STARFIELD_EASE_IN : STARFIELD_EASE_OUT);
-        if (Math.abs(starGoal - starFactor) < 0.001) starFactor = starGoal;
+        const sky = skyGoal();
+        skyFactor += (sky - skyFactor) * (sky > skyFactor ? SKY_EASE_IN : SKY_EASE_OUT);
+        if (Math.abs(sky - skyFactor) < 0.001) skyFactor = sky;
+        const flock = flockGoal();
+        flockFactor += (flock - flockFactor) * FLOCK_EASE;
+        if (Math.abs(flock - flockFactor) < 0.001) flockFactor = flock;
+        applyLayerBlend(now);
 
         // Keep the UI bounds updated so Terminal observer mode stays outside the card.
         // (Also fixes cases where the initial bounds accidentally used <main> instead of the terminal card.)
@@ -1276,7 +1267,9 @@
         for (let s = 0; s < simSubsteps; s++) {
             simulateBoidsStep(simStepNorm, now, t, intFactor);
         }
-        updateBoidInstances(t, intFactor, frameDtNorm, typingRampFactor);
+        // The flock keeps flocking while the sky is up, so it is mid-flight the
+        // moment it is asked for; only the upload to the GPU is skipped.
+        if (flockFactor > 0.004) updateBoidInstances(t, intFactor, frameDtNorm, typingRampFactor);
 
         // Update Trails
         if (showTrails && trails) {
@@ -1322,7 +1315,11 @@
     let prefersReducedMotion = false;
 
     function renderStillFrame() {
-        if (renderer && scene && camera) renderer.render(scene, camera);
+        if (!renderer || !scene || !camera) return;
+        applyLayerBlend(performance.now());
+        applyPreyAppearance();
+        applyPredatorAppearance();
+        renderer.render(scene, camera);
     }
 
     function startMotion() {
@@ -1384,6 +1381,7 @@
     onDestroy(() => {
         if (typeof window !== 'undefined') {
             if (frameId) cancelAnimationFrame(frameId);
+            galaxy?.dispose();
             if (renderer) renderer.dispose();
             if (debugMaterial) debugMaterial.dispose();
         }

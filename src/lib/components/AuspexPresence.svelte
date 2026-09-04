@@ -125,10 +125,9 @@
         // The scrim goes first, so the pale that follows sits on the near-black
         // ground it was drawn for rather than reading as fog over the navy.
         //
-        // On the dark theme it stays light on purpose. At 0.62 it looked right
-        // on its own and quietly destroyed the point of the whole thing: the
-        // flock has just become a star field behind this canvas, and a heavy
-        // wash over the top puts the stars out.
+        // On the dark theme it stays light on purpose: the galaxy has gone out
+        // to make room for this, and what is left behind the canvas is the
+        // page's own ground, which a heavy wash would only turn to mud.
         //
         // Blueprint light needs the opposite. White stars on a blue-50 page are
         // invisible however bright they are, so there the scrim goes most of the

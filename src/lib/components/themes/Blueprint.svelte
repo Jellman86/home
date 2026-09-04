@@ -403,7 +403,7 @@
                                 {focused?.label ?? data.name}
                             </h4>
                             <p class="text-xs leading-relaxed {colors.textMuted}">
-                                {focused?.blurb ?? 'Hover a link. Whatever it points at gets explained here.'}
+                                {focused?.blurb ?? 'Hover a link.'}
                             </p>
                             {#if focused?.status === 'coming-soon'}
                                 <p class="mt-2 text-[9px] tracking-[0.2em] uppercase {colors.accent} opacity-70">Not released</p>

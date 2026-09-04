@@ -17,7 +17,8 @@ The boid/sky systems have been heavily refined and are now in an advanced state:
 
 ## ✨ Features
 
-*   **3D Boid Simulation**: A custom-built Boid flocking simulation using `Three.js` and `InstancedMesh`.
+*   **Galaxy Simulation**: The page rests on a spiral galaxy that is actually simulated. Every star carries a velocity and is integrated on the GPU each frame under a galactic potential with a weak rotating spiral perturbation, so the inside turns faster than the rim and the arms are a density wave. Young stars are born blue on the arms and fade as they shear away; old stars orbit forever.
+*   **3D Boid Simulation**: A custom-built Boid flocking simulation using `Three.js` and `InstancedMesh`. It replaces the galaxy while the YA-WAMF link has focus, and is the whole background of the Terminal theme.
     *   **Observer Effect**: In terminal mode, observer boids drift into perimeter positions around the terminal and progressively intensify while the user types.
     *   **Creeping Escalation**: Observer groups add controlled shake/flash cues over sustained typing to increase tension.
     *   **Predator Logic**: A predator entity that hunts the flock with smooth steering behaviors (Reynolds Steering).

@@ -5,6 +5,8 @@ All notable changes to this project will be documented in this file.
 ## [Unreleased]
 
 ### Added
+- **Galaxy Background**: The page now rests on a simulated spiral galaxy rather than the flock. Tens of thousands of stars are integrated on the GPU every frame under a galactic potential (soft core, flat rotation curve) with a weak rotating spiral perturbation, so the inside turns faster than the rim and the arms are a density wave the stars stream through. Two populations: old stars orbit forever and are smooth; young stars are born on the arms, blue, and fade as they shear away. A baked nebula with dust lanes rotates with the pattern, a scrim pulls the page toward black, and a few spiky foreground stars sit in front. It does not react to the mouse.
+- **YA-WAMF Background**: Hovering or keyboard-focusing the YA-WAMF link swaps the galaxy for the flock; leaving brings the galaxy back.
 - **Optimisarr Project Link**: Added Optimisarr to the links list.
 - **Per-Project Background Modes**: Hovering or keyboard-focusing the Optimisarr link resolves the flock into a macroblock grid, evoking a video encode, and eases back to boids on leave. Implemented as a render-time blend over the existing simulation, so the flock keeps running underneath and no second scene is needed.
 - **Reduced-Motion Support**: Added `prefers-reduced-motion` handling so the boid simulation renders a single still frame instead of animating, and responds live when the preference changes.
@@ -16,6 +18,8 @@ All notable changes to this project will be documented in this file.
 - **Terminal Observation Escalation**: Added observer recruitment escalation under typing pressure, including shake/flash behavior ramps.
 
 ### Changed
+- **Default Background**: The flock is no longer the default. It appears for the YA-WAMF link, for Optimisarr (as macroblocks), and throughout the Terminal theme, where the observers are the point. Every hover background replaces the galaxy outright rather than layering over it; the Auspex creature arrives over an empty ground, and the old flock-into-squares morph is gone.
+- **Light Theme Sky**: On the light Blueprint theme the galaxy is drawn as dark ink with normal blending and no nebula or scrim: a chart of the same galaxy on paper.
 - **Blueprint Window Framing**: Reduced the Blueprint panel from three concentric frames to one. Removed the duplicate `0 0 0 1px` shadow ring, added rounded corners and a real drop shadow to match the Terminal window, and replaced the four protruding corner brackets with a single inset registration mark.
 
 ### Fixed

@@ -12,8 +12,11 @@ export interface PortfolioLink {
     status?: 'coming-soon';
     /** Extra detail for a status tile, shown as its title attribute. */
     statusNote?: string;
-    /** A link can nominate what the background does while it is hovered. */
-    background?: 'macroblocks' | 'auspex';
+    /** A link can nominate what the background does while it is hovered. The
+     *  page rests on the galaxy, which goes out for any of these: 'boids'
+     *  brings the flock in, 'macroblocks' the flock resolved into an encode
+     *  grid, 'auspex' clears the ground and draws the creature over it. */
+    background?: 'boids' | 'macroblocks' | 'auspex';
     /** Shown in the panel's right column while this link has focus. One or two
      *  sentences: it is a caption, not a description. */
     blurb?: string;

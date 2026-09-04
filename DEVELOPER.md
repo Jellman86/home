@@ -25,6 +25,14 @@ This is the heavy lifter. It manages:
 - **Instanced Colors**: The `instanceColor` attribute must be bound to the geometry for per-boid coloring; normals should be recomputed after geometry rotation to ensure lighting works.
 - **Color Space**: Renderer output uses sRGB + tone mapping; boid instance colors are converted to linear space before upload.
 
+### 1b. The Sky (`src/lib/galaxy.ts`)
+The galaxy lives in the same Three.js scene as the flock and shares its renderer, but nothing in it goes through the camera: positions are projected in the vertex shaders into an isotropic NDC (y in -1..1, x scaled by aspect) with a fixed tilt and a mild perspective divide. `BoidBackground` crossfades the two layers (`skyFactor`, `flockFactor`) according to its `backgroundMode` prop; the flock simulation keeps running while hidden so it is mid-flight the moment it is asked for.
+- **Dynamics**: A `GPUComputationRenderer` ping-pong texture holds position and velocity per star. Each frame integrates gravity from a potential — `0.5·V0²·ln(r²+rc²)` for the soft core and flat rotation curve, plus a Cox & Gómez-style log-spiral term turning at a fixed pattern speed — by central differences. The spiral strength is a few percent: its log-spiral wavenumber multiplies the force, and stronger values torque the whole disc into the core within minutes.
+- **Populations**: A second texture holds age and lifetime. Old stars (lifetime 0) are immortal and smooth; young stars are seeded on the arms at the current pattern angle, fade over their lifetime, and are reseeded. The GLSL `seed` and the JS `seedJs` must describe the same distribution.
+- **Bakes**: The nebula and dust lanes are the seeded field drawn soft into two render targets once, then sampled through the same projection. The dust bake is the field turned slightly against the rotation.
+- **No fake forces**: Curl-noise turbulence and velocity damping were both tried and both heat or drain the disc in a real integrator. Nothing but gravity acts on a star, and nothing reads the pointer.
+- **Themes**: `setPalette` switches to ink stars with normal blending and hides the nebula and scrim for the light Blueprint theme.
+
 ### 2. The Theme System
 Located in `src/lib/components/themes/`, these components define the "personality" of the site:
 - **Blueprint**: Uses `spring` motion for parallax effects and complex SVG corner markers.
