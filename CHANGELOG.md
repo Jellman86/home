@@ -18,11 +18,13 @@ All notable changes to this project will be documented in this file.
 - **Terminal Observation Escalation**: Added observer recruitment escalation under typing pressure, including shake/flash behavior ramps.
 
 ### Changed
+- **Auspex Mascot**: The Auspex tile and its focus panel now show the app's current mascot, a block cursor with eyes after a prompt, ported from the app with its idle behaviour: the metronome blink, the gaze, the hex/memory-map/static dumps, the typed line, the step and backspace, and the rare side-eye, stare, grin and eclipse, all on the app's shared tell clock. Reduce Motion stills it.
 - **Default Background**: The flock is no longer the default. It appears for the YA-WAMF link, for Optimisarr (as macroblocks), and throughout the Terminal theme, where the observers are the point. Every hover background replaces the galaxy outright rather than layering over it; the Auspex creature arrives over an empty ground, and the old flock-into-squares morph is gone.
 - **Light Theme Sky**: On the light Blueprint theme the galaxy is drawn as dark ink with normal blending and no nebula or scrim: a chart of the same galaxy on paper.
 - **Blueprint Window Framing**: Reduced the Blueprint panel from three concentric frames to one. Removed the duplicate `0 0 0 1px` shadow ring, added rounded corners and a real drop shadow to match the Terminal window, and replaced the four protruding corner brackets with a single inset registration mark.
 
 ### Fixed
+- **Avatar Hover**: The portrait no longer turns square on hover; the image is rounded itself and its frame is isolated, so the scaled, blended image stays clipped in Safari and Chrome.
 - **Panel Centring**: The Blueprint panel is centred in a desktop window again; the sky-reservation padding now applies only below the large breakpoint.
 - **Safari Chrome**: The status bar and toolbar on iOS Safari (and any browser honouring `theme-color`) no longer render white. The viewport extends under the safe areas, the document background follows the theme, and a `theme-color` meta tag tracks it.
 - **Mobile Toolbar Overlap**: Fixed the fixed diagnostics toolbar covering the portrait on narrow screens by giving the stacked visual column bottom clearance.
