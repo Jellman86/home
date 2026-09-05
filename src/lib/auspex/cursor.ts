@@ -251,6 +251,26 @@ function dumpVariant(t: number, o: CursorOptions): number {
     return mod(o.variantSeed + cycle, 3);
 }
 
+/**
+ * What it is doing right now, for anything that wants to follow it. The
+ * room behind the panel runs on the same clock from the same moment, so
+ * when the cursor dumps itself the room dumps with it.
+ */
+export function tells(t: number, o: CursorOptions) {
+    return {
+        dump: dump(t, o),
+        dumpVariant: dumpVariant(t, o),
+        eclipse: eclipse(t, o),
+        eclipsePhase: eclipsePhase(t, o),
+        stare: stare(t, o),
+        typing: typing(t, o),
+        step: step(t, o),
+        blink: cursorBlink(t, o)
+    };
+}
+
+export { HEX_GLYPHS, ACCENT, EYE, INK, SCLERA, BODY_DARK, BODY_LIGHT };
+
 // --- Drawing ---------------------------------------------------------------
 
 export function drawCursor(p: Painter, t: number, detailed: boolean, o: CursorOptions): void {
