@@ -96,7 +96,9 @@
 
 <svelte:window onmousemove={handleMouseMove} onmouseup={handleMouseUp} onblur={() => setFocus(null)} />
 
-<div class="flex {isMinimized ? 'items-end' : 'items-center'} justify-center min-h-screen px-4 pb-20 pt-[270px] lg:pt-[200px] font-mono {colors.text} overflow-hidden" in:fade={{ duration: 300 }}>
+<!-- Centred on a desktop window. Phones keep a band of sky above the panel,
+     which scrolls anyway; a minimised panel drops to the bottom edge. -->
+<div class="flex {isMinimized ? 'items-end' : 'items-center'} justify-center min-h-screen px-4 pb-20 pt-[270px] lg:py-4 font-mono {colors.text} overflow-hidden" in:fade={{ duration: 300 }}>
     <!-- Dynamic Grid Background (Parallax) -->
     <div class="fixed inset-0 pointer-events-none" 
         style="

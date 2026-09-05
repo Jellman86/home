@@ -23,6 +23,7 @@ All notable changes to this project will be documented in this file.
 - **Blueprint Window Framing**: Reduced the Blueprint panel from three concentric frames to one. Removed the duplicate `0 0 0 1px` shadow ring, added rounded corners and a real drop shadow to match the Terminal window, and replaced the four protruding corner brackets with a single inset registration mark.
 
 ### Fixed
+- **Panel Centring**: The Blueprint panel is centred in a desktop window again; the sky-reservation padding now applies only below the large breakpoint.
 - **Safari Chrome**: The status bar and toolbar on iOS Safari (and any browser honouring `theme-color`) no longer render white. The viewport extends under the safe areas, the document background follows the theme, and a `theme-color` meta tag tracks it.
 - **Mobile Toolbar Overlap**: Fixed the fixed diagnostics toolbar covering the portrait on narrow screens by giving the stacked visual column bottom clearance.
 - **Sky Toggle Restore Path**: Fixed Blueprint sky toggle state so disabling sky-cycle reliably restores the normal Blueprint background layers.
