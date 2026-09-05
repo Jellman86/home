@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { GPUComputationRenderer, type Variable } from 'three/addons/misc/GPUComputationRenderer.js';
-import { advanceClock, galaxyLayout, seededRandom, STEP, type PanelBounds } from './galaxy-model';
+import { advanceClock, galaxyLayout, seededRandom, createEncounterDirector, encounterPose, STEP, type EncounterKind } from './galaxy-model';
+import { ENCOUNTER_GLSL } from './galaxy-encounters';
 
 /**
  * The galaxy the page rests on.
@@ -37,8 +38,9 @@ import { advanceClock, galaxyLayout, seededRandom, STEP, type PanelBounds } from
  * Layout. The disc is a unit circle in its own coordinates; a fixed tilt
  * and a mild perspective divide put it on screen in an isotropic NDC (y
  * in -1..1, x scaled by aspect), independently of the flock's camera.
- * Responsive framing keeps the core above the card; minimising the card
- * opens a full-disc view. A scrim and a sparse foreground field frame it.
+ * Viewport-only framing stays fixed as the card moves or is minimised.
+ * A scrim and a sparse foreground field frame it. Rare ships and small
+ * illustrative black-hole lenses visit the otherwise quiet upper sky.
  * Positions, ages and gas share one bounded 60Hz clock, paused offscreen.
  *
  * Light theme. Light-on-light is invisible however bright, so on a light
@@ -61,8 +63,8 @@ export interface Galaxy {
      * @param aspect  viewport width / height
      * @param opacity 0..1 blend of the whole layer
      */
-    update(nowMs: number, aspect: number, opacity: number, panel?: PanelBounds | null, still?: boolean): void;
-    diagnostics(): { mode: string; time: number; stars: number; renderSize: number[] };
+    update(nowMs: number, aspect: number, opacity: number, still?: boolean): void;
+    diagnostics(): { mode: string; time: number; stars: number; renderSize: number[]; encounter: { kind: string | null; age: number; nextIn: number | null } };
     setPalette(palette: GalaxyPalette): void;
     dispose(): void;
 }
@@ -430,7 +432,7 @@ const STRUCTURE_FRAG = /* glsl */ `
             float phase = th - base - arm - bend;
             float d = atan(sin(phase), cos(phase)) * r;
             float lane = atan(sin(phase - ${DUST_TURN.toFixed(2)}), cos(phase - ${DUST_TURN.toFixed(2)})) * r;
-            float width = 0.055 + 0.15 * r;
+            float width = 0.075 + 0.20 * r;
             arms += exp(-d * d / (width * width)) * (0.15 + grain * grain * 1.6);
             // Short spurs branch off the primary gas ridge, not extra rings.
             float spur = d - 0.12 * sin(r * 27.0 + arm);
@@ -439,7 +441,8 @@ const STRUCTURE_FRAG = /* glsl */ `
         }
         float taper = smoothstep(0.10, 0.24, r) * (1.0 - smoothstep(0.8, 1.15, r));
         float knots = smoothstep(0.61, 0.82, noise(p * 32.0)) * arms * taper;
-        gl_FragColor = vec4(arms * taper, dust * taper, knots, 1.0);
+        float clouds = noise(p * 5.0 + 21.0) * noise(p * 11.0) * taper;
+        gl_FragColor = vec4(arms * taper, dust * taper, knots, clouds);
     }
 `;
 
@@ -470,16 +473,17 @@ const GLOW_FRAG = /* glsl */ `
     uniform float uGlow;
     varying vec2 vUv;
     void main() {
-        vec3 structure = texture2D(uStructure, vUv).rgb;
+        vec4 structure = texture2D(uStructure, vUv);
         vec2 p = (vUv * 2.0 - 1.0) * ${EXTENT.toFixed(2)};
         float r = length(p);
         float bulge = 0.85 * exp(-r * r * 90.0) + 0.22 * exp(-r * 8.0);
-        float disc = 0.065 * exp(-r * 3.5);
+        float disc = 0.16 * exp(-r * 3.5);
         vec3 light = vec3(1.0, 0.65, 0.32) * bulge
-                   + vec3(0.28, 0.47, 0.95) * structure.r * 0.22
-                   + vec3(1.0, 0.14, 0.35) * structure.b * 0.18
+                   + vec3(0.28, 0.47, 0.95) * structure.r * 0.42
+                   + vec3(1.0, 0.14, 0.35) * structure.b * 0.25
+                   + vec3(0.25, 0.23, 0.50) * structure.a * 0.18
                    + vec3(0.60, 0.65, 0.8) * disc;
-        light *= exp(-structure.g * 3.6);
+        light *= exp(-structure.g * 3.1);
         // Additive light is kept linear until the entire galaxy is composited.
         float alpha = clamp(length(light) * 2.0, 0.0, 1.0);
         gl_FragColor = vec4(light / max(alpha, 0.0001), alpha * uGlow * uOpacity);
@@ -503,9 +507,19 @@ const SCRIM_FRAG = /* glsl */ `
 const COMPOSITE_FRAG = /* glsl */ `
     uniform sampler2D uScene;
     uniform float uOpacity;
+    uniform float uDarkSky;
+    uniform vec2 uViewport;
+    uniform vec4 uEncounter;
+    uniform vec3 uEncounterStyle;
     varying vec2 vUv;
+    ${ENCOUNTER_GLSL}
     void main() {
         vec4 light = texture2D(uScene, vUv);
+        light.a = clamp(light.a, 0.0, 1.0);
+        if (uDarkSky > 0.5) {
+            addDistantGalaxies(light, vUv, uViewport);
+            applyEncounter(light, vUv);
+        }
         float alpha = clamp(light.a, 0.0, 1.0);
         gl_FragColor = vec4(light.rgb / max(alpha, 0.0001), alpha * uOpacity);
         #include <tonemapping_fragment>
@@ -815,7 +829,11 @@ export function createGalaxy(renderer: THREE.WebGLRenderer): Galaxy {
     field.frustumCulled = false;
     field.renderOrder = 0;
 
-    const compositeUniforms = { uScene: { value: skyTarget.texture }, uOpacity: { value: 0 } };
+    const compositeUniforms = {
+        uScene: { value: skyTarget.texture }, uOpacity: { value: 0 },
+        uDarkSky: { value: 1 }, uViewport: { value: new THREE.Vector2(1, 1) },
+        uEncounter: { value: new THREE.Vector4() }, uEncounterStyle: { value: new THREE.Vector3() }
+    };
     const compositeMat = new THREE.ShaderMaterial({
         vertexShader: QUAD_VERT, fragmentShader: COMPOSITE_FRAG,
         uniforms: compositeUniforms, transparent: true, depthTest: false, depthWrite: false
@@ -828,14 +846,18 @@ export function createGalaxy(renderer: THREE.WebGLRenderer): Galaxy {
 
     let lastNow = performance.now();
     let time = 0, accumulator = 0;
-    let layoutInitialized = false;
     let lightPalette = false;
     const clearColor = new THREE.Color();
     const renderSize = new THREE.Vector2();
+    const encounters = createEncounterDirector();
+    // Local visual QA only. Production builds cannot force or reveal encounters.
+    const previewParam = import.meta.env.DEV ? new URLSearchParams(window.location.search).get('encounter') : null;
+    const previewKind: EncounterKind | null = previewParam === 'ship' || previewParam === 'black-hole' ? previewParam : null;
+    let previewTime = 0;
 
     return {
         group,
-        update(nowMs, aspect, opacity, panel, still = false) {
+        update(nowMs, aspect, opacity, still = false) {
             const visible = opacity > 0.002;
             group.visible = visible;
             // Capped so a tab that was in the background does not try to
@@ -844,6 +866,13 @@ export function createGalaxy(renderer: THREE.WebGLRenderer): Galaxy {
             lastNow = nowMs;
             const clock = advanceClock(accumulator, elapsed, visible && !still && computeReady && !document.hidden);
             accumulator = clock.remainder;
+            const encountersEnabled = visible && !still && !lightPalette && !document.hidden;
+            let encounter = encounters.update(elapsed, encountersEnabled);
+            if (previewKind && encountersEnabled) {
+                if (elapsed <= 0.25) previewTime += elapsed;
+                const duration = previewKind === 'ship' ? 18 : 72;
+                encounter = { kind: previewKind, age: (previewTime + duration * 0.12) % (duration + 12), duration, lane: 0.5, reverse: false };
+            }
             if (!visible) return;
             for (let i = 0; i < clock.steps; i++) {
                 computeUniforms.uTime.value = time;
@@ -858,16 +887,13 @@ export function createGalaxy(renderer: THREE.WebGLRenderer): Galaxy {
             }
             const pattern = -time * PATTERN_OMEGA;
             renderer.getSize(renderSize);
-            const layout = galaxyLayout(renderSize.x, renderSize.y, panel);
-            const ease = !layoutInitialized || still ? 1 : 1 - Math.exp(-Math.min(elapsed, 0.1) * 5);
-            centre.x += (layout.x - centre.x) * ease;
-            centre.y += (layout.y - centre.y) * ease;
-            starUniforms.uScale.value += (layout.scale - starUniforms.uScale.value) * ease;
+            const layout = galaxyLayout(renderSize.x, renderSize.y);
+            centre.set(layout.x, layout.y);
+            starUniforms.uScale.value = layout.scale;
             // Preserve the gas/star balance when a dense field is projected
             // into a small mobile sky; point sprites themselves stay legible.
             const projectedRadius = starUniforms.uScale.value * renderSize.y * 0.5;
             starUniforms.uGain.value = (lightPalette ? 0.65 : 0.19) * Math.min(1, projectedRadius * projectedRadius / count);
-            layoutInitialized = true;
             const dpr = Math.min(renderer.getPixelRatio(), renderSize.x < 800 ? 1.25 : 1.5);
             const w = Math.max(1, Math.round(renderSize.x * dpr));
             const h = Math.max(1, Math.round(renderSize.y * dpr));
@@ -883,6 +909,13 @@ export function createGalaxy(renderer: THREE.WebGLRenderer): Galaxy {
             glowUniforms.uOpacity.value = 1;
             scrimUniforms.uOpacity.value = opacity;
             compositeUniforms.uOpacity.value = opacity;
+            compositeUniforms.uViewport.value.copy(renderSize);
+            compositeUniforms.uEncounter.value.set(0, 0, 0, 0);
+            if (encounter) {
+                const pose = encounterPose(encounter, renderSize.x, renderSize.y);
+                compositeUniforms.uEncounter.value.set(pose.x, pose.y, pose.opacity, encounter.kind === 'ship' ? 1 : 2);
+                compositeUniforms.uEncounterStyle.value.set(pose.size, pose.angle, pose.reach);
+            }
 
             const previous = renderer.getRenderTarget();
             renderer.getClearColor(clearColor);
@@ -898,10 +931,11 @@ export function createGalaxy(renderer: THREE.WebGLRenderer): Galaxy {
             }
         },
         diagnostics() {
-            return { mode: computeReady ? 'gpu' : 'seeded-still', time: +time.toFixed(3), stars: count, renderSize: [skyTarget.width, skyTarget.height] };
+            return { mode: computeReady ? 'gpu' : 'seeded-still', time: +time.toFixed(3), stars: count, renderSize: [skyTarget.width, skyTarget.height], encounter: encounters.status() };
         },
         setPalette({ light, ink }) {
             lightPalette = light;
+            compositeUniforms.uDarkSky.value = light ? 0 : 1;
             starUniforms.uLightMode.value = light ? 1 : 0;
             if (light) {
                 const inkCol = new THREE.Color(ink);

@@ -9,23 +9,67 @@ export function advanceClock(accumulator: number, elapsed: number, active: boole
     return { steps, remainder: Math.max(0, total - steps * STEP) };
 }
 
-export interface PanelBounds { top: number; right: number; bottom: number; left: number }
-
-export function galaxyLayout(width: number, height: number, panel?: PanelBounds | null) {
+export function galaxyLayout(width: number, height: number) {
     const aspect = width / height;
-    if (panel && panel.bottom - panel.top < 100) {
-        // Minimising the card opens an unobstructed, full-size viewing mode.
-        return { x: 0, y: 0.1, scale: Math.min(0.82, aspect * 0.8) };
-    }
     if (width < 800) {
-        // A complete small disc in the reserved mobile sky, above the card.
-        const skyHeight = Math.max(140, Math.min(220, panel?.top ?? 190));
-        return { x: 0.06 * aspect, y: 1 - skyHeight / height, scale: Math.min(width * 0.43, skyHeight * 0.48) * 2 / height };
+        // Fixed mobile sky, independent of card size, dragging and scrolling.
+        return { x: 0.06 * aspect, y: 1 - 270 / height, scale: width * 0.86 / height };
     }
-    // Keep the core in the visible strip above the panel. Clamp dragged cards
-    // so a window move cannot send the galaxy flying off the viewport.
-    const top = Math.max(140, Math.min(height * 0.7, panel?.top ?? 190));
-    return { x: aspect * 0.32, y: 1 - top / height, scale: Math.min(0.6, aspect * 0.63) };
+    return { x: aspect * 0.28, y: 0.62, scale: Math.min(0.98, aspect * 0.82) };
+}
+
+export type EncounterKind = 'ship' | 'black-hole';
+export interface Encounter { kind: EncounterKind; age: number; duration: number; lane: number; reverse: boolean }
+
+/** One encounter at a time, with quiet intervals measured in visible sky time. */
+export function createEncounterDirector(random: () => number = Math.random) {
+    let wait = 45 + random() * 65;
+    let current: Encounter | null = null;
+    return {
+        update(elapsed: number, enabled: boolean): Encounter | null {
+            if (!enabled) return null;
+            const dt = elapsed > 0.25 ? 0 : Math.max(0, elapsed);
+            if (current) {
+                current.age += dt;
+                if (current.age >= current.duration) {
+                    current = null;
+                    wait = 120 + random() * 150;
+                }
+            } else {
+                wait -= dt;
+                if (wait <= 0) {
+                    const kind = random() < 0.55 ? 'ship' : 'black-hole';
+                    current = { kind, age: 0, duration: kind === 'ship' ? 18 : 72, lane: random(), reverse: random() < 0.5 };
+                }
+            }
+            return current;
+        },
+        status() { return { kind: current?.kind ?? null, age: current?.age ?? 0, nextIn: current ? null : Math.ceil(wait) }; }
+    };
+}
+
+/** Fixed CSS-pixel paths through the upper sky, independent of panel position. */
+export function encounterPose(event: Encounter, width: number, height: number) {
+    const progress = Math.min(1, Math.max(0, event.age / event.duration));
+    const smooth = (x: number) => { const t = Math.min(1, Math.max(0, x)); return t * t * (3 - 2 * t); };
+    const opacity = smooth(progress / 0.15) * smooth((1 - progress) / 0.2);
+    if (event.kind === 'black-hole') {
+        // Arrive from the empty left margin, not on the galactic core. The
+        // phone path starts low-left, outside its wider, fixed disc.
+        const mobile = width < 800;
+        const x = width * (0.045 + progress * (mobile ? 0.22 : 0.25));
+        const y = mobile ? 240 - progress * 75 : height * (0.075 + event.lane * 0.025) + progress * 28;
+        const approach = smooth(progress);
+        return { x: x / width, y: 1 - y / height, angle: 0, opacity,
+            size: 4 + approach * 2, reach: 48 + approach * 24 };
+    }
+    const skyHeight = Math.max(90, Math.min(height * 0.45, 270));
+    const direction = event.reverse ? -1 : 1;
+    const travel = event.reverse ? 1 - progress : progress;
+    const x = width * (0.10 + travel * 0.80);
+    const y = skyHeight * (0.28 + event.lane * 0.26) + Math.sin(progress * Math.PI) * 14;
+    const angle = Math.atan2(-Math.cos(progress * Math.PI) * 14 * Math.PI, direction * width * 0.8);
+    return { x: x / width, y: 1 - y / height, angle, opacity, size: 10, reach: 80 };
 }
 
 /** Reproducible fields make visual regressions and initial conditions comparable. */

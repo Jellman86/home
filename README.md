@@ -17,7 +17,7 @@ The boid/sky systems have been heavily refined and are now in an advanced state:
 
 ## ✨ Features
 
-*   **Galaxy Simulation**: Stars orbit in a fixed galactic potential on the GPU, with irregular blue star-forming arms, pink gas knots, a warm bulge and shared dust extinction. A bounded 60Hz simulation clock keeps ages and the spiral pattern together; HDR light is tone-mapped once. Phones get a dedicated sky above the card. Minimise the panel to see the complete galaxy. Reduced motion and a seeded fallback are supported (WebGL2 required).
+*   **Galaxy Simulation**: Stars orbit in a fixed galactic potential on the GPU, with broad blue star-forming arms, pink gas knots, diffuse clouds, a warm bulge and shared dust extinction. The large galaxy stays fixed in the sky as the panel moves. A bounded 60Hz simulation clock keeps ages and the spiral pattern together; HDR light is tone-mapped once. Rare alien craft and slowly approaching black-hole lenses reward a longer look, with minutes of silence between encounters. Reduced motion and a seeded fallback are supported (WebGL2 required).
 *   **3D Boid Simulation**: A custom-built Boid flocking simulation using `Three.js` and `InstancedMesh`. It replaces the galaxy while the YA-WAMF link has focus, and is the whole background of the Terminal theme.
     *   **Observer Effect**: In terminal mode, observer boids drift into perimeter positions around the terminal and progressively intensify while the user types.
     *   **Creeping Escalation**: Observer groups add controlled shake/flash cues over sustained typing to increase tension.

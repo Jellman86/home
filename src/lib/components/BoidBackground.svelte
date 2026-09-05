@@ -350,7 +350,7 @@
             mesh.visible = flockFactor > 0.004;
         }
         if (galaxy && camera) {
-            galaxy.update(now, camera.aspect, skyFactor, uiRect, prefersReducedMotion);
+            galaxy.update(now, camera.aspect, skyFactor, prefersReducedMotion);
         }
     }
 
@@ -1223,7 +1223,7 @@
 
         // Keep the UI bounds updated so Terminal observer mode stays outside the card.
         // (Also fixes cases where the initial bounds accidentally used <main> instead of the terminal card.)
-        if (isTerminal || skyFactor > 0.002) {
+        if (isTerminal) {
             // Avoid repeated DOM queries; only refresh if missing/disconnected.
             if (!uiTargetElement || !uiTargetElement.isConnected) {
                 uiTargetElement = (document.getElementById('boid-target') as HTMLElement | null) ?? uiTargetElement;
