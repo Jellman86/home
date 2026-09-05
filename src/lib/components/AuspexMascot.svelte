@@ -1,11 +1,13 @@
 <script lang="ts">
-    import { CX, CY, GRID, Painter, drawMask, renderCompact } from '$lib/auspex/creature';
+    import { GRID, Painter } from '$lib/auspex/creature';
+    import { drawCursor, STILL_MOMENT } from '$lib/auspex/cursor';
 
     /**
-     * The creature at card size, as the app draws it: the mask, and every so
-     * often a limb from behind it. Hovering its tile is what makes it stand up.
+     * The daemon at card size, as the app draws it: a block cursor with eyes
+     * after a prompt, blinking on a clock, now and then showing what it is
+     * made of. Hovering its tile is what puts it on screen.
      */
-    let { size = 160 }: { size?: number } = $props();
+    let { size = 160, variant = 'dark' }: { size?: number; variant?: 'light' | 'dark' } = $props();
 
     let canvas = $state<HTMLCanvasElement | null>(null);
     let frameId = 0;
@@ -14,20 +16,21 @@
     const painter = new Painter(GRID);
     let reduceMotion = false;
     let startedAt = 0;
+    // Seeded per appearance, as in the app: each visit meets a different
+    // dump first, and it holds for the whole visit.
+    const variantSeed = Math.floor(Math.random() * 3000);
 
     /**
-     * Below this the creature is not merely small but invisible, and drawing it
-     * costs the same as drawing it large — the painter emits one fill per
-     * occupied cell of a 72-square grid however many pixels those cells land
-     * on. The link tile asks for sixteen, which is a cell size of a fifth of a
-     * pixel and several thousand sub-pixel fills per frame, forever, on every
-     * visit, for something nobody can see moving.
-     *
-     * So under this size it is drawn once and left alone. The same threshold
-     * the app uses to decide whether the detail is worth having.
+     * Below this the prompt glyph and the printout are one device pixel each,
+     * and the block alone carries the character — the app's own threshold.
+     * The link tile asks for sixteen: that is a still frame of the compact
+     * form, drawn once, because a 72-cell grid animating at a fifth of a
+     * pixel per cell is several thousand fills a frame for nothing anyone
+     * can see move.
      */
-    const ANIMATES_ABOVE = 64;
-    let animates = $derived(size >= ANIMATES_ABOVE && !reduceMotion);
+    const DETAILED_ABOVE = 64;
+    let detailed = $derived(size >= DETAILED_ABOVE);
+    let animates = $derived(detailed && !reduceMotion);
 
     function render(t: number) {
         if (!canvas) return;
@@ -40,13 +43,7 @@
         ctx.clearRect(0, 0, size, size);
 
         painter.clear();
-        if (size >= ANIMATES_ABOVE) {
-            renderCompact(painter, t, !animates);
-        } else {
-            // The mask alone. The halo and the limbs are what make the compact
-            // form read at card size and what make it mud at tile size.
-            drawMask(painter, CX, CY + 2, 2.15);
-        }
+        drawCursor(painter, t, detailed, { isDark: variant === 'dark', reduceMotion: reduceMotion || !animates, variantSeed });
         painter.paint(ctx, size / GRID, 0, 0);
         painted = true;
     }
@@ -54,9 +51,8 @@
     function loop(now: number) {
         if (!animates || document.hidden) { frameId = 0; return; }
         frameId = requestAnimationFrame(loop);
-        // 12fps. It is a grid of blocks drifting slowly; more frames buy nothing
-        // and this runs for as long as the panel is open.
-        if (now - lastFrame < 83) return;
+        // Fourteen frames a second, the app's rate for the detailed form.
+        if (now - lastFrame < 71) return;
         lastFrame = now;
         render((now - startedAt) * 0.001);
     }
@@ -64,12 +60,14 @@
     $effect(() => {
         if (typeof window === 'undefined') return;
         reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-        void size;
+        void size; void variant;
         if (!startedAt) startedAt = performance.now();
         if (animates) {
             if (!frameId) { lastFrame = 0; frameId = requestAnimationFrame(loop); }
-        } else if (!painted) {
-            render(0);
+        } else if (!painted || variant) {
+            // A settled moment, not zero: at zero the block has not drawn
+            // itself in yet, and a still frame of nothing is an empty tile.
+            render(STILL_MOMENT);
         }
     });
 
@@ -85,8 +83,7 @@
     });
 
     // Teardown only: no dependencies, so this cleanup runs when the component
-    // goes away and at no other time. Cancelling in an effect that depends on
-    // something is how the presence canvas ended up frozen mid-fade.
+    // goes away and at no other time.
     $effect(() => () => {
         if (frameId) cancelAnimationFrame(frameId);
         frameId = 0;

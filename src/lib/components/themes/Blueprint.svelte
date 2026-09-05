@@ -271,7 +271,7 @@
                                                 <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27s1.36.09 2 .27c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8Z" />
                                             </svg>
                                         {:else if link.iconGlyph === 'auspex'}
-                                            <AuspexMascot size={16} />
+                                            <AuspexMascot size={16} {variant} />
                                         {:else if link.iconGlyph === 'linkedin'}
                                             <svg class="w-4 h-4 {colors.text}" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
                                                 <path d="M3.6 5.7H1.1V15h2.5V5.7ZM2.35 1A1.45 1.45 0 1 0 2.35 3.9 1.45 1.45 0 0 0 2.35 1ZM15 9.7c0-2.6-1.4-3.8-3.26-3.8-1.5 0-2.17.82-2.55 1.4V5.7H6.7c.03.7 0 9.3 0 9.3h2.49V9.8c0-.22.02-.45.08-.61.18-.45.59-.91 1.28-.91.9 0 1.26.69 1.26 1.7V15H15V9.7Z" />
@@ -355,15 +355,16 @@
                     <div class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[130%] h-[50%] border border-dashed {colors.border} rounded-[100%] rotate-[20deg] pointer-events-none opacity-30 animate-[spin_20s_linear_infinite]"></div>
                     <div class="absolute -inset-1 border-t border-b {colors.border} rounded-full animate-[spin_4s_linear_infinite] pointer-events-none"></div>
 
-                    <!-- Auspex gets the mask itself, and it looms: same component
-                         the tile uses, scaled up and lit while it has focus. -->
+                    <!-- Auspex gets the daemon itself: the same cursor the tile
+                         shows, at a size where it has its prompt and its printout,
+                         running on its own clock while it has focus. -->
                     {#if focusedIsAuspex}
                         <div
                             class="relative z-10 transition-transform duration-700 ease-out scale-110"
                             style="filter: drop-shadow(0 0 26px rgba(122,46,212,0.65));"
                             in:scale={{ duration: 500, start: 0.82, opacity: 0 }}
                         >
-                            <AuspexMascot size={168} />
+                            <AuspexMascot size={168} {variant} />
                         </div>
                     {:else if focused?.iconUrl}
                         <img
@@ -387,11 +388,14 @@
                         <!-- Nothing hovered: back to the photograph. The column is
                              about whoever or whatever has focus, and with no tile
                              hovered that is still the person who built the lot. -->
-                        <div class="relative z-10 w-40 h-40 rounded-full overflow-hidden border-2 {colors.border} {colors.bgSolid}" in:fade={{ duration: 300 }}>
+                        <!-- The photo is rounded itself, not only by the frame: a
+                             scaled child with a blend mode escapes a border-radius
+                             clip in Safari and Chrome, and showed up square on hover. -->
+                        <div class="relative z-10 w-40 h-40 rounded-full overflow-hidden isolate border-2 {colors.border} {colors.bgSolid}" in:fade={{ duration: 300 }}>
                             <img
                                 src={data.avatarUrl}
                                 alt={data.name}
-                                class="w-full h-full object-cover grayscale opacity-60 mix-blend-luminosity hover:opacity-100 hover:mix-blend-normal transition-all duration-500 scale-110"
+                                class="w-full h-full rounded-full object-cover grayscale opacity-60 mix-blend-luminosity hover:opacity-100 hover:mix-blend-normal transition-all duration-500 scale-110"
                             />
                             <div class="absolute inset-0 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-30 mix-blend-overlay pointer-events-none"></div>
                         </div>
