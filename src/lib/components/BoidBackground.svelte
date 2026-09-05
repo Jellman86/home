@@ -59,6 +59,7 @@
             },
             boidCount,
             layers: { backgroundMode, skyFactor: +skyFactor.toFixed(3), flockFactor: +flockFactor.toFixed(3), macroblockFactor: +macroblockFactor.toFixed(3) },
+            galaxy: galaxy?.diagnostics(),
             themeColor: color,
             isTerminal,
             recruitmentLevel,
@@ -266,6 +267,8 @@
 
     let lastTime = performance.now();
     let simLastTime = performance.now();
+    let lastIdleFlockStep = 0;
+    let flockWasVisible = false;
     let frameCount = 0;
     let startupAt = performance.now();
 
@@ -347,7 +350,7 @@
             mesh.visible = flockFactor > 0.004;
         }
         if (galaxy && camera) {
-            galaxy.update(now, camera.aspect, skyFactor);
+            galaxy.update(now, camera.aspect, skyFactor, uiRect, prefersReducedMotion);
         }
     }
 
@@ -777,6 +780,7 @@
     $effect(() => {
         backgroundColor; color;
         applySkyPalette();
+        if (prefersReducedMotion) renderStillFrame();
     });
 
     // Under reduced motion nothing animates, so a mode change has to land in
@@ -1219,7 +1223,7 @@
 
         // Keep the UI bounds updated so Terminal observer mode stays outside the card.
         // (Also fixes cases where the initial bounds accidentally used <main> instead of the terminal card.)
-        if (isTerminal) {
+        if (isTerminal || skyFactor > 0.002) {
             // Avoid repeated DOM queries; only refresh if missing/disconnected.
             if (!uiTargetElement || !uiTargetElement.isConnected) {
                 uiTargetElement = (document.getElementById('boid-target') as HTMLElement | null) ?? uiTargetElement;
@@ -1262,17 +1266,26 @@
         }
 
         const intFactor = recruitmentLevel * (interactionActive ? Math.pow(Math.max(0, 1 - (timeSinceInteraction / 60000)), 0.5) : 0);
-        const simSubsteps = Math.min(MAX_SIM_SUBSTEPS, Math.max(1, Math.ceil(frameDeltaSec / MAX_SIM_STEP_SEC)));
-        const simStepNorm = frameDtNorm / simSubsteps;
-        for (let s = 0; s < simSubsteps; s++) {
-            simulateBoidsStep(simStepNorm, now, t, intFactor);
+        const flockVisible = flockFactor > 0.004;
+        if (flockVisible || now - lastIdleFlockStep >= 100) {
+            // Hidden flock: ten small steps a second, deliberately in standby.
+            // Do not catch up skipped time when a tile brings it back.
+            const delta = flockVisible ? frameDeltaSec : 1 / 60;
+            const simSubsteps = Math.min(MAX_SIM_SUBSTEPS, Math.max(1, Math.ceil(delta / MAX_SIM_STEP_SEC)));
+            for (let s = 0; s < simSubsteps; s++) {
+                simulateBoidsStep(delta * 60 / simSubsteps, now, t, intFactor);
+            }
+            lastIdleFlockStep = now;
         }
-        // The flock keeps flocking while the sky is up, so it is mid-flight the
-        // moment it is asked for; only the upload to the GPU is skipped.
-        if (flockFactor > 0.004) updateBoidInstances(t, intFactor, frameDtNorm, typingRampFactor);
+        if (flockVisible && !flockWasVisible) {
+            resetTrailHistory();
+            resetPredTrailHistory();
+        }
+        flockWasVisible = flockVisible;
+        if (flockVisible) updateBoidInstances(t, intFactor, frameDtNorm, typingRampFactor);
 
         // Update Trails
-        if (showTrails && trails) {
+        if (flockVisible && showTrails && trails) {
             const attr = trails.geometry.getAttribute('position') as THREE.BufferAttribute;
             const h = attr.array as Float32Array;
             for (let i = 0; i < boidCount; i++) {
@@ -1284,7 +1297,7 @@
             }
             attr.needsUpdate = true;
         }
-        if (showTrails && predTrailLine) {
+        if (flockVisible && showTrails && predTrailLine) {
             const attr = predTrailLine.geometry.getAttribute('position') as THREE.BufferAttribute;
             const h = attr.array as Float32Array;
             h.copyWithin(3, 0, (PRED_TRAIL_LENGTH - 1) * 3);
@@ -1316,6 +1329,10 @@
 
     function renderStillFrame() {
         if (!renderer || !scene || !camera) return;
+        skyFactor = skyGoal();
+        flockFactor = flockGoal();
+        macroblockFactor = backgroundMode === 'macroblocks' ? 1 : 0;
+        if (uiTargetElement) uiRect = uiTargetElement.getBoundingClientRect();
         applyLayerBlend(performance.now());
         applyPreyAppearance();
         applyPredatorAppearance();
@@ -1356,6 +1373,7 @@
             uiTargetElement = (document.getElementById('boid-target') as HTMLElement | null) ?? uiTargetElement;
             if (uiTargetElement) uiRect = uiTargetElement.getBoundingClientRect();
             updateUIBounds(performance.now());
+            if (prefersReducedMotion) renderStillFrame();
         };
         const onMouseMove = (e: MouseEvent) => {
             mouse.x = (e.clientX / window.innerWidth) * 2 - 1;
@@ -1366,14 +1384,22 @@
             if (prefersReducedMotion) stopMotion();
             else startMotion();
         };
+        const onStillLayoutChange = () => {
+            if (prefersReducedMotion) renderStillFrame();
+        };
+        const panelObserver = new ResizeObserver(onStillLayoutChange);
+        if (uiTargetElement) panelObserver.observe(uiTargetElement);
 
         window.addEventListener('resize', onResize);
         window.addEventListener('mousemove', onMouseMove);
+        window.addEventListener('scroll', onStillLayoutChange, { passive: true });
         motionQuery?.addEventListener('change', onMotionPreferenceChange);
 
         onDestroy(() => {
             window.removeEventListener('resize', onResize);
             window.removeEventListener('mousemove', onMouseMove);
+            window.removeEventListener('scroll', onStillLayoutChange);
+            panelObserver.disconnect();
             motionQuery?.removeEventListener('change', onMotionPreferenceChange);
         });
     });

@@ -32,6 +32,9 @@ All notable changes to this project will be documented in this file.
 - **Sky-Cycle Day Coloring**: Fixed sky-cycle day-phase color handling so predator and prey boids shift to dark gray only during daytime while sky-cycle mode is active.
 
 ### Improved
+- **Galaxy Detail and Framing**: Broadened and broken up the star-forming arms, added gas spurs and restrained HII knots, softened the warm bulge, and shared dust attenuation between gas and near/far-side stars. Linear HDR accumulation now receives one output tone-map. Mobile gets reserved sky space; minimising the panel opens a full-size galaxy view.
+- **Galaxy Timing and Lifecycle**: Added a bounded 60Hz clock shared by stars, ages and the pattern, age-aware initial seeding, a static GPU-compute fallback, explicit target/material disposal, reduced-motion layout/theme refreshes, and 14 regression checks enforced before deployment.
+- **Hidden Flock Budget**: The invisible flock now runs at 10Hz standby rather than full rate, with trail resets when it reappears. In local development CPU samples, its self-time share fell from 16.5% to 2.8%; this is not a mobile GPU benchmark.
 - **Observer Motion Quality**: Smoothed observer drift, separation behavior, and approach pacing for less jitter and more intentional looming.
 - **Skybox Composition**: Reduced uniform star-field noise and emphasized diagonal structure to better match real-sky references.
 - **Theme Consistency**: Unified predator/prey appearance rules across Blueprint dark/light and sky-cycle day/night phases.

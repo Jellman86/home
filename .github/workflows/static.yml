@@ -40,6 +40,12 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Type and component checks
+        run: npm run check
+
+      - name: Regression tests
+        run: npm test
+
       - name: Build
         run: npm run build
         env:

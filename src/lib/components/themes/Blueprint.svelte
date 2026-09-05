@@ -96,7 +96,7 @@
 
 <svelte:window onmousemove={handleMouseMove} onmouseup={handleMouseUp} onblur={() => setFocus(null)} />
 
-<div class="flex items-center justify-center min-h-screen p-4 font-mono {colors.text} overflow-hidden" in:fade={{ duration: 300 }}>
+<div class="flex {isMinimized ? 'items-end' : 'items-center'} justify-center min-h-screen px-4 pb-20 pt-[190px] lg:pt-[160px] font-mono {colors.text} overflow-hidden" in:fade={{ duration: 300 }}>
     <!-- Dynamic Grid Background (Parallax) -->
     <div class="fixed inset-0 pointer-events-none" 
         style="
